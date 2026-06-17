@@ -2,7 +2,7 @@
 // Kept UI-agnostic: components decide how to render the "tone".
 import type {
   AssetType, DealStage, DealStatus, Strategy, Recommendation,
-  PriorityLevel, DdStatus, RiskStatus, RiskLevel, DdCategory,
+  PriorityLevel, DdStatus, RiskStatus, RiskLevel, DdSection, DdJurisdiction,
 } from "@/types/database";
 
 export type Tone = "neutral" | "gold" | "positive" | "caution" | "negative" | "muted";
@@ -115,15 +115,64 @@ export const PRIORITY_TONE: Record<PriorityLevel, Tone> = {
   low: "muted", medium: "neutral", high: "caution", critical: "negative",
 };
 
+// ---- Due diligence framework -----------------------------------------------
+export const DD_STATUS_ORDER: DdStatus[] = [
+  "not_started", "requested", "in_progress", "received",
+  "reviewed", "issue_identified", "resolved", "not_applicable",
+];
+
 export const DD_STATUS_LABEL: Record<DdStatus, string> = {
-  open: "Open", in_progress: "In Progress", complete: "Complete",
-  blocked: "Blocked", na: "N/A",
+  not_started: "Not Started",
+  requested: "Requested",
+  in_progress: "In Progress",
+  received: "Received",
+  reviewed: "Reviewed",
+  issue_identified: "Issue Identified",
+  resolved: "Resolved",
+  not_applicable: "Not Applicable",
 };
 
 export const DD_STATUS_TONE: Record<DdStatus, Tone> = {
-  open: "muted", in_progress: "caution", complete: "positive",
-  blocked: "negative", na: "muted",
+  not_started: "muted",
+  requested: "neutral",
+  in_progress: "caution",
+  received: "gold",
+  reviewed: "positive",
+  issue_identified: "negative",
+  resolved: "positive",
+  not_applicable: "muted",
 };
+
+// A workstream is "cleared" when reviewed or resolved; N/A is excluded from totals.
+export function isDdCleared(status: DdStatus): boolean {
+  return status === "reviewed" || status === "resolved";
+}
+export function isDdOpen(status: DdStatus): boolean {
+  return !isDdCleared(status) && status !== "not_applicable";
+}
+export function isDdIssue(status: DdStatus): boolean {
+  return status === "issue_identified";
+}
+
+export const JURISDICTION_LABEL: Record<DdJurisdiction, string> = {
+  UK: "UK", Netherlands: "Netherlands", Japan: "Japan", "Cross-border": "Cross-Border",
+};
+
+export const JURISDICTION_TONE: Record<DdJurisdiction, Tone> = {
+  UK: "neutral", Netherlands: "neutral", Japan: "gold", "Cross-border": "caution",
+};
+
+// The Reiwa DD framework sections, in memo order.
+export const DD_SECTIONS: DdSection[] = [
+  "Executive Summary", "Submarket Overview", "Location and Micro Situation",
+  "Asset Description", "Tenure and Ownership", "Income Profile and Tenancy",
+  "Tenant Covenant Review", "Planning and Heritage", "ESG and Compliance",
+  "Market Commentary", "Valuation Metrics", "Insurance and Reinstatement Cost",
+  "Capex Plan", "Business Plan Scenarios", "Exit Strategy",
+  "Vendor and Deal Dynamics", "SWOT", "Japan Rationale",
+  "Cross Border Tax and Holding Structure", "Currency Risk and Hedging",
+  "Further DD Required",
+];
 
 export const RISK_STATUS_LABEL: Record<RiskStatus, string> = {
   open: "Open", mitigated: "Mitigated", accepted: "Accepted", closed: "Closed",
@@ -136,11 +185,6 @@ export const RISK_STATUS_TONE: Record<RiskStatus, Tone> = {
 export const RISK_LEVEL_TONE: Record<RiskLevel, Tone> = {
   low: "positive", medium: "caution", high: "negative",
 };
-
-export const DD_CATEGORIES: DdCategory[] = [
-  "Legal", "Tax", "Technical", "Planning", "ESG", "Commercial",
-  "Leasing", "Valuation", "Insurance", "FX", "Japan Tax", "Structure",
-];
 
 // ---- Investment score helpers ----------------------------------------------
 /** Tone band for an out-of-ten pillar / overall score. */

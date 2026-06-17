@@ -6,6 +6,7 @@ import type {
   Deal, DealMetrics, DueDiligenceItem, Risk, Contact, DocumentRecord,
   InvestmentScore, DecisionLogEntry, DealFile, Recommendation,
 } from "@/types/database";
+import { applyTemplate } from "@/lib/dd/templates";
 
 /** A deal plus the derived figures the pipeline cards display. */
 export interface DealSummary extends Deal {
@@ -187,16 +188,31 @@ const qgMetrics: DealMetrics = {
   cash_on_cash: 6.5, yield_on_cost: 2.51, created_at: now, updated_at: now,
 };
 
-const qgDD: DueDiligenceItem[] = [
-  { item_id: "dd1", deal_id: QG, category: "Legal", item: "Title review", description: "Confirm freehold title, restrictive covenants and rights of way.", priority: "high", status: "in_progress", owner: "Forsters LLP", due_date: "2026-07-10", risk_level: "medium", notes: "Awaiting office copies.", created_at: now, updated_at: now },
-  { item_id: "dd2", deal_id: QG, category: "Planning", item: "Listed building consent", description: "Assess scope for internal reconfiguration under Grade II listing.", priority: "critical", status: "open", owner: "Gerald Eve", due_date: "2026-07-20", risk_level: "high", notes: "Conservation area — heritage statement required.", created_at: now, updated_at: now },
-  { item_id: "dd3", deal_id: QG, category: "Technical", item: "Building survey", description: "Full structural and M&E condition survey ahead of refurbishment.", priority: "high", status: "in_progress", owner: "Malcolm Hollis", due_date: "2026-07-15", risk_level: "medium", notes: null, created_at: now, updated_at: now },
-  { item_id: "dd4", deal_id: QG, category: "Japan Tax", item: "TK/GK structuring review", description: "Confirm tax treatment of UK property income for Japanese LPs via TK-GK.", priority: "high", status: "open", owner: "PwC Japan", due_date: "2026-07-25", risk_level: "medium", notes: "Coordinate with UK structure workstream.", created_at: now, updated_at: now },
-  { item_id: "dd5", deal_id: QG, category: "FX", item: "GBP/JPY hedging policy", description: "Define equity hedging approach for JPY-denominated investors.", priority: "medium", status: "open", owner: "Reiwa Treasury", due_date: "2026-07-30", risk_level: "medium", notes: null, created_at: now, updated_at: now },
-  { item_id: "dd6", deal_id: QG, category: "ESG", item: "EPC uplift pathway", description: "Plan route from EPC D to minimum EPC B post-refurbishment.", priority: "medium", status: "open", owner: "Arup", due_date: "2026-08-05", risk_level: "low", notes: null, created_at: now, updated_at: now },
-  { item_id: "dd7", deal_id: QG, category: "Structure", item: "Acquisition SPV setup", description: "Establish UK Propco / Jersey Holdco structure.", priority: "high", status: "open", owner: "Mourant", due_date: "2026-08-01", risk_level: "medium", notes: null, created_at: now, updated_at: now },
-  { item_id: "dd8", deal_id: QG, category: "Valuation", item: "Red Book valuation", description: "Independent RICS valuation to support debt facility.", priority: "medium", status: "complete", owner: "Knight Frank Valuation", due_date: "2026-06-28", risk_level: "low", notes: "Supports purchase price.", created_at: now, updated_at: now },
-];
+// 58 Queens Gate DD: the London framework applied, then progressed on the
+// live workstreams to reflect a deal mid–due diligence.
+const qgDDPatch: Record<string, Partial<DueDiligenceItem>> = {
+  "Investment one-liner": { status: "resolved", owner: "JD Mooney", risk_level: "low" },
+  "Title & tenure": { status: "in_progress", owner: "Forsters LLP", due_date: "2026-07-10", notes: "Awaiting official copies; confirming freehold and covenants.", linked_documents: ["Queens-Gate-IM.pdf"] },
+  "Physical & technical survey": { status: "received", owner: "Malcolm Hollis", due_date: "2026-07-15", notes: "Draft received; reviewing M&E findings.", linked_documents: ["Building-Survey-Draft.pdf"] },
+  "Measured floor areas": { status: "reviewed", owner: "Reiwa Analyst", notes: "Areas verified to IPMS; consistent with IM." },
+  "Tenancy schedule": { status: "reviewed", owner: "Reiwa Analyst", notes: "Verified against leases; reversion confirmed." },
+  "Covenant strength": { status: "received", owner: "Reiwa Analyst", due_date: "2026-07-12" },
+  "Listed building / conservation": { status: "issue_identified", owner: "Gerald Eve", due_date: "2026-07-20", notes: "Grade II listing constrains internal reconfiguration; pre-app with RBKC required before committing to the unit mix.", linked_documents: ["Heritage-Statement.pdf"] },
+  "EPC / MEES": { status: "issue_identified", owner: "Arup", due_date: "2026-08-05", notes: "Currently EPC D. Capex pathway to EPC B needed for MEES compliance." },
+  "Red Book valuation": { status: "resolved", owner: "KF Valuation", due_date: "2026-06-28", notes: "Supports purchase price.", linked_documents: ["Red-Book-Valuation.pdf"] },
+  "Capex programme & costing": { status: "in_progress", owner: "Malcolm Hollis", due_date: "2026-07-22", notes: "£6.5m programme being benchmarked; contingency under review." },
+  "Base / upside / downside": { status: "reviewed", owner: "Reiwa Analyst", linked_documents: ["Queens-Gate-Underwriting.xlsx"] },
+  "Sensitivity analysis": { status: "in_progress", owner: "Reiwa Analyst" },
+  "Holding structure": { status: "in_progress", owner: "Mourant", due_date: "2026-08-01", notes: "UK Propco / Jersey Holdco being established." },
+  "Japan tax treatment": { status: "requested", owner: "PwC Japan", due_date: "2026-07-25", notes: "TK-GK treatment of UK income/gains for Japanese LPs." },
+  "SDLT & transfer tax": { status: "reviewed", owner: "Forsters LLP", notes: "SDLT modelled at 5%; asset deal confirmed." },
+  "FX exposure": { status: "requested", owner: "Reiwa Treasury", due_date: "2026-07-30", notes: "Sizing GBP/JPY equity exposure." },
+  "Conditions precedent": { status: "in_progress", owner: "Reiwa Analyst", due_date: "2026-07-31" },
+};
+
+const qgDD: DueDiligenceItem[] = applyTemplate("london", QG, now).map((item) =>
+  qgDDPatch[item.item] ? { ...item, ...qgDDPatch[item.item] } : item,
+);
 
 const qgRisks: Risk[] = [
   { risk_id: "r1", deal_id: QG, risk_title: "Listed building consent delay", risk_category: "planning", probability: 4, impact: 4, risk_score: 16, mitigation: "Pre-application engagement with RBKC conservation officer.", owner: "Gerald Eve", status: "open", created_at: now, updated_at: now },

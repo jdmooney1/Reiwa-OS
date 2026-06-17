@@ -29,13 +29,24 @@ export type DealStage =
 export type DealStatus =
   | "active" | "on_hold" | "completed" | "withdrawn" | "dead";
 
-export type DdCategory =
-  | "Legal" | "Tax" | "Technical" | "Planning" | "ESG" | "Commercial"
-  | "Leasing" | "Valuation" | "Insurance" | "FX" | "Japan Tax" | "Structure";
+// Reiwa DD framework sections (London & Amsterdam), in memo order.
+export type DdSection =
+  | "Executive Summary" | "Submarket Overview" | "Location and Micro Situation"
+  | "Asset Description" | "Tenure and Ownership" | "Income Profile and Tenancy"
+  | "Tenant Covenant Review" | "Planning and Heritage" | "ESG and Compliance"
+  | "Market Commentary" | "Valuation Metrics" | "Insurance and Reinstatement Cost"
+  | "Capex Plan" | "Business Plan Scenarios" | "Exit Strategy"
+  | "Vendor and Deal Dynamics" | "SWOT" | "Japan Rationale"
+  | "Cross Border Tax and Holding Structure" | "Currency Risk and Hedging"
+  | "Further DD Required";
+
+export type DdJurisdiction = "UK" | "Netherlands" | "Japan" | "Cross-border";
 
 export type PriorityLevel = "low" | "medium" | "high" | "critical";
 
-export type DdStatus = "open" | "in_progress" | "complete" | "blocked" | "na";
+export type DdStatus =
+  | "not_started" | "requested" | "in_progress" | "received"
+  | "reviewed" | "issue_identified" | "resolved" | "not_applicable";
 
 export type RiskLevel = "low" | "medium" | "high";
 
@@ -115,15 +126,17 @@ export interface DealMetrics {
 export interface DueDiligenceItem {
   item_id: string;
   deal_id: string;
-  category: DdCategory;
-  item: string;
-  description: string | null;
+  section: DdSection;
+  item: string; // item title
+  question: string | null; // the diligence question being answered
+  jurisdiction: DdJurisdiction;
   priority: PriorityLevel;
   status: DdStatus;
   owner: string | null;
   due_date: string | null;
   risk_level: RiskLevel | null;
   notes: string | null;
+  linked_documents: string[]; // document ids / file names
   created_at: string;
   updated_at: string;
 }

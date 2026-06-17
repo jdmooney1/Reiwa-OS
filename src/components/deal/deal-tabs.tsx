@@ -41,7 +41,7 @@ export function DealTabs({
           <FinancialsTab deal={file.deal} metrics={file.metrics} />
         </TabsContent>
         <TabsContent value="dd">
-          <DueDiligenceTab items={file.dueDiligence} />
+          <DueDiligenceTab deal={file.deal} items={file.dueDiligence} />
         </TabsContent>
         <TabsContent value="risks">
           <RisksTab risks={file.risks} />

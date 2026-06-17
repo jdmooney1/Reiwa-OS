@@ -44,14 +44,24 @@ create type deal_stage       as enum ('sourcing', 'screening', 'underwriting',
 create type deal_status      as enum ('active', 'on_hold', 'completed',
                                       'withdrawn', 'dead');
 
-create type dd_category      as enum ('Legal', 'Tax', 'Technical', 'Planning',
-                                      'ESG', 'Commercial', 'Leasing', 'Valuation',
-                                      'Insurance', 'FX', 'Japan Tax', 'Structure');
+-- DD framework sections (London & Amsterdam), in memo order.
+create type dd_section      as enum (
+  'Executive Summary', 'Submarket Overview', 'Location and Micro Situation',
+  'Asset Description', 'Tenure and Ownership', 'Income Profile and Tenancy',
+  'Tenant Covenant Review', 'Planning and Heritage', 'ESG and Compliance',
+  'Market Commentary', 'Valuation Metrics', 'Insurance and Reinstatement Cost',
+  'Capex Plan', 'Business Plan Scenarios', 'Exit Strategy',
+  'Vendor and Deal Dynamics', 'SWOT', 'Japan Rationale',
+  'Cross Border Tax and Holding Structure', 'Currency Risk and Hedging',
+  'Further DD Required');
+
+create type dd_jurisdiction  as enum ('UK', 'Netherlands', 'Japan', 'Cross-border');
 
 create type priority_level   as enum ('low', 'medium', 'high', 'critical');
 
-create type dd_status        as enum ('open', 'in_progress', 'complete',
-                                      'blocked', 'na');
+create type dd_status        as enum ('not_started', 'requested', 'in_progress',
+                                      'received', 'reviewed', 'issue_identified',
+                                      'resolved', 'not_applicable');
 
 create type risk_level       as enum ('low', 'medium', 'high');
 
@@ -151,22 +161,24 @@ create trigger trg_metrics_updated before update on deal_metrics
 -- 3. due_diligence_items
 -- ============================================================================
 create table due_diligence_items (
-  item_id      uuid primary key default gen_random_uuid(),
-  deal_id      uuid not null references deals(deal_id) on delete cascade,
-  category     dd_category not null,
-  item         text not null,
-  description  text,
-  priority     priority_level not null default 'medium',
-  status       dd_status not null default 'open',
-  owner        text,
-  due_date     date,
-  risk_level   risk_level,
-  notes        text,
-  created_at   timestamptz not null default now(),
-  updated_at   timestamptz not null default now()
+  item_id          uuid primary key default gen_random_uuid(),
+  deal_id          uuid not null references deals(deal_id) on delete cascade,
+  section          dd_section not null,
+  item             text not null,          -- item title
+  question         text,                    -- the diligence question
+  jurisdiction     dd_jurisdiction not null default 'UK',
+  priority         priority_level not null default 'medium',
+  status           dd_status not null default 'not_started',
+  owner            text,
+  due_date         date,
+  risk_level       risk_level,
+  notes            text,
+  linked_documents text[] not null default '{}',  -- document ids / file names
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
 );
-create index idx_dd_deal     on due_diligence_items(deal_id);
-create index idx_dd_category on due_diligence_items(deal_id, category);
+create index idx_dd_deal    on due_diligence_items(deal_id);
+create index idx_dd_section on due_diligence_items(deal_id, section);
 create trigger trg_dd_updated before update on due_diligence_items
   for each row execute function set_updated_at();
 
