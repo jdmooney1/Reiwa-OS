@@ -195,17 +195,54 @@ insert into documents (deal_id, file_name, file_type, category, storage_url,
   'Reiwa Analyst', 'Heritage / Rijksmonument constraints overview.');
 
 -- ----------------------------------------------------------------------------
--- 7. investment_scores  (pillars 0–10)
+-- 7. investment_scores  (header) + investment_score_categories (11 lines each)
+-- Overall is weight x score / 10 summed across the 11 weighted criteria (=/100).
 -- ----------------------------------------------------------------------------
-insert into investment_scores (deal_id, location_score, liquidity_score,
-  income_score, reversion_score, capex_score, planning_score, tenant_score,
-  depreciation_score, fx_score, exit_score, overall_score, recommendation) values
-('a1111111-1111-1111-1111-111111111111', 9.5, 8.0, 4.5, 8.0, 5.0, 4.0, 6.0,
-  7.0, 6.5, 7.5, 6.6, 'pursue'),
-('a2222222-2222-2222-2222-222222222222', 9.0, 8.5, 7.0, 6.5, 8.0, 7.5, 6.5,
-  7.5, 6.5, 7.0, 7.4, 'pursue'),
-('a3333333-3333-3333-3333-333333333333', 8.5, 6.5, 5.0, 8.5, 4.0, 3.5, 5.0,
-  6.0, 6.0, 6.5, 5.9, 'conditional');
+insert into investment_scores (score_id, deal_id, overall_score, recommendation, summary, scored_by) values
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 70.5, 'proceed',
+  'Trophy PCL asset strong on location, liquidity and fit with material reversionary upside; held back by weak in-place income and flagged listed-building and EPC/MEES risks. A Proceed, conditional on planning visibility.', 'JD Mooney'),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 75.5, 'proceed',
+  'Core-plus Mayfair asset with strong location, liquidity and in-place income, modest capex and a clean risk profile. A confident Proceed.', 'JD Mooney'),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 61.0, 'proceed_with_caution',
+  'Landmark Amsterdam repositioning with strong reversionary upside, constrained by rijksmonument planning risk, large capex and retail leasing risk. Proceed with Caution.', 'JD Mooney');
+
+insert into investment_score_categories (score_id, deal_id, category, score, commentary, risk_flag) values
+-- 58 Queens Gate
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'location_quality', 10, 'Prime South Kensington; supply-constrained.', false),
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'liquidity_exit', 9, 'Deep domestic and international UHNW buyer pool.', false),
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'income_security', 4, 'Low passing rent; income thesis is reversion-led.', false),
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'reversionary_potential', 9, 'Strong reversion plus £/sq ft capital uplift.', false),
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'asset_management_upside', 8, 'Comprehensive refurbishment to best-in-class.', false),
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'capex_risk', 5, 'GBP 6.5m programme; overrun / listed-fabric risk.', true),
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'planning_heritage_risk', 3, 'Grade II listing constrains reconfiguration.', true),
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'tenant_covenant_risk', 6, 'Residential; limited covenant dependency.', false),
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'japanese_depreciation', 7, 'Building-portion depreciation benefit.', false),
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'fx_financing_resilience', 6, '55% LTV with rate cap; GBP/JPY hedge to size.', false),
+('b1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'strategic_fit', 9, 'Squarely within the PCL value-add mandate.', false),
+-- 16 Conduit Street
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'location_quality', 9, 'Prime Mayfair / West End frontage.', false),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'liquidity_exit', 9, 'Highly liquid prime West End.', false),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'income_security', 8, 'Established office and retail income.', false),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'reversionary_potential', 6, 'Moderate reversion to ERV.', false),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'asset_management_upside', 6, 'Selective re-gear and light refurbishment.', false),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'capex_risk', 8, 'Modest GBP 3m programme; low risk.', false),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'planning_heritage_risk', 7, 'Limited constraints vs listed stock.', false),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'tenant_covenant_risk', 7, 'Solid covenants; some lease-event exposure.', true),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'japanese_depreciation', 7, 'Commercial depreciation benefit.', false),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'fx_financing_resilience', 7, '50% LTV with rate cap.', false),
+('b2222222-2222-2222-2222-222222222222', 'a2222222-2222-2222-2222-222222222222', 'strategic_fit', 8, 'Trophy West End income.', false),
+-- Magna Plaza
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'location_quality', 8, 'Landmark adjacent to Dam Square.', false),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'liquidity_exit', 6, 'Narrower buyer pool for large repositioning.', false),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'income_security', 5, 'Elevated vacancy; income to be rebuilt.', false),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'reversionary_potential', 8, 'Strong reversion toward EUR 5.2m ERV.', false),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'asset_management_upside', 8, 'F&B / experiential retail repositioning.', false),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'capex_risk', 4, 'EUR 12m programme within a protected monument.', true),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'planning_heritage_risk', 3, 'Rijksmonument status constrains repositioning.', true),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'tenant_covenant_risk', 5, 'Retail occupancy / covenant risk in lease-up.', true),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'japanese_depreciation', 6, 'Depreciation benefit; longer stabilisation.', false),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'fx_financing_resilience', 6, '60% LTV; EUR/JPY hedge required.', false),
+('b3333333-3333-3333-3333-333333333333', 'a3333333-3333-3333-3333-333333333333', 'strategic_fit', 7, 'Trophy repositioning fits the mandate.', false);
 
 -- ----------------------------------------------------------------------------
 -- 8. decision_log

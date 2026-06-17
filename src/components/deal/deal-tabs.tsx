@@ -7,6 +7,7 @@ import { OverviewTab } from "./tabs/overview-tab";
 import { FinancialsTab } from "./tabs/financials-tab";
 import { DueDiligenceTab } from "./tabs/due-diligence-tab";
 import { RisksTab } from "./tabs/risks-tab";
+import { ScoreTab } from "./tabs/score-tab";
 import { DocumentsTab } from "./tabs/documents-tab";
 import { ContactsTab } from "./tabs/contacts-tab";
 import { DecisionLogTab } from "./tabs/decision-log-tab";
@@ -27,6 +28,7 @@ export function DealTabs({
         <TabsTrigger value="financials">Financials</TabsTrigger>
         <TabsTrigger value="dd">Due Diligence{count(file.dueDiligence.length)}</TabsTrigger>
         <TabsTrigger value="risks">Risks{count(file.risks.length)}</TabsTrigger>
+        <TabsTrigger value="score">Score</TabsTrigger>
         <TabsTrigger value="documents">Documents{count(file.documents.length)}</TabsTrigger>
         <TabsTrigger value="contacts">Contacts{count(file.contacts.length)}</TabsTrigger>
         <TabsTrigger value="decisions">Decision Log{count(file.decisions.length)}</TabsTrigger>
@@ -45,6 +47,9 @@ export function DealTabs({
         </TabsContent>
         <TabsContent value="risks">
           <RisksTab risks={file.risks} />
+        </TabsContent>
+        <TabsContent value="score">
+          <ScoreTab deal={file.deal} score={file.score} />
         </TabsContent>
         <TabsContent value="documents">
           <DocumentsTab documents={file.documents} />

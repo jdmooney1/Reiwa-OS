@@ -60,7 +60,7 @@ export function PipelineTable({ deals }: { deals: DealSummary[] }) {
                         scoreTone(deal.overall_score) === "negative" && "text-negative",
                       )}
                     >
-                      {deal.overall_score.toFixed(1)}
+                      {Math.round(deal.overall_score)}
                     </span>
                   ) : (
                     "—"

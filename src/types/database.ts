@@ -61,7 +61,7 @@ export type DocCategory =
   | "Tax" | "Planning" | "ESG" | "Insurance" | "Correspondence" | "Other";
 
 export type Recommendation =
-  | "strong_pursue" | "pursue" | "conditional" | "hold" | "pass";
+  | "strong_proceed" | "proceed" | "proceed_with_caution" | "weak" | "reject";
 
 export type DecisionType =
   | "screening" | "investment_committee" | "bid" | "exclusivity"
@@ -181,21 +181,23 @@ export interface DocumentRecord {
   summary: string | null;
 }
 
+// A single weighted scoring line. `category` matches a ScoreCategoryKey in
+// src/lib/scoring/model.ts (weights live with the model, not the row).
+export interface ScoreCategory {
+  category: string; // ScoreCategoryKey
+  score: number | null; // 1–10
+  commentary: string | null;
+  risk_flag: boolean;
+}
+
 export interface InvestmentScore {
   score_id: string;
   deal_id: string;
-  location_score: number | null;
-  liquidity_score: number | null;
-  income_score: number | null;
-  reversion_score: number | null;
-  capex_score: number | null;
-  planning_score: number | null;
-  tenant_score: number | null;
-  depreciation_score: number | null;
-  fx_score: number | null;
-  exit_score: number | null;
-  overall_score: number | null;
+  overall_score: number | null; // 0–100
   recommendation: Recommendation | null;
+  summary: string | null; // IC summary (auto-generated placeholder for now)
+  categories: ScoreCategory[];
+  scored_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -229,6 +231,29 @@ type Row<T> = T;
 type Insert<T> = Partial<T>;
 type Update<T> = Partial<T>;
 
+// investment_scores is the header row; category lines live in
+// investment_score_categories (1:many). InvestmentScore above is the composite.
+export interface InvestmentScoreRow {
+  score_id: string;
+  deal_id: string;
+  overall_score: number | null;
+  recommendation: Recommendation | null;
+  summary: string | null;
+  scored_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvestmentScoreCategoryRow {
+  id: string;
+  score_id: string;
+  deal_id: string;
+  category: string;
+  score: number | null;
+  commentary: string | null;
+  risk_flag: boolean;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -238,7 +263,8 @@ export interface Database {
       risks: { Row: Row<Risk>; Insert: Insert<Risk>; Update: Update<Risk> };
       contacts: { Row: Row<Contact>; Insert: Insert<Contact>; Update: Update<Contact> };
       documents: { Row: Row<DocumentRecord>; Insert: Insert<DocumentRecord>; Update: Update<DocumentRecord> };
-      investment_scores: { Row: Row<InvestmentScore>; Insert: Insert<InvestmentScore>; Update: Update<InvestmentScore> };
+      investment_scores: { Row: Row<InvestmentScoreRow>; Insert: Insert<InvestmentScoreRow>; Update: Update<InvestmentScoreRow> };
+      investment_score_categories: { Row: Row<InvestmentScoreCategoryRow>; Insert: Insert<InvestmentScoreCategoryRow>; Update: Update<InvestmentScoreCategoryRow> };
       decision_log: { Row: Row<DecisionLogEntry>; Insert: Insert<DecisionLogEntry>; Update: Update<DecisionLogEntry> };
     };
   };

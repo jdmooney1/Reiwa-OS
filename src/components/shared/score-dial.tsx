@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { scoreTone, type Tone } from "@/lib/domain";
+import { scoreTone, pillarTone, type Tone } from "@/lib/domain";
 
 const RING_STROKE: Record<Tone, string> = {
   positive: "#3E7C5A",
@@ -10,21 +10,24 @@ const RING_STROKE: Record<Tone, string> = {
   muted: "#8A97A1",
 };
 
-/** Circular score dial (score out of 10). Used in the deal header. */
+/** Circular score dial. Defaults to the overall 0–100 scale; pass max={10} for a pillar. */
 export function ScoreDial({
   score,
   size = 64,
   dark = false,
+  max = 100,
 }: {
   score: number | null | undefined;
   size?: number;
   dark?: boolean;
+  max?: number;
 }) {
   const value = score ?? 0;
-  const pct = Math.max(0, Math.min(1, value / 10));
+  const pct = Math.max(0, Math.min(1, value / max));
   const r = size / 2 - 5;
   const c = 2 * Math.PI * r;
-  const tone = scoreTone(score);
+  const tone = max === 10 ? pillarTone(score) : scoreTone(score);
+  const display = score != null ? (max === 10 ? score.toFixed(1) : Math.round(score).toString()) : "—";
 
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
@@ -56,10 +59,10 @@ export function ScoreDial({
             dark ? "text-surface" : "text-ink",
           )}
         >
-          {score != null ? score.toFixed(1) : "—"}
+          {display}
         </span>
         <span className={cn("text-[9px] uppercase tracking-label", dark ? "text-surface/50" : "text-ink-faint")}>
-          / 10
+          / {max}
         </span>
       </div>
     </div>
@@ -69,7 +72,7 @@ export function ScoreDial({
 /** Horizontal pillar score bar (out of 10). */
 export function ScoreBar({ label, score }: { label: string; score: number | null }) {
   const value = score ?? 0;
-  const tone = scoreTone(score);
+  const tone = pillarTone(score);
   return (
     <div className="flex items-center gap-3 py-1.5">
       <span className="w-32 shrink-0 text-xs text-ink-muted">{label}</span>

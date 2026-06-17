@@ -75,8 +75,8 @@ create type doc_category      as enum ('Legal', 'Financial', 'Technical', 'Valua
                                       'Marketing', 'Tax', 'Planning', 'ESG',
                                       'Insurance', 'Correspondence', 'Other');
 
-create type recommendation   as enum ('strong_pursue', 'pursue', 'conditional',
-                                      'hold', 'pass');
+create type recommendation   as enum ('strong_proceed', 'proceed',
+                                      'proceed_with_caution', 'weak', 'reject');
 
 create type decision_type    as enum ('screening', 'investment_committee', 'bid',
                                       'exclusivity', 'legal', 'completion',
@@ -239,28 +239,37 @@ create table documents (
 create index idx_documents_deal on documents(deal_id);
 
 -- ============================================================================
--- 7. investment_scores  (1:1 scoring card; pillars 0–10)
+-- 7. investment_scores  (1:1 header) + investment_score_categories (1:many)
+-- ----------------------------------------------------------------------------
+-- The Reiwa score is 11 weighted criteria (1–10 each); category weights live in
+-- the application model (src/lib/scoring/model.ts) and sum to 100. The header
+-- stores the computed overall (0–100), recommendation and IC summary; each
+-- category line stores its 1–10 score, commentary and a risk flag.
 -- ============================================================================
 create table investment_scores (
-  score_id            uuid primary key default gen_random_uuid(),
-  deal_id             uuid not null unique references deals(deal_id) on delete cascade,
-  location_score      numeric(4,1) check (location_score      between 0 and 10),
-  liquidity_score     numeric(4,1) check (liquidity_score     between 0 and 10),
-  income_score        numeric(4,1) check (income_score        between 0 and 10),
-  reversion_score     numeric(4,1) check (reversion_score     between 0 and 10),
-  capex_score         numeric(4,1) check (capex_score         between 0 and 10),
-  planning_score      numeric(4,1) check (planning_score      between 0 and 10),
-  tenant_score        numeric(4,1) check (tenant_score        between 0 and 10),
-  depreciation_score  numeric(4,1) check (depreciation_score  between 0 and 10),
-  fx_score            numeric(4,1) check (fx_score            between 0 and 10),
-  exit_score          numeric(4,1) check (exit_score          between 0 and 10),
-  overall_score       numeric(4,1) check (overall_score       between 0 and 10),
-  recommendation      recommendation,
-  created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now()
+  score_id       uuid primary key default gen_random_uuid(),
+  deal_id        uuid not null unique references deals(deal_id) on delete cascade,
+  overall_score  numeric(5,2) check (overall_score between 0 and 100),
+  recommendation recommendation,
+  summary        text,
+  scored_by      text,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
 );
 create trigger trg_scores_updated before update on investment_scores
   for each row execute function set_updated_at();
+
+create table investment_score_categories (
+  id          uuid primary key default gen_random_uuid(),
+  score_id    uuid not null references investment_scores(score_id) on delete cascade,
+  deal_id     uuid not null references deals(deal_id) on delete cascade,
+  category    text not null,           -- ScoreCategoryKey (e.g. location_quality)
+  score       numeric(3,1) check (score between 1 and 10),
+  commentary  text,
+  risk_flag   boolean not null default false,
+  unique (score_id, category)
+);
+create index idx_score_cat_deal on investment_score_categories(deal_id);
 
 -- ============================================================================
 -- 8. decision_log
@@ -296,6 +305,7 @@ alter table risks               enable row level security;
 alter table contacts            enable row level security;
 alter table documents           enable row level security;
 alter table investment_scores   enable row level security;
+alter table investment_score_categories enable row level security;
 alter table decision_log        enable row level security;
 
 -- Full access for any authenticated (Clerk) user.
@@ -306,4 +316,5 @@ create policy risks_rw     on risks               for all to authenticated using
 create policy contacts_rw  on contacts            for all to authenticated using (true) with check (true);
 create policy documents_rw on documents           for all to authenticated using (true) with check (true);
 create policy scores_rw    on investment_scores   for all to authenticated using (true) with check (true);
+create policy score_cat_rw on investment_score_categories for all to authenticated using (true) with check (true);
 create policy decisions_rw on decision_log        for all to authenticated using (true) with check (true);

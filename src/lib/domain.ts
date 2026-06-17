@@ -92,19 +92,19 @@ export const STATUS_TONE: Record<DealStatus, Tone> = {
 };
 
 export const RECOMMENDATION_LABEL: Record<Recommendation, string> = {
-  strong_pursue: "Strong Pursue",
-  pursue: "Pursue",
-  conditional: "Conditional",
-  hold: "Hold",
-  pass: "Pass",
+  strong_proceed: "Strong Proceed",
+  proceed: "Proceed",
+  proceed_with_caution: "Proceed with Caution",
+  weak: "Weak",
+  reject: "Reject",
 };
 
 export const RECOMMENDATION_TONE: Record<Recommendation, Tone> = {
-  strong_pursue: "positive",
-  pursue: "positive",
-  conditional: "caution",
-  hold: "muted",
-  pass: "negative",
+  strong_proceed: "positive",
+  proceed: "positive",
+  proceed_with_caution: "caution",
+  weak: "muted",
+  reject: "negative",
 };
 
 export const PRIORITY_LABEL: Record<PriorityLevel, string> = {
@@ -187,8 +187,17 @@ export const RISK_LEVEL_TONE: Record<RiskLevel, Tone> = {
 };
 
 // ---- Investment score helpers ----------------------------------------------
-/** Tone band for an out-of-ten pillar / overall score. */
+/** Tone band for an overall investment score (0–100), aligned to recommendation bands. */
 export function scoreTone(score: number | null | undefined): Tone {
+  if (score == null) return "muted";
+  if (score >= 70) return "positive"; // Strong Proceed / Proceed
+  if (score >= 55) return "gold"; // Proceed with Caution
+  if (score >= 40) return "caution"; // Weak
+  return "negative"; // Reject
+}
+
+/** Tone band for a single category score (1–10). */
+export function pillarTone(score: number | null | undefined): Tone {
   if (score == null) return "muted";
   if (score >= 7.5) return "positive";
   if (score >= 5.5) return "gold";

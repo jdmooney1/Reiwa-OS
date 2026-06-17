@@ -17,7 +17,7 @@ export function Watchlist({ deals }: { deals: DealSummary[] }) {
     .map((d) => ({
       deal: d,
       priority:
-        (d.overall_score ?? 0) * 6 +
+        (d.overall_score ?? 0) * 0.6 +
         (d.probability ?? 0) * 0.3 +
         Math.min((d.price_guidance ?? 0) / 1_000_000, 40) * 0.4,
     }))
@@ -52,7 +52,7 @@ export function Watchlist({ deals }: { deals: DealSummary[] }) {
                     scoreTone(deal.overall_score) === "negative" && "bg-negative/10 text-negative",
                   )}
                 >
-                  {deal.overall_score?.toFixed(1) ?? "—"}
+                  {deal.overall_score != null ? Math.round(deal.overall_score) : "—"}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-ink">{deal.asset_name}</div>

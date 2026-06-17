@@ -29,14 +29,15 @@ export function DealCard({ deal }: { deal: DealSummary }) {
         {deal.overall_score != null && (
           <div
             className={cn(
-              "tabular flex h-8 w-8 shrink-0 items-center justify-center rounded text-xs font-semibold",
+              "tabular flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded leading-none",
               scoreTone(deal.overall_score) === "positive" && "bg-positive/10 text-positive",
               scoreTone(deal.overall_score) === "gold" && "bg-gold/10 text-gold-deep",
               scoreTone(deal.overall_score) === "caution" && "bg-caution/10 text-caution",
               scoreTone(deal.overall_score) === "negative" && "bg-negative/10 text-negative",
             )}
+            title="Investment score / 100"
           >
-            {deal.overall_score.toFixed(1)}
+            <span className="text-sm font-semibold">{Math.round(deal.overall_score)}</span>
           </div>
         )}
       </div>

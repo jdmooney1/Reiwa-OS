@@ -7,6 +7,7 @@ import type {
   InvestmentScore, DecisionLogEntry, DealFile, Recommendation,
 } from "@/types/database";
 import { applyTemplate } from "@/lib/dd/templates";
+import { buildSampleScore, SAMPLE_SCORES } from "@/lib/scoring/samples";
 
 /** A deal plus the derived figures the pipeline cards display. */
 export interface DealSummary extends Deal {
@@ -41,7 +42,7 @@ export const DEALS: DealSummary[] = [
     passing_rent: 950000, erv: 1450000, niy: 2.1, reversionary_yield: 3.2,
     capex_budget: 6500000, target_irr: 14.5, equity_multiple: 1.8,
     status: "active", probability: 60, created_at: now, updated_at: now,
-    overall_score: 6.6, recommendation: "pursue", key_risk: "Listed consent delay",
+    overall_score: 70.5, recommendation: "proceed", key_risk: "Listed consent delay",
   },
   {
     deal_id: "a2222222-2222-2222-2222-222222222222",
@@ -55,7 +56,7 @@ export const DEALS: DealSummary[] = [
     passing_rent: 2300000, erv: 2900000, niy: 3.7, reversionary_yield: 4.5,
     capex_budget: 3000000, target_irr: 12.0, equity_multiple: 1.6,
     status: "active", probability: 45, created_at: now, updated_at: now,
-    overall_score: 7.4, recommendation: "pursue", key_risk: "Lease expiry / void",
+    overall_score: 75.5, recommendation: "proceed", key_risk: "Lease expiry / void",
   },
   {
     deal_id: "a3333333-3333-3333-3333-333333333333",
@@ -69,7 +70,7 @@ export const DEALS: DealSummary[] = [
     passing_rent: 3800000, erv: 5200000, niy: 4.2, reversionary_yield: 5.5,
     capex_budget: 12000000, target_irr: 15.5, equity_multiple: 1.9,
     status: "active", probability: 35, created_at: now, updated_at: now,
-    overall_score: 5.9, recommendation: "conditional", key_risk: "Monument constraints",
+    overall_score: 61, recommendation: "proceed_with_caution", key_risk: "Monument constraints",
   },
   {
     deal_id: "a4444444-4444-4444-4444-444444444444",
@@ -82,7 +83,7 @@ export const DEALS: DealSummary[] = [
     passing_rent: 1850000, erv: 1950000, niy: 4.8, reversionary_yield: 5.0,
     capex_budget: 1200000, target_irr: 9.5, equity_multiple: 1.5,
     status: "active", probability: 20, created_at: now, updated_at: now,
-    overall_score: 7.1, recommendation: "pursue", key_risk: "Pricing tension",
+    overall_score: 71, recommendation: "proceed", key_risk: "Pricing tension",
   },
   {
     deal_id: "a5555555-5555-5555-5555-555555555555",
@@ -96,7 +97,7 @@ export const DEALS: DealSummary[] = [
     passing_rent: 4100000, erv: 5600000, niy: 4.0, reversionary_yield: 5.3,
     capex_budget: 14500000, target_irr: 13.8, equity_multiple: 1.7,
     status: "active", probability: 65, created_at: now, updated_at: now,
-    overall_score: 7.0, recommendation: "pursue", key_risk: "Capex execution",
+    overall_score: 70, recommendation: "proceed", key_risk: "Capex execution",
   },
   {
     deal_id: "a6666666-6666-6666-6666-666666666666",
@@ -109,7 +110,7 @@ export const DEALS: DealSummary[] = [
     passing_rent: 2600000, erv: 2800000, niy: 5.1, reversionary_yield: 5.4,
     capex_budget: 2200000, target_irr: 11.2, equity_multiple: 1.55,
     status: "active", probability: 55, created_at: now, updated_at: now,
-    overall_score: 6.8, recommendation: "pursue", key_risk: "Single-tenant exposure",
+    overall_score: 67, recommendation: "proceed_with_caution", key_risk: "Single-tenant exposure",
   },
   {
     deal_id: "a7777777-7777-7777-7777-777777777777",
@@ -122,7 +123,7 @@ export const DEALS: DealSummary[] = [
     passing_rent: 2950000, erv: 3100000, niy: 3.9, reversionary_yield: 4.1,
     capex_budget: 500000, target_irr: 8.8, equity_multiple: 1.45,
     status: "active", probability: 80, created_at: now, updated_at: now,
-    overall_score: 8.1, recommendation: "strong_pursue", key_risk: "Yield compression priced in",
+    overall_score: 86, recommendation: "strong_proceed", key_risk: "Yield compression priced in",
   },
   {
     deal_id: "a8888888-8888-8888-8888-888888888888",
@@ -135,7 +136,7 @@ export const DEALS: DealSummary[] = [
     passing_rent: 6800000, erv: 7400000, niy: 4.9, reversionary_yield: 5.2,
     capex_budget: 6000000, target_irr: 16.0, equity_multiple: 2.0,
     status: "completed", probability: 100, created_at: now, updated_at: now,
-    overall_score: 7.6, recommendation: "pursue", key_risk: "Lease-up risk (resolved)",
+    overall_score: 76, recommendation: "proceed", key_risk: "Lease-up risk (resolved)",
   },
   {
     deal_id: "a9999999-9999-9999-9999-999999999999",
@@ -148,7 +149,7 @@ export const DEALS: DealSummary[] = [
     passing_rent: 1500000, erv: 2100000, niy: 3.4, reversionary_yield: 4.8,
     capex_budget: 5500000, target_irr: 13.0, equity_multiple: 1.6,
     status: "dead", probability: 0, created_at: now, updated_at: now,
-    overall_score: 4.8, recommendation: "pass", key_risk: "Business plan undeliverable",
+    overall_score: 36, recommendation: "reject", key_risk: "Business plan undeliverable",
   },
   {
     deal_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -161,9 +162,20 @@ export const DEALS: DealSummary[] = [
     passing_rent: 1320000, erv: 1620000, niy: 3.8, reversionary_yield: 4.6,
     capex_budget: 1800000, target_irr: 10.5, equity_multiple: 1.5,
     status: "on_hold", probability: 30, created_at: now, updated_at: now,
-    overall_score: 6.2, recommendation: "hold", key_risk: "Rent regulation (WWS)",
+    overall_score: 62, recommendation: "proceed_with_caution", key_risk: "Rent regulation (WWS)",
   },
 ];
+
+// Keep pipeline figures for scored deals exactly in step with the score model.
+for (const d of DEALS) {
+  if (SAMPLE_SCORES[d.deal_id]) {
+    const s = buildSampleScore(d.deal_id, now);
+    if (s) {
+      d.overall_score = s.overall_score;
+      d.recommendation = s.recommendation;
+    }
+  }
+}
 
 export function getDeals(): DealSummary[] {
   return DEALS;
@@ -236,13 +248,6 @@ const qgDocs: DocumentRecord[] = [
   { document_id: "doc5", deal_id: QG, file_name: "Red-Book-Valuation.pdf", file_type: "application/pdf", category: "Valuation", storage_url: "deal-documents/a1111111/valuation.pdf", uploaded_by: "KF Valuation", uploaded_at: now, summary: "RICS Red Book valuation report." },
 ];
 
-const qgScore: InvestmentScore = {
-  score_id: "s1", deal_id: QG, location_score: 9.5, liquidity_score: 8.0,
-  income_score: 4.5, reversion_score: 8.0, capex_score: 5.0, planning_score: 4.0,
-  tenant_score: 6.0, depreciation_score: 7.0, fx_score: 6.5, exit_score: 7.5,
-  overall_score: 6.6, recommendation: "pursue", created_at: now, updated_at: now,
-};
-
 const qgDecisions: DecisionLogEntry[] = [
   { decision_id: "dl1", deal_id: QG, decision_date: "2026-06-02", decision_type: "screening", decision: "Proceed to underwriting", rationale: "Trophy PCL asset with reversion potential and limited supply.", next_steps: "Build base-case model; commission building survey.", author: "JD Mooney", created_at: now },
   { decision_id: "dl2", deal_id: QG, decision_date: "2026-06-12", decision_type: "bid", decision: "Submit indicative offer at £42.5m", rationale: "Reflects refurb capex and conservative exit pricing.", next_steps: "Enter due diligence on exclusivity.", author: "JD Mooney", created_at: now },
@@ -281,24 +286,26 @@ export function getDealFile(id: string): DealFile | undefined {
   if (!summary) return undefined;
   // Strip the derived display fields back to a plain Deal.
   const { overall_score, recommendation, key_risk, ...deal } = summary;
+  const sampleScore = buildSampleScore(id, now);
+
   if (id === QG) {
     return {
       deal, metrics: qgMetrics, dueDiligence: qgDD, risks: qgRisks,
-      contacts: qgContacts, documents: qgDocs, score: qgScore, decisions: qgDecisions,
+      contacts: qgContacts, documents: qgDocs, score: sampleScore, decisions: qgDecisions,
     };
   }
-  // Other deals: header + score only (detail not yet authored).
+  // Other deals: header + (sample score if authored, else a header-only score).
+  const headerScore: InvestmentScore | null =
+    sampleScore ??
+    (overall_score != null && recommendation != null
+      ? {
+          score_id: `score-${id}`, deal_id: id, overall_score, recommendation,
+          summary: null, categories: [], scored_by: null, created_at: now, updated_at: now,
+        }
+      : null);
   return {
     deal, metrics: null, dueDiligence: [], risks: [], contacts: [],
-    documents: [], score: recommendation
-      ? ({
-          score_id: `s-${id}`, deal_id: id, location_score: null, liquidity_score: null,
-          income_score: null, reversion_score: null, capex_score: null, planning_score: null,
-          tenant_score: null, depreciation_score: null, fx_score: null, exit_score: null,
-          overall_score, recommendation, created_at: now, updated_at: now,
-        } as InvestmentScore)
-      : null,
-    decisions: [],
+    documents: [], score: headerScore, decisions: [],
   };
 }
 
