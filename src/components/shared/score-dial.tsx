@@ -1,0 +1,87 @@
+import { cn } from "@/lib/utils";
+import { scoreTone, type Tone } from "@/lib/domain";
+
+const RING_STROKE: Record<Tone, string> = {
+  positive: "#3E7C5A",
+  gold: "#C2A14E",
+  caution: "#B98427",
+  negative: "#A6483D",
+  neutral: "#C2A14E",
+  muted: "#8A97A1",
+};
+
+/** Circular score dial (score out of 10). Used in the deal header. */
+export function ScoreDial({
+  score,
+  size = 64,
+  dark = false,
+}: {
+  score: number | null | undefined;
+  size?: number;
+  dark?: boolean;
+}) {
+  const value = score ?? 0;
+  const pct = Math.max(0, Math.min(1, value / 10));
+  const r = size / 2 - 5;
+  const c = 2 * Math.PI * r;
+  const tone = scoreTone(score);
+
+  return (
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={4}
+          stroke={dark ? "rgba(255,255,255,0.12)" : "#E2DBCD"}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={4}
+          strokeLinecap="round"
+          stroke={RING_STROKE[tone]}
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - pct)}
+        />
+      </svg>
+      <div className="absolute flex flex-col items-center leading-none">
+        <span
+          className={cn(
+            "tabular text-lg font-semibold",
+            dark ? "text-surface" : "text-ink",
+          )}
+        >
+          {score != null ? score.toFixed(1) : "—"}
+        </span>
+        <span className={cn("text-[9px] uppercase tracking-label", dark ? "text-surface/50" : "text-ink-faint")}>
+          / 10
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Horizontal pillar score bar (out of 10). */
+export function ScoreBar({ label, score }: { label: string; score: number | null }) {
+  const value = score ?? 0;
+  const tone = scoreTone(score);
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <span className="w-32 shrink-0 text-xs text-ink-muted">{label}</span>
+      <div className="h-1.5 flex-1 rounded-full bg-surface-sunken">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${(value / 10) * 100}%`, backgroundColor: RING_STROKE[tone] }}
+        />
+      </div>
+      <span className="tabular w-8 shrink-0 text-right text-xs font-medium text-ink">
+        {score != null ? score.toFixed(1) : "—"}
+      </span>
+    </div>
+  );
+}

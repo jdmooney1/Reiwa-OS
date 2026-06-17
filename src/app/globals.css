@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Georgia", serif;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-surface text-ink;
+    font-feature-settings: "ss01", "cv01";
+  }
+  /* Tabular figures everywhere numbers matter */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+@layer components {
+  /* Small uppercase field label used throughout the institutional UI */
+  .eyebrow {
+    @apply text-2xs font-medium uppercase tracking-label text-ink-faint;
+  }
+  .eyebrow-light {
+    @apply text-2xs font-medium uppercase tracking-label text-gold-soft/70;
+  }
+  .hairline {
+    @apply border-line;
+  }
+}
