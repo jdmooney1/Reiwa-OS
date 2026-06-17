@@ -5,7 +5,7 @@ export default function MemoPage() {
     <ComingSoon
       eyebrow="Reporting"
       title="Investment Memos"
-      description="Committee-ready investment memoranda assembled from each deal file. Export engine arrives in a later phase."
+      description="A cross-deal memo library. Generate and edit memos per deal from the Memo tab on each deal file; this workspace will collect them and add PDF export."
     />
   );
 }

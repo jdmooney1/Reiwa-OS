@@ -61,7 +61,7 @@ export function DealTabs({
           <DecisionLogTab decisions={file.decisions} />
         </TabsContent>
         <TabsContent value="memo">
-          <MemoTab file={file} />
+          <MemoTab file={file} narrative={narrative} />
         </TabsContent>
       </div>
     </Tabs>
