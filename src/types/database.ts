@@ -57,8 +57,13 @@ export type RiskCategory =
 export type RiskStatus = "open" | "mitigated" | "accepted" | "closed";
 
 export type DocCategory =
-  | "Legal" | "Financial" | "Technical" | "Valuation" | "Marketing"
-  | "Tax" | "Planning" | "ESG" | "Insurance" | "Correspondence" | "Other";
+  | "Broker Brochure" | "Rent Roll" | "Lease" | "Title" | "Valuation"
+  | "Technical DD" | "Planning" | "EPC" | "Capex Quote" | "Tax Memo"
+  | "Legal Memo" | "Photos" | "Floorplans" | "Financial Model"
+  | "Investor Presentation";
+
+// Lifecycle of a document through the AI ingestion workflow.
+export type DocIngestStatus = "uploaded" | "processing" | "extracted" | "reviewed";
 
 export type Recommendation =
   | "strong_proceed" | "proceed" | "proceed_with_caution" | "weak" | "reject";
@@ -179,6 +184,19 @@ export interface DocumentRecord {
   uploaded_by: string | null;
   uploaded_at: string;
   summary: string | null;
+  ingest_status: DocIngestStatus;
+  extraction: DocumentExtraction | null;
+}
+
+// Structured "deal memory" extracted from a document during AI ingestion.
+export interface DocumentExtraction {
+  summary: string;
+  key_facts: string[];
+  financial_figures: string[];
+  lease_terms: string[];
+  risks: string[];
+  missing_information: string[];
+  follow_up_questions: string[];
 }
 
 // A single weighted scoring line. `category` matches a ScoreCategoryKey in
@@ -254,6 +272,32 @@ export interface InvestmentScoreCategoryRow {
   risk_flag: boolean;
 }
 
+// documents is the file row; the structured extraction is a 1:1 child table.
+export interface DocumentRow {
+  document_id: string;
+  deal_id: string;
+  file_name: string;
+  file_type: string | null;
+  category: DocCategory;
+  storage_url: string | null;
+  uploaded_by: string | null;
+  uploaded_at: string;
+  summary: string | null;
+  ingest_status: DocIngestStatus;
+}
+
+export interface DocumentExtractionRow {
+  document_id: string;
+  deal_id: string;
+  summary: string | null;
+  key_facts: string[];
+  financial_figures: string[];
+  lease_terms: string[];
+  risks: string[];
+  missing_information: string[];
+  follow_up_questions: string[];
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -262,7 +306,8 @@ export interface Database {
       due_diligence_items: { Row: Row<DueDiligenceItem>; Insert: Insert<DueDiligenceItem>; Update: Update<DueDiligenceItem> };
       risks: { Row: Row<Risk>; Insert: Insert<Risk>; Update: Update<Risk> };
       contacts: { Row: Row<Contact>; Insert: Insert<Contact>; Update: Update<Contact> };
-      documents: { Row: Row<DocumentRecord>; Insert: Insert<DocumentRecord>; Update: Update<DocumentRecord> };
+      documents: { Row: Row<DocumentRow>; Insert: Insert<DocumentRow>; Update: Update<DocumentRow> };
+      document_extractions: { Row: Row<DocumentExtractionRow>; Insert: Insert<DocumentExtractionRow>; Update: Update<DocumentExtractionRow> };
       investment_scores: { Row: Row<InvestmentScoreRow>; Insert: Insert<InvestmentScoreRow>; Update: Update<InvestmentScoreRow> };
       investment_score_categories: { Row: Row<InvestmentScoreCategoryRow>; Insert: Insert<InvestmentScoreCategoryRow>; Update: Update<InvestmentScoreCategoryRow> };
       decision_log: { Row: Row<DecisionLogEntry>; Insert: Insert<DecisionLogEntry>; Update: Update<DecisionLogEntry> };

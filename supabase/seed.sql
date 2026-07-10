@@ -175,24 +175,77 @@ insert into contacts (deal_id, name, company, role, email, phone, notes) values
 -- ----------------------------------------------------------------------------
 -- 6. documents
 -- ----------------------------------------------------------------------------
+insert into documents (document_id, deal_id, file_name, file_type, category,
+  storage_url, uploaded_by, summary, ingest_status) values
+('c0000001-0000-0000-0000-000000000001', 'a1111111-1111-1111-1111-111111111111',
+  'Queens-Gate-IM.pdf', 'application/pdf', 'Broker Brochure',
+  'deal-documents/a1111111/queens-gate-im.pdf', 'Reiwa Analyst',
+  'Information memorandum from Knight Frank.', 'reviewed'),
+('c0000001-0000-0000-0000-000000000002', 'a1111111-1111-1111-1111-111111111111',
+  'Queens-Gate-Rent-Roll.xlsx', 'spreadsheet', 'Rent Roll',
+  'deal-documents/a1111111/rent-roll.xlsx', 'Reiwa Analyst',
+  'Vendor rent roll — multi-let apartments.', 'extracted'),
+('c0000001-0000-0000-0000-000000000003', 'a1111111-1111-1111-1111-111111111111',
+  'Red-Book-Valuation.pdf', 'application/pdf', 'Valuation',
+  'deal-documents/a1111111/valuation.pdf', 'KF Valuation',
+  'RICS Red Book valuation.', 'reviewed'),
+('c0000001-0000-0000-0000-000000000004', 'a1111111-1111-1111-1111-111111111111',
+  'Heritage-Statement.pdf', 'application/pdf', 'Planning',
+  'deal-documents/a1111111/heritage.pdf', 'Gerald Eve',
+  'Heritage statement for listed consent.', 'extracted'),
+('c0000001-0000-0000-0000-000000000005', 'a1111111-1111-1111-1111-111111111111',
+  'Title-Register-NGL123456.pdf', 'application/pdf', 'Title',
+  'deal-documents/a1111111/title.pdf', 'Forsters LLP',
+  'Land Registry official copy.', 'uploaded');
+
+-- Conduit & Magna documents (no extraction yet)
 insert into documents (deal_id, file_name, file_type, category, storage_url,
-  uploaded_by, summary) values
-('a1111111-1111-1111-1111-111111111111', 'Queens-Gate-IM.pdf', 'application/pdf',
-  'Marketing', 'deal-documents/a1111111/queens-gate-im.pdf', 'Reiwa Analyst',
-  'Information memorandum from Knight Frank.'),
-('a1111111-1111-1111-1111-111111111111', 'Queens-Gate-Underwriting.xlsx',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Financial',
-  'deal-documents/a1111111/underwriting.xlsx', 'Reiwa Analyst',
-  'Base-case underwriting model.'),
+  uploaded_by, summary, ingest_status) values
 ('a2222222-2222-2222-2222-222222222222', 'Conduit-St-Tenancy-Schedule.pdf',
-  'application/pdf', 'Legal', 'deal-documents/a2222222/tenancy-schedule.pdf',
-  'Reiwa Analyst', 'Current tenancy schedule and lease summaries.'),
+  'application/pdf', 'Rent Roll', 'deal-documents/a2222222/tenancy-schedule.pdf',
+  'Reiwa Analyst', 'Current tenancy schedule and lease summaries.', 'uploaded'),
 ('a3333333-3333-3333-3333-333333333333', 'Magna-Plaza-Teaser.pdf',
-  'application/pdf', 'Marketing', 'deal-documents/a3333333/teaser.pdf',
-  'Reiwa Analyst', 'CBRE marketing teaser.'),
+  'application/pdf', 'Broker Brochure', 'deal-documents/a3333333/teaser.pdf',
+  'Reiwa Analyst', 'CBRE marketing teaser.', 'uploaded'),
 ('a3333333-3333-3333-3333-333333333333', 'Magna-Plaza-Monument-Report.pdf',
   'application/pdf', 'Planning', 'deal-documents/a3333333/monument-report.pdf',
-  'Reiwa Analyst', 'Heritage / Rijksmonument constraints overview.');
+  'Reiwa Analyst', 'Heritage / Rijksmonument constraints overview.', 'extracted');
+
+-- Structured extractions (AI deal memory) for ingested 58 Queens Gate documents
+insert into document_extractions (document_id, deal_id, summary, key_facts,
+  financial_figures, lease_terms, risks, missing_information, follow_up_questions) values
+('c0000001-0000-0000-0000-000000000001', 'a1111111-1111-1111-1111-111111111111',
+  'Knight Frank IM for 58 Queens Gate offered at GBP 42.5m. Headline figures are vendor-prepared and require verification.',
+  ARRAY['58 Queens Gate, South Kensington (SW7)', 'Grade II listed, c. 24,500 sq ft'],
+  ARRAY['Guide price: GBP 42,500,000', 'Passing rent: GBP 950,000 p.a.', 'ERV: GBP 1,450,000 p.a.', 'NIY: 2.1%'],
+  ARRAY[]::text[],
+  ARRAY['Vendor-prepared figures — verify independently.'],
+  ARRAY['Verified tenancy schedule', 'Vendor income & expenditure history'],
+  ARRAY['Please provide the underlying data behind the headline rent and ERV.']),
+('c0000001-0000-0000-0000-000000000002', 'a1111111-1111-1111-1111-111111111111',
+  'Rent roll confirms in-place income materially below ERV, supporting the reversionary thesis.',
+  ARRAY['Multi-let residential — several apartments'],
+  ARRAY['Total passing rent: GBP 950,000 p.a.', 'ERV: GBP 1,450,000 p.a.', 'Reversion: GBP 500,000 p.a.'],
+  ARRAY['Mix of ASTs and longer leases — expiries to verify per unit.'],
+  ARRAY['Income reversionary; several units let below market.'],
+  ARRAY['Unit-by-unit lease expiry profile', 'Arrears schedule'],
+  ARRAY['Which units can be obtained with vacant possession, and when?']),
+('c0000001-0000-0000-0000-000000000003', 'a1111111-1111-1111-1111-111111111111',
+  'Independent RICS Red Book valuation supporting the purchase price.',
+  ARRAY['Independent RICS valuer', 'Basis: Market Value'],
+  ARRAY['Market Value: GBP 43,000,000', 'NIY: 2.1%', 'Reversionary yield: 3.2%'],
+  ARRAY[]::text[],
+  ARRAY['Value sensitive to the assumed exit yield.'],
+  ARRAY['Comparable evidence schedule'],
+  ARRAY['Does the valuation reflect the proposed business plan and capex?']),
+('c0000001-0000-0000-0000-000000000004', 'a1111111-1111-1111-1111-111111111111',
+  'Heritage statement on the Grade II listing; internal reconfiguration is constrained and requires consent.',
+  ARRAY['Grade II listed', 'Within an RBKC conservation area'],
+  ARRAY[]::text[],
+  ARRAY[]::text[],
+  ARRAY['Listed building consent constrains the target reconfiguration.', 'Consent timeline could delay the programme.'],
+  ARRAY['Pre-application advice from RBKC'],
+  ARRAY['What unit mix is deliverable under listed consent, and on what timeline?']);
 
 -- ----------------------------------------------------------------------------
 -- 7. investment_scores  (header) + investment_score_categories (11 lines each)

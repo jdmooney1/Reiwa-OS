@@ -71,9 +71,13 @@ create type risk_category    as enum ('market', 'tenant', 'structural', 'legal',
 
 create type risk_status      as enum ('open', 'mitigated', 'accepted', 'closed');
 
-create type doc_category      as enum ('Legal', 'Financial', 'Technical', 'Valuation',
-                                      'Marketing', 'Tax', 'Planning', 'ESG',
-                                      'Insurance', 'Correspondence', 'Other');
+create type doc_category      as enum ('Broker Brochure', 'Rent Roll', 'Lease',
+                                      'Title', 'Valuation', 'Technical DD', 'Planning',
+                                      'EPC', 'Capex Quote', 'Tax Memo', 'Legal Memo',
+                                      'Photos', 'Floorplans', 'Financial Model',
+                                      'Investor Presentation');
+
+create type doc_ingest_status as enum ('uploaded', 'processing', 'extracted', 'reviewed');
 
 create type recommendation   as enum ('strong_proceed', 'proceed',
                                       'proceed_with_caution', 'weak', 'reject');
@@ -223,20 +227,39 @@ create trigger trg_contacts_updated before update on contacts
   for each row execute function set_updated_at();
 
 -- ============================================================================
--- 6. documents  (metadata; bytes live in Supabase Storage)
+-- 6. documents (metadata) + document_extractions (structured deal memory)
+-- ----------------------------------------------------------------------------
+-- Document bytes live in private Supabase Storage; the row holds metadata and an
+-- ingestion status. The AI ingestion workflow writes a 1:1 extraction row that
+-- turns the file into structured deal memory (facts, figures, lease terms,
+-- risks, gaps and follow-ups) from which DD tasks and risks can be created.
 -- ============================================================================
 create table documents (
-  document_id uuid primary key default gen_random_uuid(),
-  deal_id     uuid not null references deals(deal_id) on delete cascade,
-  file_name   text not null,
-  file_type   text,
-  category    doc_category not null default 'Other',
-  storage_url text,                          -- path within the private bucket
-  uploaded_by text,
-  uploaded_at timestamptz not null default now(),
-  summary     text
+  document_id   uuid primary key default gen_random_uuid(),
+  deal_id       uuid not null references deals(deal_id) on delete cascade,
+  file_name     text not null,
+  file_type     text,
+  category      doc_category not null,
+  storage_url   text,                        -- path within the private bucket
+  uploaded_by   text,
+  uploaded_at   timestamptz not null default now(),
+  summary       text,
+  ingest_status doc_ingest_status not null default 'uploaded'
 );
 create index idx_documents_deal on documents(deal_id);
+
+create table document_extractions (
+  document_id         uuid primary key references documents(document_id) on delete cascade,
+  deal_id             uuid not null references deals(deal_id) on delete cascade,
+  summary             text,
+  key_facts           text[] not null default '{}',
+  financial_figures   text[] not null default '{}',
+  lease_terms         text[] not null default '{}',
+  risks               text[] not null default '{}',
+  missing_information text[] not null default '{}',
+  follow_up_questions text[] not null default '{}'
+);
+create index idx_doc_extractions_deal on document_extractions(deal_id);
 
 -- ============================================================================
 -- 7. investment_scores  (1:1 header) + investment_score_categories (1:many)
@@ -304,6 +327,7 @@ alter table due_diligence_items enable row level security;
 alter table risks               enable row level security;
 alter table contacts            enable row level security;
 alter table documents           enable row level security;
+alter table document_extractions enable row level security;
 alter table investment_scores   enable row level security;
 alter table investment_score_categories enable row level security;
 alter table decision_log        enable row level security;
@@ -315,6 +339,7 @@ create policy dd_rw        on due_diligence_items for all to authenticated using
 create policy risks_rw     on risks               for all to authenticated using (true) with check (true);
 create policy contacts_rw  on contacts            for all to authenticated using (true) with check (true);
 create policy documents_rw on documents           for all to authenticated using (true) with check (true);
+create policy doc_ext_rw   on document_extractions for all to authenticated using (true) with check (true);
 create policy scores_rw    on investment_scores   for all to authenticated using (true) with check (true);
 create policy score_cat_rw on investment_score_categories for all to authenticated using (true) with check (true);
 create policy decisions_rw on decision_log        for all to authenticated using (true) with check (true);

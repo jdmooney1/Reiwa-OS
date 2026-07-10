@@ -52,7 +52,7 @@ export function DealTabs({
           <ScoreTab deal={file.deal} score={file.score} />
         </TabsContent>
         <TabsContent value="documents">
-          <DocumentsTab documents={file.documents} />
+          <DocumentsTab file={file} />
         </TabsContent>
         <TabsContent value="contacts">
           <ContactsTab contacts={file.contacts} />
