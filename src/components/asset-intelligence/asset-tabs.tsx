@@ -4,9 +4,9 @@ import type { AssetFile } from "@/lib/asset-intelligence/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardBody } from "@/components/ui/card";
 import { AssetOverview } from "@/components/asset-intelligence/asset-overview";
+import { PerformancePanel } from "@/components/asset-intelligence/performance-panel";
 
 const PLANNED: Record<string, { phase: string; points: string[] }> = {
-  performance: { phase: "Phase 2", points: ["Underwriting / approved / forecast / actual by period", "Variance analysis with value-bridge attribution (NOI, vacancy, ERV, yield, CapEx, financing, FX)"] },
   leasing: { phase: "Phase 2", points: ["Rent roll, expiry profile, ERV vs passing", "Upcoming lease events, vacancy and leasing pipeline"] },
   capex: { phase: "Phase 2–3", points: ["Operating CapEx: budget / approved / committed / spent / forecast / variance", "Development: programme, workstreams, milestones, critical issues, programme variance"] },
   valuation: { phase: "Phase 2", points: ["Valuation history and movement", "Valuation bridge where data supports attribution"] },
@@ -17,7 +17,7 @@ const PLANNED: Record<string, { phase: string; points: string[] }> = {
   reporting: { phase: "Phase 4", points: ["Monthly / quarterly / annual / IC reports from the same dataset", "AI management commentary and document intelligence"] },
 };
 
-export function AssetTabs({ file }: { file: AssetFile }) {
+export function AssetTabs({ file, canWrite = false }: { file: AssetFile; canWrite?: boolean }) {
   return (
     <Tabs defaultValue="overview">
       <TabsList>
@@ -35,6 +35,7 @@ export function AssetTabs({ file }: { file: AssetFile }) {
 
       <div className="px-8 py-6">
         <TabsContent value="overview"><AssetOverview file={file} /></TabsContent>
+        <TabsContent value="performance"><PerformancePanel file={file} canWrite={canWrite} /></TabsContent>
         {Object.entries(PLANNED).map(([key, cfg]) => (
           <TabsContent key={key} value={key}>
             <PlannedTab phase={cfg.phase} points={cfg.points} />

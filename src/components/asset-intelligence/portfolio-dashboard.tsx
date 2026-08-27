@@ -14,11 +14,22 @@ import { MetricTile } from "@/components/shared/metric-tile";
 import { VarianceValue } from "@/components/shared/variance";
 import { cn } from "@/lib/utils";
 
-export function PortfolioDashboard({ files }: { files: AssetFile[] }) {
-  const agg = portfolioAggregate(files, "GBP");
+export function PortfolioDashboard({
+  files, rates, fxNote,
+}: {
+  files: AssetFile[];
+  rates?: Record<string, number>;
+  fxNote?: string;
+}) {
+  const agg = portfolioAggregate(files, "GBP", rates);
 
   return (
     <div className="space-y-6 px-8 py-6">
+      {fxNote && (
+        <div className="text-2xs text-ink-faint">
+          Reporting currency GBP · {fxNote}
+        </div>
+      )}
       {/* Primary KPI strip */}
       <Card>
         <div className="grid grid-cols-2 divide-x divide-line border-b border-line sm:grid-cols-3 lg:grid-cols-6">

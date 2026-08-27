@@ -1,29 +1,33 @@
+import Link from "next/link";
 import { Plus } from "lucide-react";
-import { getDeals } from "@/lib/mock-data";
+import { requireAuth, toDbSession } from "@/lib/auth/session";
+import { listOpportunities } from "@/lib/data/opportunities";
 import { PageHeader } from "@/components/layout/page-header";
-import { PipelineView } from "@/components/pipeline/pipeline-view";
-import { formatMoneyCompact } from "@/lib/format";
+import { OpportunityPipeline } from "@/components/opportunities/opportunity-pipeline";
 
-export default function PipelinePage() {
-  const deals = getDeals();
-  const active = deals.filter((d) => d.status === "active");
-  const gbp = active.filter((d) => d.currency === "GBP").reduce((s, d) => s + (d.price_guidance ?? 0), 0);
-  const eur = active.filter((d) => d.currency === "EUR").reduce((s, d) => s + (d.price_guidance ?? 0), 0);
+export const dynamic = "force-dynamic";
+
+export default async function PipelinePage() {
+  const auth = await requireAuth();
+  const opportunities = await listOpportunities(toDbSession(auth));
+  const canWrite = auth.role !== "investor_viewer";
 
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         eyebrow="Investment Desk"
-        title="Deal Pipeline"
-        description={`${active.length} active opportunities · ${formatMoneyCompact(gbp, "GBP")} + ${formatMoneyCompact(eur, "EUR")} under consideration`}
+        title="Pipeline"
+        description="Opportunities across the lifecycle — persisted to the live database."
         actions={
-          <button className="flex items-center gap-1.5 rounded bg-navy px-3.5 py-2 text-xs font-medium text-surface transition-colors hover:bg-navy-50">
-            <Plus className="h-3.5 w-3.5" /> New Deal
-          </button>
+          canWrite ? (
+            <Link href="/opportunities/new" className="flex items-center gap-1.5 rounded bg-navy px-3.5 py-2 text-xs font-medium text-surface transition-colors hover:bg-navy-50">
+              <Plus className="h-3.5 w-3.5" /> New Opportunity
+            </Link>
+          ) : null
         }
       />
       <div className="min-h-0 flex-1">
-        <PipelineView deals={deals} />
+        <OpportunityPipeline opportunities={opportunities} />
       </div>
     </div>
   );

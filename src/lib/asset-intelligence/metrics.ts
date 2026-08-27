@@ -194,16 +194,21 @@ export interface PortfolioAggregate {
   reportingCurrency: Currency;
 }
 
-// Demonstration FX rates to the reporting currency. Clearly labelled as demo in
-// the UI — replace with a live rate source when wiring the backend.
-export const DEMO_FX_TO_GBP: Record<Currency, number> = { GBP: 1, EUR: 0.85, USD: 0.79 };
+// Fallback demo rates for the Phase-1 mock page only. The live portfolio path
+// passes an EXPLICIT, labelled rate table (see src/lib/data/portfolio.ts).
+export const DEMO_FX_TO_GBP: Record<string, number> = { GBP: 1, EUR: 0.85, USD: 0.79, JPY: 0.0052 };
 
-export function portfolioAggregate(files: AssetFile[], reportingCurrency: Currency = "GBP"): PortfolioAggregate {
-  const base = DEMO_FX_TO_GBP[reportingCurrency];
+export function portfolioAggregate(
+  files: AssetFile[],
+  reportingCurrency: Currency = "GBP",
+  rates: Record<string, number> = DEMO_FX_TO_GBP,
+): PortfolioAggregate {
+  const rateOf = (c: string) => rates[c] ?? DEMO_FX_TO_GBP[c] ?? 1;
+  const base = rateOf(reportingCurrency);
   const snaps = files.map((f) => ({
     f,
     s: assetSnapshot(f),
-    fx: DEMO_FX_TO_GBP[f.asset.currency] / base, // asset currency → reporting currency
+    fx: rateOf(f.asset.currency) / base, // asset currency → reporting currency
   }));
   // Sum money metrics in the reporting currency (FX-converted).
   const sum = (fn: (x: (typeof snaps)[number]) => number | null | undefined) =>

@@ -1,18 +1,20 @@
 import { notFound } from "next/navigation";
-import { getAssetFile, getPortfolios } from "@/lib/asset-intelligence/mock";
+import { requireAuth, toDbSession } from "@/lib/auth/session";
+import { getAssetFile } from "@/lib/data/assets";
 import { AssetHeader } from "@/components/asset-intelligence/asset-header";
 import { AssetTabs } from "@/components/asset-intelligence/asset-tabs";
 
-export default function AssetPage({ params }: { params: { assetId: string } }) {
-  const file = getAssetFile(params.assetId);
-  if (!file) notFound();
+export const dynamic = "force-dynamic";
 
-  const portfolio = getPortfolios().find((p) => p.portfolio_id === file.asset.portfolio_id);
+export default async function AssetPage({ params }: { params: { assetId: string } }) {
+  const auth = await requireAuth();
+  const file = await getAssetFile(toDbSession(auth), params.assetId);
+  if (!file) notFound();
 
   return (
     <div className="min-h-full bg-surface pb-16">
-      <AssetHeader file={file} portfolioName={portfolio?.name ?? null} />
-      <AssetTabs file={file} />
+      <AssetHeader file={file} portfolioName={null} />
+      <AssetTabs file={file} canWrite={auth.role !== "investor_viewer"} />
     </div>
   );
 }

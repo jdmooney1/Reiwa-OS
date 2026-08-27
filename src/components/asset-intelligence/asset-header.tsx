@@ -34,7 +34,7 @@ export function AssetHeader({ file, portfolioName }: { file: AssetFile; portfoli
             {a.strategy && <Badge tone="neutral" dark>{STRATEGY_LABEL[a.strategy]}</Badge>}
             <Badge tone="neutral" dark>{ASSET_TYPE_LABEL[a.asset_type]}</Badge>
             {a.source_deal_id && (
-              <Link href={`/deals/${a.source_deal_id}`}>
+              <Link href={`/opportunities/${a.source_deal_id}`}>
                 <Badge tone="muted" dark className="hover:border-gold/60">
                   <FileText className="h-2.5 w-2.5" /> Underwriting case
                 </Badge>
