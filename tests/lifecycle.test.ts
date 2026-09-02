@@ -8,7 +8,7 @@ import { convertToAsset } from "@/lib/data/conversion";
 import { getAssetFile, listAssetFiles, addPerformancePeriod } from "@/lib/data/assets";
 import { getPortfolioData } from "@/lib/data/portfolio";
 import { threeWay, variance, varianceTone } from "@/lib/asset-intelligence/metrics";
-import { freshDb, installTestDb, clearTestDb, orgIdByName, orgUserSession } from "./helpers";
+import { freshDb, installTestDb, clearTestDb, orgIdByName, sessionFor } from "./helpers";
 
 let db: PGlite;
 let meiji: string;
@@ -18,7 +18,7 @@ beforeAll(async () => {
   db = await freshDb();
   installTestDb(db);
   meiji = await orgIdByName(db, "Meiji Shipping");
-  session = orgUserSession([meiji]);
+  session = await sessionFor(db, "analyst@meiji.com");
 });
 afterAll(async () => { clearTestDb(); await db.close(); });
 

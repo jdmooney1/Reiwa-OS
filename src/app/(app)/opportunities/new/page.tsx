@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NewOpportunityPage() {
   const auth = await requireAuth();
-  if (auth.role === "investor_viewer") redirect("/pipeline");
+  if (!auth.canWrite) redirect("/pipeline");
   const orgs = await listOrgs(toDbSession(auth));
 
   return (

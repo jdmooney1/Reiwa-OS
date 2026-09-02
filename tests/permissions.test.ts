@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
 import { createOpportunity } from "@/lib/data/opportunities";
-import { freshDb, installTestDb, clearTestDb, orgIdByName, viewerSession, orgUserSession } from "./helpers";
+import { freshDb, installTestDb, clearTestDb, orgIdByName, sessionFor } from "./helpers";
 
 let db: PGlite;
 let meiji: string;
@@ -15,22 +15,34 @@ beforeAll(async () => {
 });
 afterAll(async () => { clearTestDb(); await db.close(); });
 
-describe("Write permissions & scope (database-enforced)", () => {
-  it("investor_viewer cannot create (write blocked by RLS)", async () => {
+describe("Write permissions & scope (database-enforced via membership roles)", () => {
+  it("a viewer-role member cannot create (write blocked by RLS)", async () => {
+    const viewer = await sessionFor(db, "viewer@meiji.com");
+    expect(viewer.canWrite).toBe(false); // UI hint agrees with DB
     await expect(
-      createOpportunity(viewerSession([meiji]), { orgId: meiji, name: "Viewer Attempt" }),
+      createOpportunity(viewer, { orgId: meiji, name: "Viewer Attempt" }),
     ).rejects.toThrow();
   });
 
   it("a user cannot create an opportunity in an org they don't belong to", async () => {
-    // Meiji user attempts to write into Aoyama's org — RLS check must fail.
+    const analyst = await sessionFor(db, "analyst@meiji.com");
     await expect(
-      createOpportunity(orgUserSession([meiji]), { orgId: aoyama, name: "Cross-Org Attempt" }),
+      createOpportunity(analyst, { orgId: aoyama, name: "Cross-Org Attempt" }),
     ).rejects.toThrow();
   });
 
-  it("an org_user can create within their own org", async () => {
-    const id = await createOpportunity(orgUserSession([meiji]), { orgId: meiji, name: "Legit Opp" });
+  it("a manager-role member can create within their own org", async () => {
+    const analyst = await sessionFor(db, "analyst@meiji.com");
+    const id = await createOpportunity(analyst, { orgId: meiji, name: "Legit Opp" });
     expect(id).toBeTruthy();
+  });
+
+  it("the session's canWrite flag cannot override the database (RLS re-derives)", async () => {
+    // Forge canWrite=true on the read-only viewer: the DB must still block.
+    const viewer = await sessionFor(db, "viewer@meiji.com");
+    const forged = { ...viewer, canWrite: true };
+    await expect(
+      createOpportunity(forged, { orgId: meiji, name: "Forged Flag Attempt" }),
+    ).rejects.toThrow();
   });
 });

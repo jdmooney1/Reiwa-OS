@@ -1,3 +1,15 @@
+// ============================================================================
+// Session layer — target shape for Supabase Auth as the single identity
+// provider (staff email+password; investors email OTP in P1).
+// ----------------------------------------------------------------------------
+// TRANSITIONAL: until connectivity to the hosted reiwa-dev Supabase project is
+// available from this environment, the ACTIVE mechanism is the legacy signed
+// session cookie below. The exported interface (AuthSession / getSession /
+// requireAuth) is already the target shape, so swapping the provider to
+// @supabase/ssr changes only this module's internals (P0 steps 5/12).
+// `role` and `canWrite` are UI hints; RLS re-derives authorisation in the
+// database from auth.uid() membership joins.
+// ============================================================================
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import type { GlobalRole, Session } from "@/lib/db/client";
@@ -8,20 +20,16 @@ const secret = new TextEncoder().encode(
 );
 
 export interface AuthSession {
-  userId: string;
+  kind: "internal";
+  userId: string; // Supabase Auth user id (auth.users.id)
   email: string;
   name: string | null;
   role: GlobalRole;
-  orgIds: string[];
+  canWrite: boolean; // admin, or any membership with a write role
 }
 
-export function canWrite(role: GlobalRole): boolean {
-  return role !== "investor_viewer";
-}
-
-/** DB session (role + org scope) derived from the auth session. */
 export function toDbSession(s: AuthSession): Session {
-  return { userId: s.userId, orgIds: s.orgIds, role: s.role, canWrite: canWrite(s.role) };
+  return { kind: "internal", userId: s.userId, role: s.role, canWrite: s.canWrite };
 }
 
 export async function createSessionCookie(s: AuthSession): Promise<void> {
@@ -43,7 +51,6 @@ export function clearSessionCookie(): void {
   cookies().set(COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
-/** For server actions/pages: the auth session or a redirect to sign-in. */
 export async function requireAuth(): Promise<AuthSession> {
   const s = await getSession();
   if (s) return s;
@@ -62,11 +69,12 @@ export async function getSession(): Promise<AuthSession | null> {
   try {
     const { payload } = await jwtVerify(token, secret);
     return {
+      kind: "internal",
       userId: String(payload.userId),
       email: String(payload.email),
       name: (payload.name as string) ?? null,
       role: payload.role as GlobalRole,
-      orgIds: (payload.orgIds as string[]) ?? [],
+      canWrite: payload.canWrite === true,
     };
   } catch {
     return null;

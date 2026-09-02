@@ -23,10 +23,13 @@ describe("File persistence across server restart", () => {
     await getDb();
     const auth = await authenticate("analyst@meiji.com", "reiwa2026");
     expect(auth).not.toBeNull();
-    const session: Session = { userId: auth!.userId, orgIds: auth!.orgIds, role: auth!.role, canWrite: true };
+    expect(auth!.canWrite).toBe(true);
+    const session: Session = { kind: "internal", userId: auth!.userId, role: auth!.role, canWrite: auth!.canWrite };
+    const meijiOrg = (await adminQuery<{ org_id: string }>(
+      "select org_id from organizations where name = 'Meiji Shipping'"))[0].org_id;
 
     const id = await createOpportunity(session, {
-      orgId: auth!.orgIds[0], name: "20 Example Street", city: "London", market: "London",
+      orgId: meijiOrg, name: "20 Example Street", city: "London", market: "London",
       assetType: "office", currency: "GBP", targetPrice: 30000000, targetIrr: 15,
     });
     for (const s of ["screening", "underwriting", "ic", "approved"] as const) await setStage(session, id, s);

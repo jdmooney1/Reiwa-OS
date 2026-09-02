@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function PipelinePage() {
   const auth = await requireAuth();
   const opportunities = await listOpportunities(toDbSession(auth));
-  const canWrite = auth.role !== "investor_viewer";
+  const canWrite = auth.canWrite;
 
   return (
     <div className="flex h-full flex-col">

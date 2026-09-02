@@ -14,7 +14,7 @@ export default async function AssetPage({ params }: { params: { assetId: string 
   return (
     <div className="min-h-full bg-surface pb-16">
       <AssetHeader file={file} portfolioName={null} />
-      <AssetTabs file={file} canWrite={auth.role !== "investor_viewer"} />
+      <AssetTabs file={file} canWrite={auth.canWrite} />
     </div>
   );
 }

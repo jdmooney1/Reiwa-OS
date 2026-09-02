@@ -1,10 +1,9 @@
 -- ============================================================================
--- 0003 — Asset Intelligence (persisted Phase-1 subset)
+-- 20260901000003 — Asset Intelligence (persisted Phase-1 subset)
 -- ----------------------------------------------------------------------------
--- asset = the owned position, created on conversion, linked to property /
--- opportunity / investment_case / transaction. The first business_plan
--- (plan_type='underwriting') is IMMUTABLE — the original underwriting baseline.
--- Forecasts are new versions; actuals are append-only performance_periods.
+-- Unchanged data model from the approved persistence gate; Supabase-native
+-- policies (has_org / can_write_org). The v1 'underwriting' business plan
+-- remains IMMUTABLE.
 -- ============================================================================
 
 create table if not exists assets (
@@ -29,7 +28,6 @@ create table if not exists assets (
 create index if not exists idx_assets_org on assets(org_id);
 create index if not exists idx_assets_property on assets(property_id);
 
--- Shared metric columns for plans & periods (three-way comparison).
 create table if not exists business_plans (
   plan_id             uuid primary key default gen_random_uuid(),
   org_id              uuid not null references organizations(org_id) on delete cascade,
@@ -55,7 +53,6 @@ create table if not exists business_plans (
 );
 create index if not exists idx_plans_asset on business_plans(asset_id);
 
--- The underwriting baseline is immutable.
 create or replace function app.block_underwriting_plan() returns trigger
   language plpgsql as $$
   begin
@@ -145,7 +142,7 @@ drop trigger if exists trg_assets_touch on assets;
 create trigger trg_assets_touch before update on assets
   for each row execute function app.touch_asset_updated();
 
--- ---- RLS -------------------------------------------------------------------
+-- ---- RLS: reads via has_org; writes via can_write_org ------------------------
 do $$
 declare t text;
 begin
@@ -154,11 +151,11 @@ begin
     execute format('drop policy if exists %I_select on %I', t, t);
     execute format('create policy %I_select on %I for select to authenticated using (app.has_org(org_id))', t, t);
     execute format('drop policy if exists %I_insert on %I', t, t);
-    execute format('create policy %I_insert on %I for insert to authenticated with check (app.has_org(org_id) and app.can_write())', t, t);
+    execute format('create policy %I_insert on %I for insert to authenticated with check (app.has_org(org_id) and app.can_write_org(org_id))', t, t);
     execute format('drop policy if exists %I_update on %I', t, t);
-    execute format('create policy %I_update on %I for update to authenticated using (app.has_org(org_id) and app.can_write()) with check (app.has_org(org_id) and app.can_write())', t, t);
+    execute format('create policy %I_update on %I for update to authenticated using (app.has_org(org_id) and app.can_write_org(org_id)) with check (app.has_org(org_id) and app.can_write_org(org_id))', t, t);
     execute format('drop policy if exists %I_delete on %I', t, t);
-    execute format('create policy %I_delete on %I for delete to authenticated using (app.has_org(org_id) and app.can_write())', t, t);
+    execute format('create policy %I_delete on %I for delete to authenticated using (app.has_org(org_id) and app.can_write_org(org_id))', t, t);
     execute format('grant select, insert, update, delete on %I to authenticated', t);
   end loop;
 end $$;

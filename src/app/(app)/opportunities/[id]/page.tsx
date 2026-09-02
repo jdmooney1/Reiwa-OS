@@ -10,5 +10,5 @@ export default async function OpportunityPage({ params }: { params: { id: string
   const opp = await getOpportunity(toDbSession(auth), params.id);
   if (!opp) notFound();
 
-  return <OpportunityDetail opp={opp} canWrite={auth.role !== "investor_viewer"} />;
+  return <OpportunityDetail opp={opp} canWrite={auth.canWrite} />;
 }

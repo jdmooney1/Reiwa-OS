@@ -24,6 +24,10 @@ export async function seedIfEmpty(db: PGlite): Promise<void> {
   const existing = await q<{ n: number }>("select count(*)::int as n from organizations");
   if ((existing[0]?.n ?? 0) > 0) return;
 
+  // TRANSITIONAL: password hashes power the legacy dev sign-in only. On hosted
+  // Supabase this step is replaced by an identity provider that calls the Auth
+  // Admin API (SUPABASE_SECRET_KEY) to create auth users, then inserts the
+  // matching `users` rows (no password_hash).
   const pwd = hashPassword(DEMO_PASSWORD);
 
   // ---- Organisations ----
@@ -32,24 +36,26 @@ export async function seedIfEmpty(db: PGlite): Promise<void> {
   const aoyama = await one<{ org_id: string }>(
     "insert into organizations(name, type) values ($1,'family_office') returning org_id", ["Aoyama Holdings"]);
 
-  // ---- Users (three roles) + memberships ----
-  const admin = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'reiwa_admin') returning user_id",
-    ["admin@reiwa.com", pwd, "Reiwa Admin"]);
-  const analyst = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'org_user') returning user_id",
-    ["analyst@meiji.com", pwd, "Meiji Analyst"]);
-  const viewer = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'investor_viewer') returning user_id",
-    ["viewer@meiji.com", pwd, "Meiji Investor"]);
-  const aoyamaUser = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'org_user') returning user_id",
-    ["user@aoyama.com", pwd, "Aoyama Manager"]);
+  // ---- Identities (auth.users first, then staff profile) ----
+  const newIdentity = async (email: string, name: string, role: "reiwa_admin" | "org_user") => {
+    const authRow = await one<{ id: string }>(
+      "insert into auth.users(id, email) values (gen_random_uuid(), $1) returning id", [email]);
+    await q(
+      "insert into users(user_id, email, name, global_role, password_hash) values ($1,$2,$3,$4,$5)",
+      [authRow.id, email, name, role, pwd]);
+    return authRow.id;
+  };
 
-  await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'manager')", [meiji.org_id, analyst.user_id]);
-  await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'viewer')", [meiji.org_id, viewer.user_id]);
-  await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'manager')", [aoyama.org_id, aoyamaUser.user_id]);
-  // reiwa_admin sees everything via RLS is_admin(); no membership rows required.
+  const adminId = await newIdentity("admin@reiwa.com", "Reiwa Admin", "reiwa_admin");
+  const analystId = await newIdentity("analyst@meiji.com", "Meiji Analyst", "org_user");
+  const viewerId = await newIdentity("viewer@meiji.com", "Meiji Viewer", "org_user");
+  const aoyamaId = await newIdentity("user@aoyama.com", "Aoyama Manager", "org_user");
+  void adminId; // admin needs no memberships: RLS is_admin() derives from users
+
+  // Read-only access is a MEMBERSHIP role ('viewer'), not a global role.
+  await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'manager')", [meiji.org_id, analystId]);
+  await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'viewer')", [meiji.org_id, viewerId]);
+  await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'manager')", [aoyama.org_id, aoyamaId]);
 
   // ---- Portfolios ----
   const pfUk = await one<{ portfolio_id: string }>(
@@ -76,7 +82,7 @@ export async function seedIfEmpty(db: PGlite): Promise<void> {
        currency, target_price, niy, target_irr, owner_user_id, created_by)
        values ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$12)`,
       [meiji.org_id, prop.property_id, name, market, atype, strat, stage,
-       market === "London" ? "GBP" : "EUR", price, niy, irr, analyst.user_id]);
+       market === "London" ? "GBP" : "EUR", price, niy, irr, analystId]);
   }
   // A rejected opportunity (alternate outcome)
   {
@@ -86,18 +92,18 @@ export async function seedIfEmpty(db: PGlite): Promise<void> {
     await q(`insert into opportunities(org_id, property_id, name, market, asset_type, strategy, stage, status,
        currency, target_price, niy, target_irr, owner_user_id, created_by)
        values ($1,$2,'Clerkenwell Workspace','London','office','value_add','screening','rejected','GBP',38000000,3.4,13.0,$3,$3)`,
-      [meiji.org_id, prop.property_id, analyst.user_id]);
+      [meiji.org_id, prop.property_id, analystId]);
   }
 
   // ---- The two demo assets, persisted through the full lifecycle chain ----
   const files = getAssetFiles();
   for (const f of files) {
     const portfolioId = f.asset.city === "Amsterdam" ? pfNl.portfolio_id : pfUk.portfolio_id;
-    await seedAssetChain(q, one, meiji.org_id, portfolioId, analyst.user_id, f, true);
+    await seedAssetChain(q, one, meiji.org_id, portfolioId, analystId, f, true);
   }
 
   // ---- Aoyama isolation fixture (a separate org's asset) ----
-  await seedStandaloneAsset(q, one, aoyama.org_id, pfAoyama.portfolio_id, aoyamaUser.user_id);
+  await seedStandaloneAsset(q, one, aoyama.org_id, pfAoyama.portfolio_id, aoyamaId);
 }
 
 type Q = <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<T[]>;
