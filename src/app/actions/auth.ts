@@ -1,8 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { authenticate } from "@/lib/auth/service";
-import { createSessionCookie, clearSessionCookie } from "@/lib/auth/session";
+import { createSupabaseServerClient } from "@/lib/auth/supabase-server";
 
 export interface SignInState {
   error?: string;
@@ -13,14 +12,15 @@ export async function signInAction(_prev: SignInState, formData: FormData): Prom
   const password = String(formData.get("password") || "");
   if (!email || !password) return { error: "Enter your email and password." };
 
-  const session = await authenticate(email, password);
-  if (!session) return { error: "Invalid email or password." };
+  const supabase = createSupabaseServerClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { error: "Invalid email or password." };
 
-  await createSessionCookie(session);
   redirect("/portfolio");
 }
 
 export async function signOutAction(): Promise<void> {
-  clearSessionCookie();
+  const supabase = createSupabaseServerClient();
+  await supabase.auth.signOut();
   redirect("/sign-in");
 }

@@ -6,25 +6,51 @@
 //   * Aoyama Holdings  — a separate asset that Meiji users must never see.
 // Demo login password for every seeded user: "reiwa2026".
 // ============================================================================
-import type { PGlite } from "@electric-sql/pglite";
 import { adminQueryOn, type Queryable } from "@/lib/db/client";
-import { hashPassword } from "@/lib/auth/password";
 import { getAssetFiles } from "@/lib/asset-intelligence/mock";
 import type { AssetFile, BusinessPlan } from "@/lib/asset-intelligence/types";
 
 const DEMO_PASSWORD = "reiwa2026";
 
-export async function seedIfEmpty(db: PGlite): Promise<void> {
+/**
+ * Create the auth user (credentials) + staff profile row, returning the id.
+ * On hosted Supabase, credentials are created through the Auth Admin API
+ * (SUPABASE_SECRET_KEY — deliberately not the Postgres connection). On the
+ * local auth shim, an auth.users row with a bcrypt hash is inserted directly.
+ */
+async function createStaffUser(
+  q: Q, email: string, name: string, globalRole: string,
+): Promise<{ user_id: string }> {
+  const shim = await q<{ shim: boolean }>(
+    `select exists(select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'auth' and p.proname = 'is_local_shim') as shim`);
+  let authUserId: string;
+  if (shim[0]?.shim) {
+    const rows = await q<{ id: string }>(
+      `insert into auth.users(email, encrypted_password, raw_user_meta_data)
+       values (lower($1), crypt($2, gen_salt('bf')), jsonb_build_object('name', $3::text))
+       returning id`,
+      [email, DEMO_PASSWORD, name]);
+    authUserId = rows[0].id;
+  } else {
+    const { createAuthUser } = await import("@/lib/auth/admin");
+    authUserId = await createAuthUser(email, DEMO_PASSWORD, name);
+  }
+  const rows = await q<{ user_id: string }>(
+    "insert into users(user_id, email, name, global_role) values ($1, lower($2), $3, $4) returning user_id",
+    [authUserId, email, name, globalRole]);
+  return rows[0];
+}
+
+export async function seedIfEmpty(db: Queryable): Promise<void> {
   const q = <T = Record<string, unknown>>(sql: string, params: unknown[] = []) =>
-    adminQueryOn<T>(db as unknown as Queryable, sql, params);
+    adminQueryOn<T>(db, sql, params);
   // Inserts here always RETURNING a row; cast for ergonomics.
   const one = async <T = Record<string, unknown>>(sql: string, params: unknown[] = []) =>
     (await q<T>(sql, params))[0] as T;
 
   const existing = await q<{ n: number }>("select count(*)::int as n from organizations");
   if ((existing[0]?.n ?? 0) > 0) return;
-
-  const pwd = hashPassword(DEMO_PASSWORD);
 
   // ---- Organisations ----
   const meiji = await one<{ org_id: string }>(
@@ -33,18 +59,11 @@ export async function seedIfEmpty(db: PGlite): Promise<void> {
     "insert into organizations(name, type) values ($1,'family_office') returning org_id", ["Aoyama Holdings"]);
 
   // ---- Users (three roles) + memberships ----
-  const admin = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'reiwa_admin') returning user_id",
-    ["admin@reiwa.com", pwd, "Reiwa Admin"]);
-  const analyst = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'org_user') returning user_id",
-    ["analyst@meiji.com", pwd, "Meiji Analyst"]);
-  const viewer = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'investor_viewer') returning user_id",
-    ["viewer@meiji.com", pwd, "Meiji Investor"]);
-  const aoyamaUser = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'org_user') returning user_id",
-    ["user@aoyama.com", pwd, "Aoyama Manager"]);
+  const admin = await createStaffUser(q, "admin@reiwa.com", "Reiwa Admin", "reiwa_admin");
+  const analyst = await createStaffUser(q, "analyst@meiji.com", "Meiji Analyst", "org_user");
+  const viewer = await createStaffUser(q, "viewer@meiji.com", "Meiji Investor", "investor_viewer");
+  const aoyamaUser = await createStaffUser(q, "user@aoyama.com", "Aoyama Manager", "org_user");
+  void admin; // reiwa_admin needs no membership rows (RLS is_admin() sees all)
 
   await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'manager')", [meiji.org_id, analyst.user_id]);
   await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'viewer')", [meiji.org_id, viewer.user_id]);

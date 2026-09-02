@@ -22,16 +22,16 @@ acquisition* (approved case + underwriting plan), *what was our forecast at date
 
 | Capability | Status | Proof |
 | --- | --- | --- |
-| Real Postgres persistence | **Live** | PGlite (embedded, file-backed); same migrations run on Supabase |
+| Real Postgres persistence | **Live** | PGlite (embedded, file-backed); same migrations run on Supabase — **superseded by P0, see [11](11-p0-supabase-native.md)** |
 | Migrations (idempotent, ordered) | **Live** | `supabase/migrations/0001–0004`, runner in `db/client.ts` |
-| Authentication (email/password, signed cookie) | **Live** | `lib/auth/*`, sign-in page, guarded `(app)` layout |
-| Org isolation via DB RLS | **Live** | `authenticated` role + `app.*` GUC helpers; 3 isolation tests |
+| Authentication (email/password, signed cookie) | **Live** | `lib/auth/*`, sign-in page, guarded `(app)` layout — **replaced by Supabase Auth in P0** |
+| Org isolation via DB RLS | **Live** | `authenticated` role + `app.*` GUC helpers; 3 isolation tests — **RLS now reads `auth.uid()` in P0** |
 | Roles: reiwa_admin / org_user / investor_viewer | **Live** | RLS `has_org` + `can_write`; permission tests |
 | Opportunity CRUD + stage + archive | **Live** | `data/opportunities.ts`, actions, pipeline UI |
 | Opportunity → Asset conversion | **Live** | `data/conversion.ts`; underwriting carried + immutable |
 | Asset Intelligence persistence (asset/plans/periods/risks/decisions/valuations) | **Live** | `data/assets.ts`, DB-backed overview + performance panel |
 | Portfolio aggregation from stored assets | **Live** | `data/portfolio.ts`; explicit labelled FX (`fx_rates`) |
-| Clerk / hosted Supabase | **Designed, not connected** | superseded by working self-contained auth; migrations are Supabase-ready |
+| Clerk / hosted Supabase | **Connected in P0** | PGlite→PostgreSQL, self-contained auth→Supabase Auth; see [11](11-p0-supabase-native.md) |
 | Phase-2 modules (leasing/capex/financing/etc.) | **Planned** | tab shells present; not built this gate |
 
 ## Automated tests (12, all passing) — `npm test`

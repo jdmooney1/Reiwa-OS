@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // PGlite ships WASM; keep it external so it is required at runtime, not bundled.
+  // node-postgres is a Node-native driver; keep it external to the bundle.
   experimental: {
-    serverComponentsExternalPackages: ["@electric-sql/pglite"],
+    serverComponentsExternalPackages: ["pg"],
   },
 };
 
