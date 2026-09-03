@@ -597,33 +597,94 @@ export async function returnVersionToDraft(session: Session, versionId: string):
 }
 
 /**
- * Publish. The supersede of the outgoing version and the repointing of the
- * publication happen inside one database function, in one transaction, so a
- * publication is never briefly pointing at nothing or at two live versions.
+ * Publish, inside a transaction the caller already owns.
+ *
+ * The supersede of the outgoing version and the repointing of the publication
+ * are one unit of work: a publication is never briefly pointing at nothing or at
+ * two live versions. Atomicity comes from the enclosing transaction, and the
+ * `for update` locks make concurrent publishes serialise rather than race;
+ * `publication_versions_single_published` makes the two-live-versions state
+ * unrepresentable regardless.
+ *
+ * This is deliberately NOT a database function. A publication lifecycle function
+ * would have to be granted to `authenticated` for the admin data layer to call
+ * it — and `authenticated` is the role a portal investor authenticates on. As a
+ * statement sequence it needs no EXECUTE grant at all, and each statement is
+ * gated by the admin write policy on its own table.
  */
+export async function publishVersionOn(
+  tx: Queryable, versionId: string, actorUserId: string | null = null,
+): Promise<string> {
+  const version = await tx.query<{ publication_id: string; status: VersionStatus }>(
+    "select publication_id, status from publication_versions where version_id = $1 for update",
+    [versionId]);
+  if (!version.rows[0]) {
+    throw new Error(`Publication version ${versionId} not found, or not writable by this session`);
+  }
+  const { publication_id: publicationId, status } = version.rows[0];
+  if (status !== "draft" && status !== "in_review") {
+    throw new Error(`Publication version ${versionId} cannot be published from status ${status}`);
+  }
+
+  const publication = await tx.query<{ active_version_id: string | null }>(
+    "select active_version_id from investor_publications where publication_id = $1 for update",
+    [publicationId]);
+  const previous = publication.rows[0]?.active_version_id ?? null;
+
+  if (previous && previous !== versionId) {
+    await tx.query(
+      `update publication_versions set status = 'superseded', superseded_at = now()
+        where version_id = $1 and status = 'published'`, [previous]);
+  }
+  await tx.query(
+    `update publication_versions set status = 'published', published_at = now(), published_by = $2
+      where version_id = $1`, [versionId, actorUserId]);
+  await tx.query(
+    `update investor_publications
+        set status = 'published',
+            active_version_id = $2,
+            first_published_at = coalesce(first_published_at, now()),
+            last_published_at = now()
+      where publication_id = $1`, [publicationId, versionId]);
+
+  return versionId;
+}
+
+/** Publish, in a transaction of its own, gated by the caller's RLS. */
 export async function publishVersion(
   session: Session, versionId: string, actorUserId?: string | null,
 ): Promise<string> {
-  return withSession(session, async (tx) => {
-    const { rows } = await tx.query<{ version_id: string }>(
-      "select app.publish_publication_version($1, $2) as version_id",
-      [versionId, actorUserId ?? null]);
-    return rows[0].version_id;
-  });
+  return withSession(session, (tx) => publishVersionOn(tx, versionId, actorUserId ?? null));
 }
 
 /**
- * Withdraw the live version. The publication becomes invisible to every investor
- * immediately: its active pointer is cleared in the same transaction.
+ * Withdraw the live version, inside a transaction the caller already owns. The
+ * version is superseded and the pointer cleared together, so the publication
+ * leaves every investor's portal at once.
  */
+export async function supersedeActiveVersionOn(
+  tx: Queryable, publicationId: string,
+): Promise<string | null> {
+  const publication = await tx.query<{ active_version_id: string | null }>(
+    "select active_version_id from investor_publications where publication_id = $1 for update",
+    [publicationId]);
+  const previous = publication.rows[0]?.active_version_id ?? null;
+  if (!previous) return null;
+
+  await tx.query(
+    `update publication_versions set status = 'superseded', superseded_at = now()
+      where version_id = $1 and status = 'published'`, [previous]);
+  await tx.query(
+    "update investor_publications set status = 'withdrawn', active_version_id = null where publication_id = $1",
+    [publicationId]);
+  return previous;
+}
+
+/** Withdraw the live version, in a transaction of its own. */
 export async function supersedeActiveVersion(
   session: Session, publicationId: string,
 ): Promise<string | null> {
-  return withSession(session, async (tx) => {
-    const { rows } = await tx.query<{ version_id: string | null }>(
-      "select app.supersede_active_version($1) as version_id", [publicationId]);
-    return rows[0]?.version_id ?? null;
-  });
+  return withSession(session, (tx) => supersedeActiveVersionOn(tx, publicationId));
 }
 
 export async function listPublications(session: Session): Promise<Publication[]> {

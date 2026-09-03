@@ -295,23 +295,14 @@ create or replace function app.is_investor() returns boolean
   set search_path = ''
   as $fn$ select app.current_investor_org_id() is not null $fn$;
 
-/*
- * True on the privileged connection (migrations, seeding, adminQuery), which
- * runs as a BYPASSRLS role and carries no request claims.
- *
- * This is a statement of fact, not a grant: a BYPASSRLS role can already read
- * and write every row directly, so exempting it from an in-function admin check
- * gives it nothing it did not have. It exists so the guards below can refuse the
- * `authenticated` role — the one an investor actually arrives on — without also
- * refusing the seed.
- */
-create or replace function app.is_privileged_connection() returns boolean
-  language sql stable
-  set search_path = ''
-  as $fn$
-    select coalesce((select r.rolbypassrls from pg_catalog.pg_roles r
-                      where r.rolname = current_user), false)
-  $fn$;
+-- Superseded objects from an earlier draft of this migration. Publishing is now
+-- a statement sequence in the data layer's own transaction (see
+-- publishVersionOn in src/lib/data/investor-portal.ts), which keeps the same
+-- atomicity while removing the need to grant `authenticated` EXECUTE on a
+-- mutating function — `authenticated` is the role an investor arrives on.
+drop function if exists app.publish_publication_version(uuid, uuid);
+drop function if exists app.supersede_active_version(uuid);
+drop function if exists app.is_privileged_connection();
 
 -- standard < diligence < internal. 'internal' sits above every investor tier.
 create or replace function app.document_tier(p_level text) returns int
@@ -506,90 +497,6 @@ drop trigger if exists trg_pubdocument_guard on publication_documents;
 create trigger trg_pubdocument_guard before insert or update or delete on publication_documents
   for each row execute function app.guard_publication_document();
 
--- ---- Atomic publish --------------------------------------------------------
--- Supersedes the outgoing version and repoints the publication in ONE
--- transaction. SECURITY INVOKER, so the caller still needs the admin write
--- policy; the row locks make concurrent publishes serialise rather than race.
---
--- The explicit admin check is belt and braces. Without it a non-admin caller is
--- already harmless — RLS filters every row the function would touch, so it
--- silently changes nothing — but a mutating entry point should refuse loudly
--- rather than no-op, and `authenticated` covers investors as well as staff.
-create or replace function app.publish_publication_version(p_version_id uuid, p_actor uuid default null)
-  returns uuid
-  language plpgsql
-  set search_path = ''
-  as $fn$
-  declare
-    v    record;
-    prev uuid;
-  begin
-    if not app.is_admin() and not app.is_privileged_connection() then
-      raise exception 'Publishing a version requires a Reiwa administrator';
-    end if;
-
-    select * into v from public.publication_versions
-      where version_id = p_version_id for update;
-    if not found then
-      raise exception 'Publication version % not found', p_version_id;
-    end if;
-    if v.status not in ('draft', 'in_review') then
-      raise exception 'Publication version % cannot be published from status %', p_version_id, v.status;
-    end if;
-
-    select active_version_id into prev from public.investor_publications
-      where publication_id = v.publication_id for update;
-
-    if prev is not null and prev <> p_version_id then
-      update public.publication_versions
-         set status = 'superseded', superseded_at = now()
-       where version_id = prev and status = 'published';
-    end if;
-
-    update public.publication_versions
-       set status = 'published', published_at = now(), published_by = p_actor
-     where version_id = p_version_id;
-
-    update public.investor_publications
-       set status = 'published',
-           active_version_id = p_version_id,
-           first_published_at = coalesce(first_published_at, now()),
-           last_published_at = now()
-     where publication_id = v.publication_id;
-
-    return p_version_id;
-  end
-  $fn$;
-
--- Withdraw the live version: supersede it and drop the pointer, so the
--- publication becomes invisible to every investor immediately.
-create or replace function app.supersede_active_version(p_publication_id uuid)
-  returns uuid
-  language plpgsql
-  set search_path = ''
-  as $fn$
-  declare
-    prev uuid;
-  begin
-    if not app.is_admin() and not app.is_privileged_connection() then
-      raise exception 'Withdrawing a publication requires a Reiwa administrator';
-    end if;
-
-    select active_version_id into prev from public.investor_publications
-      where publication_id = p_publication_id for update;
-    if prev is null then
-      return null;
-    end if;
-    update public.publication_versions
-       set status = 'superseded', superseded_at = now()
-     where version_id = prev and status = 'published';
-    update public.investor_publications
-       set status = 'withdrawn', active_version_id = null
-     where publication_id = p_publication_id;
-    return prev;
-  end
-  $fn$;
-
 -- ---- updated_at ------------------------------------------------------------
 do $$
 declare t text;
@@ -734,25 +641,67 @@ revoke all on investor_feed from anon, public;
 grant select on investor_feed to authenticated;
 
 -- ============================================================================
--- Grants
+-- EXECUTE privileges — enumerated, never blanket
 -- ----------------------------------------------------------------------------
 -- `create function` grants EXECUTE to PUBLIC by default, which would extend to
--- every present and future role. Revoke that first and then grant deliberately:
--- the `app` schema is reachable by `authenticated` and by nobody else.
+-- every present and future role. Everything is revoked first, then granted one
+-- function at a time, so adding a helper to this schema is a decision rather
+-- than an inheritance. There is no `on all functions` grant and no ALTER
+-- DEFAULT PRIVILEGES for `app` anywhere in these migrations.
 --
--- `anon` gets neither USAGE on the schema nor EXECUTE on its functions, so an
--- unauthenticated caller cannot invoke a single helper. `authenticated` covers
--- both internal staff and portal investors, since they share the Postgres role —
--- which is exactly why every helper derives its answer from auth.uid() and every
--- table is gated by RLS rather than by role.
+-- `anon` gets neither USAGE on the schema nor EXECUTE on any function.
+-- `authenticated` is the one role that reaches this schema, and it holds EXECUTE
+-- on exactly the functions below. Staff and investors share that Postgres role,
+-- which is why every helper derives its answer from auth.uid() and every table
+-- is gated by RLS rather than by role.
 --
--- The schema is also not in PostgREST's exposed schemas, so none of these
--- functions is reachable as an HTTP RPC; they are callable only over the
--- server-side Postgres connection.
+-- The schema is not in PostgREST's exposed schemas either, so no helper is
+-- reachable as an HTTP RPC; they are callable only over the server-side
+-- Postgres connection.
+--
+-- NOT granted to `authenticated`, deliberately:
+--   * the seven trigger functions (block_*, guard_*, touch_*) — PostgreSQL
+--     checks EXECUTE on a trigger function at CREATE TRIGGER time, not when it
+--     fires, so the role never needs it;
+--   * app.document_tier(text) — reached only from inside
+--     app.investor_can_read_document(), a SECURITY DEFINER body that runs as the
+--     function owner;
+--   * any publication lifecycle function — there are none: publishing and
+--     withdrawal are statement sequences in the data layer's own transaction,
+--     precisely so that no mutating entry point has to be exposed to the role an
+--     investor authenticates on.
 -- ============================================================================
 revoke all on schema app from public;
 revoke execute on all functions in schema app from public;
 revoke execute on all functions in schema app from anon;
+revoke execute on all functions in schema app from authenticated;
 
 grant usage on schema app to authenticated;
-grant execute on all functions in schema app to authenticated;
+
+-- Evaluated inside RLS policies (P0 tenancy).
+grant execute on function
+  app.current_user_id(),
+  app.current_global_role(),
+  app.current_org_ids(),
+  app.is_admin(),
+  app.can_write(),
+  app.has_org(uuid)
+  to authenticated;
+
+-- Evaluated inside RLS policies (P1 portal authorisation).
+grant execute on function
+  app.is_investor(),
+  app.current_investor_contact_id(),
+  app.current_investor_org_id(),
+  app.investor_can_read_publication(uuid),
+  app.investor_active_version_id(uuid),
+  app.investor_can_read_document(uuid, text)
+  to authenticated;
+
+-- Called directly by the admin data layer, which runs as `authenticated`. Both
+-- are SECURITY INVOKER and read `opportunities`, so an investor calling them is
+-- gated by the internal RLS policy and gets null.
+grant execute on function
+  app.opportunity_publication_source(uuid),
+  app.opportunity_publication_fingerprint(uuid)
+  to authenticated;

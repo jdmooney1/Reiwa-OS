@@ -125,7 +125,27 @@ create policy members_select on organization_members for select to authenticated
   using (app.has_org(org_id));
 
 -- ---- Grants (RLS still gates rows) -----------------------------------------
+-- EXECUTE is enumerated, never blanket: `grant ... on all functions` would hand
+-- `authenticated` every helper in the schema, including ones it has no business
+-- calling, and would silently do the same for anything added later. Each grant
+-- below names a function the `authenticated` role genuinely needs — these six
+-- are evaluated inside the RLS policies above (directly, or from another
+-- SECURITY INVOKER helper's body, which runs as the calling role).
+--
+-- The trigger functions in later migrations are deliberately NOT granted:
+-- PostgreSQL checks EXECUTE on a trigger function when the trigger is created,
+-- not when it fires.
+revoke execute on all functions in schema app from public;
+
 grant usage on schema app to authenticated;
-grant execute on all functions in schema app to authenticated;
+grant execute on function
+  app.current_user_id(),
+  app.current_global_role(),
+  app.current_org_ids(),
+  app.is_admin(),
+  app.can_write(),
+  app.has_org(uuid)
+  to authenticated;
+
 grant select, insert, update, delete on organizations, organization_members to authenticated;
 grant select on profiles to authenticated;

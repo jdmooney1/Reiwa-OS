@@ -463,17 +463,35 @@ describe("Investor-generated records", () => {
 });
 
 describe("Portal helpers cannot be turned into a privilege", () => {
-  it("refuses the mutating publication functions to an investor", async () => {
-    // Their OWN entitled publication — the most favourable case for a caller.
-    await expect(
-      withInvestorSession(kitanoUid, (tx) =>
-        tx.query("select app.supersede_active_version($1)", [queensGate.publicationId])),
-    ).rejects.toThrow(/administrator/i);
+  it("exposes no publication lifecycle function for an investor to call", async () => {
+    // Publishing and withdrawal are statement sequences in the data layer's own
+    // transaction, not database functions — so there is nothing here that would
+    // have to be granted to `authenticated`, the role an investor arrives on.
+    const lifecycle = await adminQuery<{ proname: string }>(
+      `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'app'
+          and p.proname in ('publish_publication_version', 'supersede_active_version',
+                            'is_privileged_connection')`);
+    expect(lifecycle).toEqual([]);
+  });
 
-    await expect(
-      withInvestorSession(kitanoUid, (tx) =>
-        tx.query("select app.publish_publication_version($1)", [queensGate.activeVersionId])),
-    ).rejects.toThrow(/administrator/i);
+  it("cannot publish, supersede or repoint a publication by direct statement", async () => {
+    // Their OWN entitled publication — the most favourable case for a caller.
+    const superseded = await withInvestorSession(kitanoUid, (tx) =>
+      tx.query(`update publication_versions set status = 'superseded'
+                 where version_id = $1 returning version_id`, [queensGate.activeVersionId]));
+    expect(superseded.rows.length).toBe(0);
+
+    const repointed = await withInvestorSession(kitanoUid, (tx) =>
+      tx.query(`update investor_publications set active_version_id = null, status = 'withdrawn'
+                 where publication_id = $1 returning publication_id`, [queensGate.publicationId]));
+    expect(repointed.rows.length).toBe(0);
+
+    const promoted = await withInvestorSession(kitanoUid, (tx) =>
+      tx.query(`update publication_versions set status = 'published'
+                 where publication_id = $1 and status = 'draft' returning version_id`,
+               [queensGate.publicationId]));
+    expect(promoted.rows.length).toBe(0);
 
     // And the publication is untouched.
     const after = await adminQuery<{ status: string; active_version_id: string }>(

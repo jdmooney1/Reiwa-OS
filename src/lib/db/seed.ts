@@ -17,6 +17,7 @@
 import type { Pool } from "pg";
 import { adminQueryOn, getPool, type Queryable } from "@/lib/db/client";
 import { createSupabaseAdminClient, ensureAuthUser } from "@/lib/supabase/admin";
+import { publishVersionOn } from "@/lib/data/investor-portal";
 import { getAssetFiles } from "@/lib/asset-intelligence/mock";
 import type { AssetFile, BusinessPlan } from "@/lib/asset-intelligence/types";
 
@@ -207,7 +208,7 @@ export async function seedIfEmpty(pool: Pool = getPool()): Promise<boolean> {
     await seedStandaloneAsset(q, one, aoyama.org_id, pfAoyama.portfolio_id, aoyamaUserId);
 
     // ---- Investment Portal fixtures (P1) ----
-    await seedInvestorPortal(q, one, meiji.org_id, userIds["admin@reiwa.com"], investorUserIds);
+    await seedInvestorPortal(q, one, db, meiji.org_id, userIds["admin@reiwa.com"], investorUserIds);
 
     await conn.query("commit");
     return true;
@@ -409,7 +410,8 @@ async function seedDraftVersion(
 }
 
 async function seedInvestorPortal(
-  q: Q, one: One, internalOrgId: string, adminId: string, investorUserIds: Record<string, string>,
+  q: Q, one: One, db: Queryable, internalOrgId: string, adminId: string,
+  investorUserIds: Record<string, string>,
 ): Promise<void> {
   // ---- Investor organisations (separate tenancy from `organizations`) ----
   const orgIds: Record<string, string> = {};
@@ -457,14 +459,14 @@ async function seedInvestorPortal(
     "Prime South Kensington residential conversion",
     ["Grade II listed stucco terrace", "Vacant possession on completion"], adminId);
   await seedPublicationDocuments(q, qgV1, adminId);
-  await q("select app.publish_publication_version($1, $2)", [qgV1, adminId]);
+  await publishVersionOn(db, qgV1, adminId);
 
   const qgV2 = await seedDraftVersion(q, one, queensGate.id, queensGate.opportunityId, 2,
     "Prime South Kensington residential conversion",
     ["Grade II listed stucco terrace", "Vacant possession on completion",
      "Planning consent granted for 11 lateral apartments"], adminId);
   await seedPublicationDocuments(q, qgV2, adminId);
-  await q("select app.publish_publication_version($1, $2)", [qgV2, adminId]);
+  await publishVersionOn(db, qgV2, adminId);
 
   // A third version left in draft, so a live publication also has open work.
   await seedDraftVersion(q, one, queensGate.id, queensGate.opportunityId, 3,
@@ -476,7 +478,7 @@ async function seedInvestorPortal(
     "City of London office repositioning",
     ["EPC B on completion of the capex programme", "WAULT 4.2 years to break"], adminId);
   await seedPublicationDocuments(q, fcV1, adminId);
-  await q("select app.publish_publication_version($1, $2)", [fcV1, adminId]);
+  await publishVersionOn(db, fcV1, adminId);
 
   // Old Bond Street Retail — a single published version.
   const bondStreet = await publication("Old Bond Street Retail");
@@ -484,7 +486,7 @@ async function seedInvestorPortal(
     "Mayfair prime retail, core income",
     ["Flagship frontage", "Index-linked lease to 2034"], adminId);
   await seedPublicationDocuments(q, bsV1, adminId);
-  await q("select app.publish_publication_version($1, $2)", [bsV1, adminId]);
+  await publishVersionOn(db, bsV1, adminId);
 
   // Herengracht 124 — submitted for review but never published. Kitano holds a
   // visible entitlement to it, which must still show them nothing.

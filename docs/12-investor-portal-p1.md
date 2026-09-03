@@ -86,14 +86,28 @@ Audited, and asserted by test:
   `false` / `null`; handed `'internal'`, the document helper returns false for
   every published version in the database
 - `EXECUTE` is revoked from `PUBLIC` (which `CREATE FUNCTION` grants by default)
-  and held by `authenticated` alone; `anon` has neither `USAGE` on the schema nor
-  `EXECUTE` on any function
+  and from `anon`, which also has no `USAGE` on the schema; `authenticated` holds
+  it on an **enumerated** list of 14 functions and nothing else. There is no
+  `grant ... on all functions` and no `ALTER DEFAULT PRIVILEGES` for `app`, so a
+  helper added later inherits nothing — `tests/privileges.test.ts` pins the whole
+  matrix and fails on any function that has not been classified
 - `app` is not one of PostgREST's exposed schemas, so no helper is reachable as
   an HTTP RPC — they are callable only over the server-side Postgres connection
 - `anon` holds no privilege on any portal table or view; Supabase's default
   privileges are revoked in this migration
-- the two mutating functions refuse a non-admin caller outright rather than
-  no-opping through RLS
+- there is **no publication lifecycle function at all**. Publishing and
+  withdrawal would have to be granted to `authenticated` for the admin data layer
+  to call them, and `authenticated` is the role a portal investor arrives on, so
+  they are statement sequences inside the data layer's own transaction instead —
+  same atomicity, no mutating entry point exposed to the role, and each statement
+  gated by the admin write policy on its own table
+
+Not granted to `authenticated`, deliberately: the seven trigger functions
+(PostgreSQL checks `EXECUTE` on a trigger function at `CREATE TRIGGER` time, not
+when it fires) and `app.document_tier()`, which is only reached from inside a
+`SECURITY DEFINER` body that runs as the function owner. The integration suite
+exercises all eight under the `authenticated` role, so the narrowing is proven,
+not assumed.
 
 An investor may read:
 
@@ -186,15 +200,23 @@ Documents belong to a version and are part of that frozen snapshot: they must be
 attached while the version is still editable, and cannot be added, changed or
 removed once it is published.
 
-Publishing is one database function, `app.publish_publication_version()`, which
-locks the rows, supersedes the outgoing version and repoints
-`active_version_id` in a single transaction — so a publication is never briefly
-pointing at nothing or at two live versions. A partial unique index
+Publishing (`publishVersionOn`) locks the rows, supersedes the outgoing version
+and repoints `active_version_id` as one unit of work, so a publication is never
+briefly pointing at nothing or at two live versions. A partial unique index
 (`publication_versions_single_published`) makes the two-live-versions state
 unrepresentable even by direct statement.
 
-`app.supersede_active_version()` withdraws a live publication: the version is
-superseded and the pointer cleared, so it leaves every investor's portal at once.
+It is deliberately **not** a database function. A publication lifecycle function
+would have to be granted to `authenticated` for the admin data layer to call it,
+and `authenticated` is the role a portal investor authenticates on. As a
+statement sequence in the caller's own transaction it needs no `EXECUTE` grant,
+keeps the same atomicity, and leaves each statement gated by the admin write
+policy on its own table. The seed and the data layer share the one
+implementation, which takes any `Queryable` already inside a transaction.
+
+`supersedeActiveVersionOn` withdraws a live publication the same way: the version
+is superseded and the pointer cleared together, so it leaves every investor's
+portal at once.
 
 ## Data layer
 
@@ -265,3 +287,9 @@ P2 admin screens, P3 investor authentication flow, P4 investor-facing UI.
   behind them) is P4 work.
 - **Activity events are written but never read.** No retention policy and no
   admin view yet.
+- **Supabase's default privileges still grant `anon` future tables in `public`.**
+  This migration revokes them on the tables it creates, and
+  `tests/privileges.test.ts` fails if any portal table regains them — but a table
+  added by a later migration will be granted to `anon` again unless it revokes
+  too. Changing the project-level `ALTER DEFAULT PRIVILEGES` would fix it at the
+  source, and touches P0 tables as well, so it was left out of P1.
