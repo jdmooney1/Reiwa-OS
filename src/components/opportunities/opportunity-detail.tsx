@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useTransition } from "react";
-import { ChevronLeft, ArrowRight, Check, Loader2 } from "lucide-react";
+import { ChevronLeft, ArrowRight, Check, Loader2, Landmark } from "lucide-react";
 import type { Opportunity, OppStage } from "@/lib/data/opportunity-types";
 import { OPP_STAGES } from "@/lib/data/opportunity-types";
 import {
   setStageAction, setOutcomeAction, reactivateAction, convertToAssetAction, updateOpportunityAction,
 } from "@/app/actions/opportunities";
+import { preparePublicationAction } from "@/app/actions/admin-portal";
 import { ASSET_TYPE_LABEL, STRATEGY_LABEL } from "@/lib/domain";
 import { formatMoneyCompact, formatPct, formatDate } from "@/lib/format";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
@@ -19,7 +20,16 @@ const STAGE_LABEL: Record<OppStage, string> = {
   new: "New", screening: "Screening", underwriting: "Underwriting", ic: "IC", approved: "Approved", acquired: "Acquired",
 };
 
-export function OpportunityDetail({ opp, canWrite }: { opp: Opportunity; canWrite: boolean }) {
+export function OpportunityDetail({
+  opp, canWrite, portalAdmin = false, publicationId = null,
+}: {
+  opp: Opportunity;
+  canWrite: boolean;
+  /** Reiwa admin — may prepare this opportunity for the Investment Portal. */
+  portalAdmin?: boolean;
+  /** The existing investor publication for this opportunity, if any. */
+  publicationId?: string | null;
+}) {
   const [pending, start] = useTransition();
   const id = opp.opportunityId;
   const cur = opp.currency as Currency;
@@ -48,11 +58,28 @@ export function OpportunityDetail({ opp, canWrite }: { opp: Opportunity; canWrit
               {opp.strategy ? ` · ${STRATEGY_LABEL[opp.strategy as Strategy] ?? opp.strategy}` : ""}
             </div>
           </div>
-          {converted && opp.assetId && (
-            <Link href={`/assets/${opp.assetId}`} className="flex items-center gap-1.5 rounded bg-gold px-3.5 py-2 text-xs font-semibold text-navy hover:bg-gold-soft">
-              View Asset <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {portalAdmin && (
+              publicationId ? (
+                <Link href={`/admin/publications/${publicationId}`}
+                  className="flex items-center gap-1.5 rounded border border-gold/40 bg-gold/10 px-3.5 py-2 text-xs font-semibold text-gold-deep hover:bg-gold/20">
+                  <Landmark className="h-3.5 w-3.5" /> View Investor Publication
+                </Link>
+              ) : (
+                <button onClick={() => start(() => preparePublicationAction(id))} disabled={pending}
+                  title="Creates a draft investor publication from the approved field whitelist"
+                  className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-semibold text-ink-muted hover:border-gold/40 hover:text-ink disabled:opacity-60">
+                  {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Landmark className="h-3.5 w-3.5" />}
+                  Prepare for Investors
+                </button>
+              )
+            )}
+            {converted && opp.assetId && (
+              <Link href={`/assets/${opp.assetId}`} className="flex items-center gap-1.5 rounded bg-gold px-3.5 py-2 text-xs font-semibold text-navy hover:bg-gold-soft">
+                View Asset <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

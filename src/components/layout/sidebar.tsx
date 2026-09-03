@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Boxes, Building2, LogOut } from "lucide-react";
+import { LayoutGrid, Boxes, Building2, LogOut, Landmark, Users, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAction } from "@/app/actions/auth";
 
@@ -29,6 +29,19 @@ export function Sidebar({
         ...assets.map((a) => ({ href: `/assets/${a.assetId}`, label: a.name, icon: Building2 })),
       ],
     },
+    // The Investment Portal admin surface — Reiwa administrators only. The
+    // /admin layout and the database policies both enforce this; hiding the
+    // section is presentation, not the control.
+    ...(user.role === "reiwa_admin"
+      ? [{
+          heading: "Investment Portal",
+          items: [
+            { href: "/admin", label: "Portal Overview", icon: Landmark },
+            { href: "/admin/investors", label: "Investors", icon: Users },
+            { href: "/admin/publications", label: "Publications", icon: FileText },
+          ],
+        }]
+      : []),
   ];
 
   return (
@@ -45,7 +58,10 @@ export function Sidebar({
           <div key={section.heading} className="mb-4">
             <div className="eyebrow-light px-3 pb-1.5">{section.heading}</div>
             {section.items.map(({ href, label, icon: Icon }) => {
-              const active = pathname === href || pathname.startsWith(href + "/");
+              // "/admin" is a hub with siblings below it, so it matches exactly.
+              const active = href === "/admin"
+                ? pathname === "/admin"
+                : pathname === href || pathname.startsWith(href + "/");
               return (
                 <Link
                   key={href}
