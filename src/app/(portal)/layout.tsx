@@ -1,0 +1,25 @@
+// The investor-facing shell (P3): a minimal, branded frame for the access flow
+// and the holding page. Deliberately shares nothing with the internal (app)
+// shell — no sidebar, no internal navigation, no internal data.
+export const dynamic = "force-dynamic";
+
+export default function PortalLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col bg-navy">
+      <header className="border-b border-line-dark px-8 py-5">
+        <div className="mx-auto flex w-full max-w-3xl items-baseline justify-between">
+          <div className="font-serif text-lg tracking-wide text-surface">
+            REIWA<span className="text-gold"> CAPITAL</span>
+          </div>
+          <div className="eyebrow-light">Investment Portal</div>
+        </div>
+      </header>
+      <main className="flex flex-1 items-start justify-center px-6 py-14">
+        <div className="w-full max-w-lg">{children}</div>
+      </main>
+      <footer className="px-8 py-5 text-center text-2xs text-surface/30">
+        Private &amp; confidential. Access is by invitation of Reiwa Capital only.
+      </footer>
+    </div>
+  );
+}

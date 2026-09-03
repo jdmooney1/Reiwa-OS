@@ -7,12 +7,17 @@ import {
 } from "lucide-react";
 import type { InvestorContact, AssignedPublication } from "@/lib/data/investor-portal";
 import type { PublicationOption } from "@/lib/data/admin-portal";
+import type { InvestorInvite } from "@/lib/data/investor-invites";
 import {
   updateInvestorOrgAction, createInvestorContactAction, updateInvestorContactAction,
   setContactActiveAction, assignPublicationAction, setEntitlementPlacementAction,
   setEntitlementVisibilityAction, revokeEntitlementAction, setEntitlementAccessAction,
   saveEntitlementNoteAction, reorderSecondaryAction,
 } from "@/app/actions/admin-portal";
+import {
+  provisionContactAccessAction, createInviteForContactAction, revokeInviteAction,
+  type CreatedInvite,
+} from "@/app/actions/admin-invites";
 import {
   INVESTOR_ORG_STATUS_LABEL, INVESTOR_ORG_STATUS_TONE, WORKFLOW_LABEL, WORKFLOW_TONE,
 } from "@/lib/portal-labels";
@@ -32,12 +37,13 @@ interface Org {
 }
 
 export function InvestorOrgDetail({
-  org, contacts, assignments, publicationOptions,
+  org, contacts, assignments, publicationOptions, invites = [],
 }: {
   org: Org;
   contacts: InvestorContact[];
   assignments: AssignedPublication[];
   publicationOptions: PublicationOption[];
+  invites?: InvestorInvite[];
 }) {
   const [pending, start] = useTransition();
   const titles = useMemo(
@@ -250,7 +256,8 @@ export function InvestorOrgDetail({
             </CardBody>
           </Card>
 
-          <ContactsCard org={org} contacts={contacts} pending={pending} start={start} />
+          <ContactsCard org={org} contacts={contacts} invites={invites}
+            pending={pending} start={start} />
         </div>
       </div>
     </div>
@@ -376,15 +383,22 @@ function AssignmentRow({
 // Contacts
 // ============================================================================
 function ContactsCard({
-  org, contacts, pending, start,
+  org, contacts, invites, pending, start,
 }: {
   org: Org;
   contacts: InvestorContact[];
+  invites: InvestorInvite[];
   pending: boolean;
   start: (fn: () => Promise<void>) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Raw invitation links exist only here, in this admin's browser, until the
+  // page is left — the server stores hashes alone.
+  const [issued, setIssued] = useState<Record<string, CreatedInvite>>({});
+
+  const latestInviteFor = (contactId: string): InvestorInvite | undefined =>
+    invites.find((i) => i.investorContactId === contactId); // newest first
 
   return (
     <Card>
@@ -433,31 +447,43 @@ function ContactsCard({
                     </div>
                   </form>
                 ) : (
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-ink">{c.name}</span>
-                        {!c.isActive && <Badge tone="muted">Inactive</Badge>}
+                  <>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-ink">{c.name}</span>
+                          {!c.isActive && <Badge tone="muted">Inactive</Badge>}
+                        </div>
+                        <div className="mt-0.5 truncate text-2xs text-ink-faint">
+                          {c.email}{c.title ? ` · ${c.title}` : ""}
+                        </div>
+                        <div className="mt-1">
+                          {c.authUserId
+                            ? <Badge tone="positive" dot>Sign-in provisioned</Badge>
+                            : <Badge tone="muted" dot>No portal account yet</Badge>}
+                        </div>
                       </div>
-                      <div className="mt-0.5 truncate text-2xs text-ink-faint">
-                        {c.email}{c.title ? ` · ${c.title}` : ""}
-                      </div>
-                      <div className="mt-1">
-                        {c.authUserId
-                          ? <Badge tone="positive" dot>Sign-in provisioned</Badge>
-                          : <Badge tone="muted" dot>No portal account yet</Badge>}
+                      <div className="flex shrink-0 items-center gap-1">
+                        <SmallBtn disabled={pending} onClick={() => setEditingId(c.investorContactId)}>
+                          <Pencil className="h-3 w-3" /> Edit
+                        </SmallBtn>
+                        <SmallBtn tone={c.isActive ? "negative" : undefined} disabled={pending}
+                          onClick={() => start(() => setContactActiveAction(c.investorContactId, org.investorOrgId, !c.isActive))}>
+                          {c.isActive ? "Deactivate" : "Reactivate"}
+                        </SmallBtn>
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <SmallBtn disabled={pending} onClick={() => setEditingId(c.investorContactId)}>
-                        <Pencil className="h-3 w-3" /> Edit
-                      </SmallBtn>
-                      <SmallBtn tone={c.isActive ? "negative" : undefined} disabled={pending}
-                        onClick={() => start(() => setContactActiveAction(c.investorContactId, org.investorOrgId, !c.isActive))}>
-                        {c.isActive ? "Deactivate" : "Reactivate"}
-                      </SmallBtn>
-                    </div>
-                  </div>
+                    <ContactAccess
+                      contact={c}
+                      org={org}
+                      invite={latestInviteFor(c.investorContactId)}
+                      issued={issued[c.investorContactId]}
+                      onIssued={(created) =>
+                        setIssued((prev) => ({ ...prev, [c.investorContactId]: created }))}
+                      pending={pending}
+                      start={start}
+                    />
+                  </>
                 )}
               </li>
             ))}
@@ -465,6 +491,88 @@ function ContactsCard({
         )}
       </CardBody>
     </Card>
+  );
+}
+
+/**
+ * Portal access controls for one contact (P3): provision the passwordless
+ * sign-in, mint/revoke the invitation link, show its state. The raw link is
+ * displayed exactly once, straight from the action's response.
+ */
+function ContactAccess({
+  contact, org, invite, issued, onIssued, pending, start,
+}: {
+  contact: InvestorContact;
+  org: Org;
+  invite: InvestorInvite | undefined;
+  issued: CreatedInvite | undefined;
+  onIssued: (created: CreatedInvite) => void;
+  pending: boolean;
+  start: (fn: () => Promise<void>) => void;
+}) {
+  if (!contact.isActive) return null;
+
+  if (!contact.authUserId) {
+    return (
+      <div className="mt-2 flex items-center justify-between gap-3 rounded border border-dashed border-line px-3 py-2">
+        <span className="text-2xs text-ink-faint">
+          Provision the sign-in to enable invitations. The account is OTP-only — no password exists.
+        </span>
+        <SmallBtn disabled={pending}
+          onClick={() => start(() => provisionContactAccessAction(contact.investorContactId, org.investorOrgId))}>
+          Provision sign-in
+        </SmallBtn>
+      </div>
+    );
+  }
+
+  const stateBadge = invite && (
+    invite.state === "active" ? <Badge tone="gold" dot>Invite active until {formatDate(invite.expiresAt)}</Badge>
+    : invite.state === "accepted" ? <Badge tone="positive" dot>Invite accepted {formatDate(invite.acceptedAt)}</Badge>
+    : invite.state === "expired" ? <Badge tone="caution" dot>Invite expired {formatDate(invite.expiresAt)}</Badge>
+    : <Badge tone="muted" dot>Invite revoked</Badge>
+  );
+
+  return (
+    <div className="mt-2 rounded border border-line bg-surface px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {stateBadge ?? <span className="text-2xs text-ink-faint">No invitation issued yet.</span>}
+        </div>
+        <div className="flex items-center gap-1">
+          {invite?.state === "active" && (
+            <SmallBtn tone="negative" disabled={pending}
+              title="The link stops working immediately"
+              onClick={() => start(() => revokeInviteAction(invite.inviteId, org.investorOrgId))}>
+              Revoke
+            </SmallBtn>
+          )}
+          <SmallBtn disabled={pending}
+            title={invite?.state === "active"
+              ? "Revokes the current link and issues a new one"
+              : "Issues a new invitation link"}
+            onClick={() => start(async () => {
+              const created = await createInviteForContactAction(contact.investorContactId, org.investorOrgId);
+              onIssued(created);
+            })}>
+            {invite ? "Regenerate invite" : "Create invite link"}
+          </SmallBtn>
+        </div>
+      </div>
+      {issued && (
+        <div className="mt-2 rounded border border-gold/40 bg-gold/5 px-3 py-2">
+          <div className="eyebrow mb-1">Invitation link — shown once, copy it now</div>
+          <input readOnly
+            value={typeof window !== "undefined" ? `${window.location.origin}${issued.path}` : issued.path}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-full rounded border border-line bg-surface-card px-2 py-1.5 font-mono text-2xs text-ink" />
+          <div className="mt-1 text-2xs text-ink-faint">
+            Valid until {formatDate(issued.expiresAt)}. Only the link identifies the invitation — the
+            server keeps a hash, so it cannot be recovered later.
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

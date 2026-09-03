@@ -7,11 +7,17 @@
 //
 //   POST /auth/v1/token?grant_type=password        sign-in (app + tests)
 //   POST /auth/v1/token?grant_type=refresh_token   session refresh (middleware)
+//   POST /auth/v1/otp                              email OTP request (P3);
+//                                                  honours create_user=false
+//   POST /auth/v1/verify                           email OTP verification (P3)
 //   GET  /auth/v1/user                             token verification
 //   POST /auth/v1/logout                           sign-out
 //   GET  /auth/v1/admin/users                      seed: find user by email
 //   POST /auth/v1/admin/users                      seed: provision user
 //   DELETE /auth/v1/admin/users/:id                dev tidy-up
+//
+// OTP codes are not emailed locally — they are written to auth._local_otp so a
+// developer or a test on the privileged connection can read what "was sent".
 //
 // DEVELOPMENT ONLY. Binds to 127.0.0.1, signs demo JWTs with a local secret and
 // refuses to start unless the database carries the auth._local_shim marker, so
@@ -171,6 +177,55 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return send(res, 200, await sessionResponse(user));
     }
     return send(res, 400, { error: "unsupported_grant_type", msg: `Unsupported grant_type ${grant}` });
+  }
+
+  // ---- Email OTP (P3) -----------------------------------------------------
+  if (method === "POST" && path === "/auth/v1/otp") {
+    const body = await readJson(req);
+    const email = String(body.email ?? "").trim();
+    if (!email) return send(res, 422, { code: 422, msg: "email is required" });
+    const user = await userByEmail(email);
+    // GoTrue semantics: with create_user=false an unknown email is refused and
+    // no Auth user is ever created.
+    if (!user) {
+      if (body.create_user === false) {
+        return send(res, 422, {
+          code: 422, error_code: "otp_disabled", msg: "Signups not allowed for otp",
+        });
+      }
+      return send(res, 422, { code: 422, error_code: "signup_disabled", msg: "Signups not allowed" });
+    }
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    await getPool().query(
+      `insert into auth._local_otp(email, code, expires_at)
+       values (lower($1), $2, now() + interval '10 minutes')
+       on conflict (email) do update set code = excluded.code,
+         expires_at = excluded.expires_at, created_at = now()`,
+      [email, code]);
+    return send(res, 200, {});
+  }
+
+  if (method === "POST" && path === "/auth/v1/verify") {
+    const body = await readJson(req);
+    const email = String(body.email ?? "").trim();
+    const token = String(body.token ?? "").trim();
+    const type = String(body.type ?? "");
+    if (!["email", "magiclink", "signup"].includes(type)) {
+      return send(res, 400, { code: 400, msg: `Unsupported verify type ${type}` });
+    }
+    const { rows } = await getPool().query<{ email: string }>(
+      `delete from auth._local_otp
+        where email = lower($1) and code = $2 and expires_at > now()
+        returning email`,
+      [email, token]);
+    const user = rows[0] ? await userByEmail(email) : null;
+    if (!user) {
+      return send(res, 403, {
+        code: 403, error_code: "otp_expired",
+        msg: "Token has expired or is invalid",
+      });
+    }
+    return send(res, 200, await sessionResponse(user));
   }
 
   // ---- Token verification ------------------------------------------------

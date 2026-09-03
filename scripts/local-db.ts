@@ -57,6 +57,15 @@ create table if not exists auth._local_refresh_tokens (
   user_id    uuid not null references auth.users(id) on delete cascade,
   created_at timestamptz not null default now()
 );
+-- Email OTP codes issued by the local Auth stand-in. On hosted Supabase these
+-- are emailed by GoTrue; locally they sit here so a developer (or a test on
+-- the privileged connection) can read the code that "was sent".
+create table if not exists auth._local_otp (
+  email      text primary key,
+  code       text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
 -- Marker so tooling can recognise the local harness (absent on hosted Supabase).
 create table if not exists auth._local_shim (created_at timestamptz not null default now());
 

@@ -12,6 +12,8 @@ import { seedIfEmpty } from "@/lib/db/seed";
 
 /** Application tables in dependency order (children first). */
 const TABLES = [
+  // Investor access (P3)
+  "investor_invites",
   // Investment Portal (P1)
   "investor_activity_events",
   "investor_requests",
