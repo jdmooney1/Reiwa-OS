@@ -9,6 +9,10 @@
 // then mirrored into `profiles` over the privileged Postgres connection. The two
 // credentials are used for their own jobs and never substituted for each other.
 // Demo login password for every seeded user: "reiwa2026".
+//
+// The Investment Portal fixtures (three investor organisations, four contacts,
+// four publications, deliberately unequal entitlements) are seeded last — see
+// seedInvestorPortal() at the foot of this file.
 // ============================================================================
 import type { Pool } from "pg";
 import { adminQueryOn, getPool, type Queryable } from "@/lib/db/client";
@@ -31,6 +35,31 @@ export const SEED_ACCOUNTS: SeedStaffAccount[] = [
   { email: "viewer@meiji.com", name: "Meiji Investor", globalRole: "investor_viewer" },
   { email: "user@aoyama.com", name: "Aoyama Manager", globalRole: "org_user" },
 ];
+
+export interface SeedInvestorAccount {
+  email: string;
+  name: string;
+  title: string;
+  /** Matches an entry in INVESTOR_ORG_FIXTURES by name. */
+  org: string;
+}
+
+/**
+ * Portal identities. Fictional people at fictional firms — the fixtures exist to
+ * prove isolation, so they must never carry real client information.
+ *
+ * These accounts get a Supabase Auth user and an `investor_contacts` row and
+ * NOTHING else: no `profiles` row, no `organization_members` row. That is what
+ * makes every internal policy deny them by construction rather than by rule.
+ */
+export const SEED_INVESTOR_ACCOUNTS: SeedInvestorAccount[] = [
+  { email: "principal@kitano-fo.example", name: "K. Arai", title: "Principal", org: "Kitano Family Office" },
+  { email: "analyst@kitano-fo.example", name: "M. Oda", title: "Investment Analyst", org: "Kitano Family Office" },
+  { email: "partner@sakura-cap.example", name: "T. Ishii", title: "Managing Partner", org: "Sakura Capital Partners" },
+  { email: "director@hanabi-ven.example", name: "R. Kudo", title: "Director", org: "Hanabi Ventures" },
+];
+
+const INVESTOR_ORG_FIXTURES = ["Kitano Family Office", "Sakura Capital Partners", "Hanabi Ventures"];
 
 /**
  * Provision the Supabase Auth users and their `profiles` rows. Safe to re-run:
@@ -62,6 +91,24 @@ export async function seedIdentities(pool: Pool = getPool()): Promise<Record<str
 }
 
 /**
+ * Provision the Supabase Auth users behind the portal contacts. Deliberately
+ * separate from seedIdentities(): no `profiles` row is written, because a portal
+ * investor is not a Reiwa OS user.
+ */
+export async function seedInvestorIdentities(): Promise<Record<string, string>> {
+  const admin = createSupabaseAdminClient();
+  const ids: Record<string, string> = {};
+  for (const account of SEED_INVESTOR_ACCOUNTS) {
+    ids[account.email] = await ensureAuthUser(admin, {
+      email: account.email,
+      password: DEMO_PASSWORD,
+      name: account.name,
+    });
+  }
+  return ids;
+}
+
+/**
  * Seed demonstration data. No-op when `organizations` already has rows.
  * Returns true when data was written.
  */
@@ -75,6 +122,7 @@ export async function seedIfEmpty(pool: Pool = getPool()): Promise<boolean> {
   }
 
   const userIds = await seedIdentities(pool);
+  const investorUserIds = await seedInvestorIdentities();
 
   const conn = await pool.connect();
   const db: Queryable = {
@@ -157,6 +205,9 @@ export async function seedIfEmpty(pool: Pool = getPool()): Promise<boolean> {
 
     // ---- Aoyama isolation fixture (a separate org's asset) ----
     await seedStandaloneAsset(q, one, aoyama.org_id, pfAoyama.portfolio_id, aoyamaUserId);
+
+    // ---- Investment Portal fixtures (P1) ----
+    await seedInvestorPortal(q, one, meiji.org_id, userIds["admin@reiwa.com"], investorUserIds);
 
     await conn.query("commit");
     return true;
@@ -277,4 +328,196 @@ async function seedStandaloneAsset(q: Q, one: One, orgId: string, portfolioId: s
      values ($1,$2,'underwriting',1,'2025-01-15','Acquisition underwriting',5200000,110000000,96,44000000,40,11.0,1.6)`, [orgId, asset!.asset_id]);
   await q(`insert into performance_periods(org_id, asset_id, period_label, period_end, status, noi, valuation, occupancy_pct, debt, ltv_pct)
      values ($1,$2,'Q2 2026','2026-06-30','closed',5300000,112000000,97,44000000,39.3)`, [orgId, asset!.asset_id]);
+}
+
+// ============================================================================
+// Investment Portal fixtures (P1)
+// ----------------------------------------------------------------------------
+// Enough shape to prove isolation without any screens existing yet:
+//
+//   Kitano Family Office   featured: 58 Queens Gate (diligence documents)
+//                          secondary: 120 Fenchurch Street (standard documents)
+//                          entitled to a publication that was never published
+//   Sakura Capital         featured: 120 Fenchurch Street (standard documents)
+//                          a HIDDEN entitlement to Old Bond Street Retail
+//   Hanabi Ventures        featured: Old Bond Street Retail (standard documents)
+//
+// So: Queens Gate is invisible to Sakura (no entitlement at all), Old Bond
+// Street is invisible to Sakura (entitlement present but not visible) and
+// visible to Hanabi, and every organisation sees a different portal.
+//
+// Queens Gate is published twice, so version 1 is superseded and only version 2
+// is readable. Documents must be attached while a version is still a draft —
+// once published, a version and its documents are an immutable snapshot.
+// ============================================================================
+
+/** Document set attached to every published version: one per access tier. */
+const PORTAL_DOCUMENTS: [string, string, string, string][] = [
+  // title, category, access_level, storage path (private bucket)
+  ["Investment teaser", "teaser", "standard", "publications/%s/teaser.pdf"],
+  ["Data room index", "data_room", "diligence", "publications/%s/data-room-index.pdf"],
+  ["Internal IC memo", "other", "internal", "publications/%s/internal-ic-memo.pdf"],
+];
+
+async function seedPublicationDocuments(q: Q, versionId: string, adminId: string): Promise<void> {
+  let order = 0;
+  for (const [title, category, level, path] of PORTAL_DOCUMENTS) {
+    await q(
+      `insert into publication_documents(version_id, title, category, storage_path, file_name,
+         mime_type, access_level, sort_order, created_by)
+       values ($1,$2,$3,$4,$5,'application/pdf',$6,$7,$8)`,
+      [versionId, title, category, path.replace("%s", versionId), `${title}.pdf`, level, order++, adminId]);
+  }
+}
+
+/**
+ * Take a draft version through the real boundary: the whitelist function
+ * supplies every field carried over from the internal opportunity, and the
+ * fingerprint is captured at the same moment — privately, in
+ * publication_version_sources, never on the version row.
+ */
+async function seedDraftVersion(
+  q: Q, one: One, publicationId: string, opportunityId: string, versionNumber: number,
+  headline: string, highlights: string[], adminId: string,
+): Promise<string> {
+  const row = await one<{ version_id: string }>(
+    `with src as (
+       select app.opportunity_publication_source($2) as s)
+     insert into publication_versions(
+       publication_id, version_number, status,
+       title, headline, overview, market, submarket, city, country,
+       asset_type, strategy, currency, headline_price, target_niy, target_irr,
+       target_equity_multiple, size_sqft, size_sqm, hold_period_years, highlights, created_by)
+     select $1, $3, 'draft',
+            coalesce(src.s ->> 'title', 'Untitled opportunity'),
+            $4,
+            src.s ->> 'overview',
+            src.s ->> 'market', src.s ->> 'submarket', src.s ->> 'city', src.s ->> 'country',
+            src.s ->> 'asset_type', src.s ->> 'strategy', coalesce(src.s ->> 'currency', 'GBP'),
+            (src.s ->> 'headline_price')::numeric, (src.s ->> 'target_niy')::numeric,
+            (src.s ->> 'target_irr')::numeric, (src.s ->> 'target_equity_multiple')::numeric,
+            (src.s ->> 'size_sqft')::numeric, (src.s ->> 'size_sqm')::numeric,
+            5, $5::jsonb, $6
+       from src
+     returning version_id`,
+    [publicationId, opportunityId, versionNumber, headline, JSON.stringify(highlights), adminId]);
+  await q(
+    `insert into publication_version_sources(version_id, source_fingerprint)
+     values ($1, app.opportunity_publication_fingerprint($2))`,
+    [row!.version_id, opportunityId]);
+  return row!.version_id;
+}
+
+async function seedInvestorPortal(
+  q: Q, one: One, internalOrgId: string, adminId: string, investorUserIds: Record<string, string>,
+): Promise<void> {
+  // ---- Investor organisations (separate tenancy from `organizations`) ----
+  const orgIds: Record<string, string> = {};
+  for (const name of INVESTOR_ORG_FIXTURES) {
+    const row = await one<{ investor_org_id: string }>(
+      `insert into investor_organizations(name, status, linked_internal_organization_id, notes)
+       values ($1, 'active', null, $2) returning investor_org_id`,
+      [name, "Demonstration fixture — fictional firm."]);
+    orgIds[name] = row!.investor_org_id;
+  }
+
+  // ---- Contacts, each bound to its Supabase Auth user ----
+  const contactIds: Record<string, string> = {};
+  for (const account of SEED_INVESTOR_ACCOUNTS) {
+    const row = await one<{ investor_contact_id: string }>(
+      `insert into investor_contacts(investor_org_id, email, name, title, auth_user_id, is_active)
+       values ($1,$2,$3,$4,$5,true) returning investor_contact_id`,
+      [orgIds[account.org], account.email, account.name, account.title, investorUserIds[account.email]]);
+    contactIds[account.email] = row!.investor_contact_id;
+  }
+
+  // ---- Publications, drawn from Meiji's pipeline ----
+  const opportunityId = async (name: string): Promise<string> => {
+    const row = await one<{ opportunity_id: string }>(
+      "select opportunity_id from opportunities where org_id = $1 and name = $2",
+      [internalOrgId, name]);
+    if (!row) throw new Error(`Seed opportunity "${name}" not found`);
+    return row.opportunity_id;
+  };
+  // The publication row carries no internal identifier; the link is recorded in
+  // the admin-only mapping alongside it.
+  const publication = async (name: string): Promise<{ id: string; opportunityId: string }> => {
+    const oppId = await opportunityId(name);
+    const row = await one<{ publication_id: string }>(
+      "insert into investor_publications(status, created_by) values ('draft',$1) returning publication_id",
+      [adminId]);
+    await q("insert into publication_sources(publication_id, opportunity_id, linked_by) values ($1,$2,$3)",
+      [row!.publication_id, oppId, adminId]);
+    return { id: row!.publication_id, opportunityId: oppId };
+  };
+
+  // 58 Queens Gate — published twice, so v1 is superseded and only v2 is live.
+  const queensGate = await publication("58 Queens Gate");
+  const qgV1 = await seedDraftVersion(q, one, queensGate.id, queensGate.opportunityId, 1,
+    "Prime South Kensington residential conversion",
+    ["Grade II listed stucco terrace", "Vacant possession on completion"], adminId);
+  await seedPublicationDocuments(q, qgV1, adminId);
+  await q("select app.publish_publication_version($1, $2)", [qgV1, adminId]);
+
+  const qgV2 = await seedDraftVersion(q, one, queensGate.id, queensGate.opportunityId, 2,
+    "Prime South Kensington residential conversion",
+    ["Grade II listed stucco terrace", "Vacant possession on completion",
+     "Planning consent granted for 11 lateral apartments"], adminId);
+  await seedPublicationDocuments(q, qgV2, adminId);
+  await q("select app.publish_publication_version($1, $2)", [qgV2, adminId]);
+
+  // A third version left in draft, so a live publication also has open work.
+  await seedDraftVersion(q, one, queensGate.id, queensGate.opportunityId, 3,
+    "Prime South Kensington residential conversion", ["Draft — not for release"], adminId);
+
+  // 120 Fenchurch Street — a single published version.
+  const fenchurch = await publication("120 Fenchurch Street");
+  const fcV1 = await seedDraftVersion(q, one, fenchurch.id, fenchurch.opportunityId, 1,
+    "City of London office repositioning",
+    ["EPC B on completion of the capex programme", "WAULT 4.2 years to break"], adminId);
+  await seedPublicationDocuments(q, fcV1, adminId);
+  await q("select app.publish_publication_version($1, $2)", [fcV1, adminId]);
+
+  // Old Bond Street Retail — a single published version.
+  const bondStreet = await publication("Old Bond Street Retail");
+  const bsV1 = await seedDraftVersion(q, one, bondStreet.id, bondStreet.opportunityId, 1,
+    "Mayfair prime retail, core income",
+    ["Flagship frontage", "Index-linked lease to 2034"], adminId);
+  await seedPublicationDocuments(q, bsV1, adminId);
+  await q("select app.publish_publication_version($1, $2)", [bsV1, adminId]);
+
+  // Herengracht 124 — submitted for review but never published. Kitano holds a
+  // visible entitlement to it, which must still show them nothing.
+  const herengracht = await publication("Herengracht 124");
+  const hgV1 = await seedDraftVersion(q, one, herengracht.id, herengracht.opportunityId, 1,
+    "Amsterdam canal-district office", ["Awaiting approval"], adminId);
+  await q(`update publication_versions set status = 'in_review', submitted_at = now(), submitted_by = $2
+           where version_id = $1`, [hgV1, adminId]);
+
+  // ---- Entitlements (default deny; each organisation sees a different portal) ----
+  const entitle = async (
+    org: string, publicationId: string, visible: boolean, placement: string,
+    sortOrder: number, docLevel: string, note: string | null,
+  ): Promise<void> => {
+    await q(
+      `insert into publication_entitlements(investor_org_id, publication_id, is_visible, placement,
+         sort_order, investor_note, document_access_level, granted_by)
+       values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [orgIds[org], publicationId, visible, placement, sortOrder, note, docLevel, adminId]);
+  };
+
+  await entitle("Kitano Family Office", queensGate.id, true, "featured", 0, "diligence",
+    "Shared ahead of the December committee.");
+  await entitle("Kitano Family Office", fenchurch.id, true, "secondary", 1, "standard", null);
+  await entitle("Kitano Family Office", herengracht.id, true, "secondary", 2, "standard", null);
+
+  await entitle("Sakura Capital Partners", fenchurch.id, true, "featured", 0, "standard", null);
+  // Present but hidden — the entitlement exists and grants nothing.
+  await entitle("Sakura Capital Partners", bondStreet.id, false, "secondary", 1, "diligence", null);
+
+  await entitle("Hanabi Ventures", bondStreet.id, true, "featured", 0, "standard", null);
+
+  // ---- One contact's saved state, to prove saves are per contact ----
+  await q("insert into investor_saved(investor_contact_id, publication_id) values ($1,$2)",
+    [contactIds["principal@kitano-fo.example"], queensGate.id]);
 }

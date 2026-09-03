@@ -222,3 +222,50 @@ export async function adminQuery<T = Record<string, unknown>>(
 export async function withSession<T>(session: Session, fn: (tx: Queryable) => Promise<T>): Promise<T> {
   return withSessionOn(getPool(), session, fn);
 }
+
+// ---- Investment Portal sessions --------------------------------------------
+/**
+ * The claims an investor presents. Deliberately just the Supabase user id: no
+ * organisation, no entitlement, no document tier, no global role. Everything an
+ * investor is allowed to see is derived inside the database from `auth.uid()`
+ * (see app.current_investor_org_id() and friends in migration 0005), so there is
+ * nothing here for the application — or a tampered token — to get wrong.
+ */
+export function investorSessionClaims(authUserId: string): Record<string, unknown> {
+  return { sub: authUserId, role: "authenticated", app_metadata: {} };
+}
+
+export async function withInvestorSessionOn<T>(
+  pool: Pool, authUserId: string, fn: (tx: Queryable) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    try {
+      await client.query("set local role authenticated");
+      await client.query("select set_config('request.jwt.claims', $1, true)", [
+        JSON.stringify(investorSessionClaims(authUserId)),
+      ]);
+      const out = await fn(wrap(client));
+      await client.query("commit");
+      return out;
+    } catch (e) {
+      try { await client.query("rollback"); } catch { /* connection already gone */ }
+      throw e;
+    }
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * RLS-gated unit of work for a portal investor, identified only by their
+ * Supabase Auth user id. An investor has no `profiles` row and no
+ * `organization_members` row, so every internal policy (app.has_org) denies them
+ * by construction; migration 0005 grants the narrow portal access instead.
+ */
+export async function withInvestorSession<T>(
+  authUserId: string, fn: (tx: Queryable) => Promise<T>,
+): Promise<T> {
+  return withInvestorSessionOn(getPool(), authUserId, fn);
+}

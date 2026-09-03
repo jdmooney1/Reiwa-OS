@@ -12,6 +12,19 @@ import { seedIfEmpty } from "@/lib/db/seed";
 
 /** Application tables in dependency order (children first). */
 const TABLES = [
+  // Investment Portal (P1)
+  "investor_activity_events",
+  "investor_requests",
+  "investor_saved",
+  "publication_entitlements",
+  "publication_documents",
+  "publication_version_sources",
+  "publication_versions",
+  "publication_sources",
+  "investor_publications",
+  "investor_contacts",
+  "investor_organizations",
+  // Internal Reiwa OS
   "valuations",
   "asset_decisions",
   "asset_risks",
@@ -34,6 +47,7 @@ export async function dropSchema(pool: Pool = getPool()): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("begin");
+    await client.query("drop view if exists public.investor_feed cascade");
     for (const table of TABLES) {
       await client.query(`drop table if exists public.${table} cascade`);
     }
