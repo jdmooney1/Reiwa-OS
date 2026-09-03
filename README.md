@@ -25,6 +25,8 @@ yet. See the documents below before any implementation begins.
 | [`docs/01-architecture.md`](docs/01-architecture.md) | Tech stack, folder structure, navigation, auth, storage |
 | [`docs/02-data-model.md`](docs/02-data-model.md) | Domain model, entity relationships, schema rationale |
 | [`docs/03-mvp-screens.md`](docs/03-mvp-screens.md) | MVP screen list, layouts, component inventory |
+| [`docs/10-persistence-gate.md`](docs/10-persistence-gate.md) | Property-centric lifecycle model, immutability rules |
+| [`docs/11-supabase-p0.md`](docs/11-supabase-p0.md) | P0: Supabase runtime, Supabase Auth, RLS claims seam |
 | [`supabase/schema.sql`](supabase/schema.sql) | Concrete proposed Postgres schema (enums, tables, RLS) |
 
 ---
@@ -33,7 +35,7 @@ yet. See the documents below before any implementation begins.
 
 - **Framework:** Next.js (App Router) + TypeScript
 - **Styling:** Tailwind CSS + shadcn/ui
-- **Auth:** Clerk
+- **Auth:** Supabase Auth (email + password; staff accounts)
 - **Database:** Supabase (Postgres + Row Level Security)
 - **File storage:** Supabase Storage (Document Vault)
 - **Hosting (proposed):** Vercel

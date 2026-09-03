@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import type { PGlite } from "@electric-sql/pglite";
-import { adminQueryOn, type Queryable, type Session } from "@/lib/db/client";
+import { describe, it, expect, beforeAll } from "vitest";
+import { adminQuery, type Session } from "@/lib/db/client";
 import {
   createOpportunity, getOpportunity, listOpportunities, setStage,
 } from "@/lib/data/opportunities";
@@ -8,19 +7,15 @@ import { convertToAsset } from "@/lib/data/conversion";
 import { getAssetFile, listAssetFiles, addPerformancePeriod } from "@/lib/data/assets";
 import { getPortfolioData } from "@/lib/data/portfolio";
 import { threeWay, variance, varianceTone } from "@/lib/asset-intelligence/metrics";
-import { freshDb, installTestDb, clearTestDb, orgIdByName, orgUserSession } from "./helpers";
+import { orgIdByName, orgUserSession } from "./helpers";
 
-let db: PGlite;
 let meiji: string;
 let session: Session;
 
 beforeAll(async () => {
-  db = await freshDb();
-  installTestDb(db);
-  meiji = await orgIdByName(db, "Meiji Shipping");
+  meiji = await orgIdByName("Meiji Shipping");
   session = orgUserSession([meiji]);
 });
-afterAll(async () => { clearTestDb(); await db.close(); });
 
 describe("Opportunity persistence", () => {
   it("creates, reads back, and lists an opportunity", async () => {
@@ -77,12 +72,11 @@ describe("Opportunity → Asset conversion", () => {
 
 describe("Original underwriting is immutable", () => {
   it("blocks updates to the underwriting business plan and the approved case", async () => {
-    const q = (sql: string, p: unknown[] = []) => adminQueryOn(db as unknown as Queryable, sql, p);
-    await expect(q("update business_plans set noi = 1 where plan_type = 'underwriting'"))
+    await expect(adminQuery("update business_plans set noi = 1 where plan_type = 'underwriting'"))
       .rejects.toThrow(/immutable/i);
-    await expect(q("update investment_cases set acquisition_price = 1 where status = 'approved'"))
+    await expect(adminQuery("update investment_cases set acquisition_price = 1 where status = 'approved'"))
       .rejects.toThrow(/immutable/i);
-    await expect(q("delete from transactions"))
+    await expect(adminQuery("delete from transactions"))
       .rejects.toThrow(/immutable/i);
   });
 });

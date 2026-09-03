@@ -10,7 +10,7 @@ import type {
 } from "@/lib/asset-intelligence/types";
 import type { RiskStatus } from "@/types/database";
 
-// Row shapes from PGlite are dynamic; typed loosely at this mapping boundary.
+// Row shapes from node-postgres are dynamic; typed loosely at this mapping boundary.
 type Row = Record<string, unknown>;
 const metrics = (r: Row): AssetMetrics => ({
   gross_rental_income: num(r.gross_rental_income), noi: num(r.noi),

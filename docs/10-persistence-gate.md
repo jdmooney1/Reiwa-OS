@@ -1,5 +1,10 @@
 # 10 · Persistence Gate — live backend, auth, lifecycle
 
+> **Superseded in part by [11 · P0 — Supabase runtime](11-supabase-p0.md).** The
+> lifecycle model below still stands; the runtime does not. PGlite and the custom
+> JWT/scrypt authentication described here were replaced by hosted Supabase
+> PostgreSQL and Supabase Auth.
+
 This phase converted Reiwa OS from a mock prototype into a **functioning persistent,
 authenticated, multi-tenant application** and validated the full lifecycle end to end.
 

@@ -4,100 +4,168 @@
 // Two organisations so org isolation is provable end to end:
 //   * Meiji Shipping   — pipeline opportunities + the two demo assets.
 //   * Aoyama Holdings  — a separate asset that Meiji users must never see.
+//
+// Identity is created in Supabase Auth through the Admin API (SUPABASE_SECRET_KEY),
+// then mirrored into `profiles` over the privileged Postgres connection. The two
+// credentials are used for their own jobs and never substituted for each other.
 // Demo login password for every seeded user: "reiwa2026".
 // ============================================================================
-import type { PGlite } from "@electric-sql/pglite";
-import { adminQueryOn, type Queryable } from "@/lib/db/client";
-import { hashPassword } from "@/lib/auth/password";
+import type { Pool } from "pg";
+import { adminQueryOn, getPool, type Queryable } from "@/lib/db/client";
+import { createSupabaseAdminClient, ensureAuthUser } from "@/lib/supabase/admin";
 import { getAssetFiles } from "@/lib/asset-intelligence/mock";
 import type { AssetFile, BusinessPlan } from "@/lib/asset-intelligence/types";
 
-const DEMO_PASSWORD = "reiwa2026";
+export const DEMO_PASSWORD = "reiwa2026";
 
-export async function seedIfEmpty(db: PGlite): Promise<void> {
+export interface SeedStaffAccount {
+  email: string;
+  name: string;
+  globalRole: "reiwa_admin" | "org_user" | "investor_viewer";
+}
+
+/** The staff accounts the demo environment provisions in Supabase Auth. */
+export const SEED_ACCOUNTS: SeedStaffAccount[] = [
+  { email: "admin@reiwa.com", name: "Reiwa Admin", globalRole: "reiwa_admin" },
+  { email: "analyst@meiji.com", name: "Meiji Analyst", globalRole: "org_user" },
+  { email: "viewer@meiji.com", name: "Meiji Investor", globalRole: "investor_viewer" },
+  { email: "user@aoyama.com", name: "Aoyama Manager", globalRole: "org_user" },
+];
+
+/**
+ * Provision the Supabase Auth users and their `profiles` rows. Safe to re-run:
+ * existing accounts are reused and profiles are upserted.
+ */
+export async function seedIdentities(pool: Pool = getPool()): Promise<Record<string, string>> {
+  const admin = createSupabaseAdminClient();
+  const client = await pool.connect();
+  const ids: Record<string, string> = {};
+  try {
+    for (const account of SEED_ACCOUNTS) {
+      const userId = await ensureAuthUser(admin, {
+        email: account.email,
+        password: DEMO_PASSWORD,
+        name: account.name,
+      });
+      ids[account.email] = userId;
+      await client.query(
+        `insert into profiles(user_id, email, name, global_role) values ($1,$2,$3,$4)
+         on conflict (user_id) do update set email = excluded.email, name = excluded.name,
+           global_role = excluded.global_role`,
+        [userId, account.email, account.name, account.globalRole],
+      );
+    }
+  } finally {
+    client.release();
+  }
+  return ids;
+}
+
+/**
+ * Seed demonstration data. No-op when `organizations` already has rows.
+ * Returns true when data was written.
+ */
+export async function seedIfEmpty(pool: Pool = getPool()): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    const existing = await client.query<{ n: number }>("select count(*)::int as n from organizations");
+    if ((existing.rows[0]?.n ?? 0) > 0) return false;
+  } finally {
+    client.release();
+  }
+
+  const userIds = await seedIdentities(pool);
+
+  const conn = await pool.connect();
+  const db: Queryable = {
+    async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []) {
+      const res = await conn.query(sql, params as unknown[]);
+      return { rows: res.rows as T[] };
+    },
+    async exec(sql: string) {
+      return conn.query(sql);
+    },
+  };
   const q = <T = Record<string, unknown>>(sql: string, params: unknown[] = []) =>
-    adminQueryOn<T>(db as unknown as Queryable, sql, params);
-  // Inserts here always RETURNING a row; cast for ergonomics.
+    adminQueryOn<T>(db, sql, params);
   const one = async <T = Record<string, unknown>>(sql: string, params: unknown[] = []) =>
     (await q<T>(sql, params))[0] as T;
 
-  const existing = await q<{ n: number }>("select count(*)::int as n from organizations");
-  if ((existing[0]?.n ?? 0) > 0) return;
+  try {
+    await conn.query("begin");
 
-  const pwd = hashPassword(DEMO_PASSWORD);
+    // ---- Organisations ----
+    const meiji = await one<{ org_id: string }>(
+      "insert into organizations(name, type) values ($1,'corporate') returning org_id", ["Meiji Shipping"]);
+    const aoyama = await one<{ org_id: string }>(
+      "insert into organizations(name, type) values ($1,'family_office') returning org_id", ["Aoyama Holdings"]);
 
-  // ---- Organisations ----
-  const meiji = await one<{ org_id: string }>(
-    "insert into organizations(name, type) values ($1,'corporate') returning org_id", ["Meiji Shipping"]);
-  const aoyama = await one<{ org_id: string }>(
-    "insert into organizations(name, type) values ($1,'family_office') returning org_id", ["Aoyama Holdings"]);
+    // ---- Memberships (identities already exist in auth.users + profiles) ----
+    const analystId = userIds["analyst@meiji.com"];
+    const viewerId = userIds["viewer@meiji.com"];
+    const aoyamaUserId = userIds["user@aoyama.com"];
 
-  // ---- Users (three roles) + memberships ----
-  const admin = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'reiwa_admin') returning user_id",
-    ["admin@reiwa.com", pwd, "Reiwa Admin"]);
-  const analyst = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'org_user') returning user_id",
-    ["analyst@meiji.com", pwd, "Meiji Analyst"]);
-  const viewer = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'investor_viewer') returning user_id",
-    ["viewer@meiji.com", pwd, "Meiji Investor"]);
-  const aoyamaUser = await one<{ user_id: string }>(
-    "insert into users(email, password_hash, name, global_role) values ($1,$2,$3,'org_user') returning user_id",
-    ["user@aoyama.com", pwd, "Aoyama Manager"]);
+    await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'manager')", [meiji.org_id, analystId]);
+    await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'viewer')", [meiji.org_id, viewerId]);
+    await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'manager')", [aoyama.org_id, aoyamaUserId]);
+    // reiwa_admin sees everything via RLS is_admin(); no membership rows required.
 
-  await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'manager')", [meiji.org_id, analyst.user_id]);
-  await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'viewer')", [meiji.org_id, viewer.user_id]);
-  await q("insert into organization_members(org_id, user_id, role) values ($1,$2,'manager')", [aoyama.org_id, aoyamaUser.user_id]);
-  // reiwa_admin sees everything via RLS is_admin(); no membership rows required.
+    // ---- Portfolios ----
+    const pfUk = await one<{ portfolio_id: string }>(
+      "insert into portfolios(org_id, name, country, currency) values ($1,'UK Portfolio','United Kingdom','GBP') returning portfolio_id", [meiji.org_id]);
+    const pfNl = await one<{ portfolio_id: string }>(
+      "insert into portfolios(org_id, name, country, currency) values ($1,'Netherlands Portfolio','Netherlands','EUR') returning portfolio_id", [meiji.org_id]);
+    const pfAoyama = await one<{ portfolio_id: string }>(
+      "insert into portfolios(org_id, name, country, currency) values ($1,'Japan & Global','Japan','GBP') returning portfolio_id", [aoyama.org_id]);
 
-  // ---- Portfolios ----
-  const pfUk = await one<{ portfolio_id: string }>(
-    "insert into portfolios(org_id, name, country, currency) values ($1,'UK Portfolio','United Kingdom','GBP') returning portfolio_id", [meiji.org_id]);
-  const pfNl = await one<{ portfolio_id: string }>(
-    "insert into portfolios(org_id, name, country, currency) values ($1,'Netherlands Portfolio','Netherlands','EUR') returning portfolio_id", [meiji.org_id]);
-  const pfAoyama = await one<{ portfolio_id: string }>(
-    "insert into portfolios(org_id, name, country, currency) values ($1,'Japan & Global','Japan','GBP') returning portfolio_id", [aoyama.org_id]);
+    // ---- Meiji pipeline opportunities (not yet assets) ----
+    const pipeline: [string, string, string, string, string, string, number, number, number][] = [
+      // name, city, market, asset_type, strategy, stage, target_price, niy, target_irr
+      ["58 Queens Gate", "London", "London", "residential", "value_add", "underwriting", 42500000, 2.1, 14.5],
+      ["Magna Plaza", "Amsterdam", "Amsterdam", "mixed_use", "value_add", "screening", 85000000, 4.2, 15.5],
+      ["120 Fenchurch Street", "London", "London", "office", "value_add", "ic", 96000000, 4.0, 13.8],
+      ["Old Bond Street Retail", "London", "London", "retail", "core", "approved", 72000000, 3.9, 8.8],
+      ["Herengracht 124", "Amsterdam", "Amsterdam", "office", "core", "new", 34000000, 4.8, 9.5],
+    ];
+    for (const [name, city, market, atype, strat, stage, price, niy, irr] of pipeline) {
+      const prop = await one<{ property_id: string }>(
+        "insert into properties(org_id, name, city, country, market, asset_type) values ($1,$2,$3,$4,$5,$6) returning property_id",
+        [meiji.org_id, name, city, market === "London" ? "United Kingdom" : "Netherlands", market, atype]);
+      await q(`insert into opportunities(org_id, property_id, name, market, asset_type, strategy, stage, status,
+         currency, target_price, niy, target_irr, owner_user_id, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$12)`,
+        [meiji.org_id, prop.property_id, name, market, atype, strat, stage,
+         market === "London" ? "GBP" : "EUR", price, niy, irr, analystId]);
+    }
+    // A rejected opportunity (alternate outcome)
+    {
+      const prop = await one<{ property_id: string }>(
+        "insert into properties(org_id, name, city, country, market, asset_type) values ($1,'Clerkenwell Workspace','London','United Kingdom','London','office') returning property_id",
+        [meiji.org_id]);
+      await q(`insert into opportunities(org_id, property_id, name, market, asset_type, strategy, stage, status,
+         currency, target_price, niy, target_irr, owner_user_id, created_by)
+         values ($1,$2,'Clerkenwell Workspace','London','office','value_add','screening','rejected','GBP',38000000,3.4,13.0,$3,$3)`,
+        [meiji.org_id, prop.property_id, analystId]);
+    }
 
-  // ---- Meiji pipeline opportunities (not yet assets) ----
-  const pipeline: [string, string, string, string, string, string, number, number, number][] = [
-    // name, city, market, asset_type, strategy, stage, target_price, niy, target_irr
-    ["58 Queens Gate", "London", "London", "residential", "value_add", "underwriting", 42500000, 2.1, 14.5],
-    ["Magna Plaza", "Amsterdam", "Amsterdam", "mixed_use", "value_add", "screening", 85000000, 4.2, 15.5],
-    ["120 Fenchurch Street", "London", "London", "office", "value_add", "ic", 96000000, 4.0, 13.8],
-    ["Old Bond Street Retail", "London", "London", "retail", "core", "approved", 72000000, 3.9, 8.8],
-    ["Herengracht 124", "Amsterdam", "Amsterdam", "office", "core", "new", 34000000, 4.8, 9.5],
-  ];
-  for (const [name, city, market, atype, strat, stage, price, niy, irr] of pipeline) {
-    const prop = await one<{ property_id: string }>(
-      "insert into properties(org_id, name, city, country, market, asset_type) values ($1,$2,$3,$4,$5,$6) returning property_id",
-      [meiji.org_id, name, city, market === "London" ? "United Kingdom" : "Netherlands", market, atype]);
-    await q(`insert into opportunities(org_id, property_id, name, market, asset_type, strategy, stage, status,
-       currency, target_price, niy, target_irr, owner_user_id, created_by)
-       values ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$12)`,
-      [meiji.org_id, prop.property_id, name, market, atype, strat, stage,
-       market === "London" ? "GBP" : "EUR", price, niy, irr, analyst.user_id]);
+    // ---- The two demo assets, persisted through the full lifecycle chain ----
+    const files = getAssetFiles();
+    for (const f of files) {
+      const portfolioId = f.asset.city === "Amsterdam" ? pfNl.portfolio_id : pfUk.portfolio_id;
+      await seedAssetChain(q, one, meiji.org_id, portfolioId, analystId, f, true);
+    }
+
+    // ---- Aoyama isolation fixture (a separate org's asset) ----
+    await seedStandaloneAsset(q, one, aoyama.org_id, pfAoyama.portfolio_id, aoyamaUserId);
+
+    await conn.query("commit");
+    return true;
+  } catch (e) {
+    await conn.query("rollback");
+    throw e;
+  } finally {
+    conn.release();
   }
-  // A rejected opportunity (alternate outcome)
-  {
-    const prop = await one<{ property_id: string }>(
-      "insert into properties(org_id, name, city, country, market, asset_type) values ($1,'Clerkenwell Workspace','London','United Kingdom','London','office') returning property_id",
-      [meiji.org_id]);
-    await q(`insert into opportunities(org_id, property_id, name, market, asset_type, strategy, stage, status,
-       currency, target_price, niy, target_irr, owner_user_id, created_by)
-       values ($1,$2,'Clerkenwell Workspace','London','office','value_add','screening','rejected','GBP',38000000,3.4,13.0,$3,$3)`,
-      [meiji.org_id, prop.property_id, analyst.user_id]);
-  }
-
-  // ---- The two demo assets, persisted through the full lifecycle chain ----
-  const files = getAssetFiles();
-  for (const f of files) {
-    const portfolioId = f.asset.city === "Amsterdam" ? pfNl.portfolio_id : pfUk.portfolio_id;
-    await seedAssetChain(q, one, meiji.org_id, portfolioId, analyst.user_id, f, true);
-  }
-
-  // ---- Aoyama isolation fixture (a separate org's asset) ----
-  await seedStandaloneAsset(q, one, aoyama.org_id, pfAoyama.portfolio_id, aoyamaUser.user_id);
 }
 
 type Q = <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<T[]>;

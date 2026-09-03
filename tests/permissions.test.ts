@@ -1,19 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import type { PGlite } from "@electric-sql/pglite";
+import { describe, it, expect, beforeAll } from "vitest";
 import { createOpportunity } from "@/lib/data/opportunities";
-import { freshDb, installTestDb, clearTestDb, orgIdByName, viewerSession, orgUserSession } from "./helpers";
+import { orgIdByName, viewerSession, orgUserSession } from "./helpers";
 
-let db: PGlite;
 let meiji: string;
 let aoyama: string;
 
 beforeAll(async () => {
-  db = await freshDb();
-  installTestDb(db);
-  meiji = await orgIdByName(db, "Meiji Shipping");
-  aoyama = await orgIdByName(db, "Aoyama Holdings");
+  meiji = await orgIdByName("Meiji Shipping");
+  aoyama = await orgIdByName("Aoyama Holdings");
 });
-afterAll(async () => { clearTestDb(); await db.close(); });
 
 describe("Write permissions & scope (database-enforced)", () => {
   it("investor_viewer cannot create (write blocked by RLS)", async () => {

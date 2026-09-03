@@ -1,15 +1,19 @@
 // ============================================================================
-// Database client — real Postgres via PGlite (embedded, file-persistent).
+// Database client — hosted Supabase PostgreSQL over node-postgres.
 // ----------------------------------------------------------------------------
-// The SAME migrations run on Supabase. Two access modes mirror Supabase exactly:
-//   * adminQuery  → superuser connection, bypasses RLS (auth, seeding, admin).
-//   * withSession → opens a tx, `set local role authenticated` + request GUCs,
-//                   so every query is gated by database RLS.
-// Swapping to hosted Supabase = point a Postgres driver at DATABASE_URL and run
-// the same SQL; the app code above this file does not change.
+// Two access modes, deliberately kept separate:
+//   * adminQuery  → privileged connection (the `postgres` role, BYPASSRLS).
+//                   Sign-in support, session assembly, migrations, seeding.
+//   * withSession → opens a transaction, `set local role authenticated` and sets
+//                   the Supabase claims GUC `request.jwt.claims`, so every query
+//                   inside is gated by database RLS.
+//
+// This module is the ONLY place that speaks Postgres. Supabase's HTTP APIs
+// (Auth / PostgREST, authenticated with SUPABASE_SECRET_KEY or the publishable
+// key) live under src/lib/supabase/ and never share a credential with this file.
 // ============================================================================
-import { PGlite } from "@electric-sql/pglite";
-import { readFileSync, readdirSync } from "node:fs";
+import { Pool, types, type PoolClient } from "pg";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 export type GlobalRole = "reiwa_admin" | "org_user" | "investor_viewer";
@@ -21,38 +25,142 @@ export interface Session {
   canWrite: boolean;
 }
 
-// A minimal query surface both PGlite and a tx expose.
+// A minimal query surface both the pool and a transaction expose.
 export interface Queryable {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
   exec(sql: string): Promise<unknown>;
 }
 
+// ---- Type parsing ----------------------------------------------------------
+// Dates and timestamps are surfaced as strings so the data layer keeps the
+// `string` shapes it already declares; numerics stay strings and are coerced in
+// src/lib/data/coerce.ts.
+const OID_DATE = 1082, OID_TIMESTAMP = 1114, OID_TIMESTAMPTZ = 1184;
+const defaultTimestamp = types.getTypeParser(OID_TIMESTAMP);
+const defaultTimestamptz = types.getTypeParser(OID_TIMESTAMPTZ);
+const toIso = (parse: (v: string) => unknown) => (raw: string): string | null => {
+  if (raw === null) return null;
+  const parsed = parse(raw);
+  return parsed instanceof Date ? parsed.toISOString() : String(parsed);
+};
+types.setTypeParser(OID_DATE, (v) => v); // 'YYYY-MM-DD', verbatim
+types.setTypeParser(OID_TIMESTAMP, toIso(defaultTimestamp as (v: string) => unknown));
+types.setTypeParser(OID_TIMESTAMPTZ, toIso(defaultTimestamptz as (v: string) => unknown));
+
+// ---- Connection ------------------------------------------------------------
+/**
+ * The Supabase pooler presents a certificate issued by Supabase's own CA, which
+ * is not in the public trust store. Verification stays ON and the shipped root
+ * (supabase/prod-ca-2021.crt, overridable with SUPABASE_DB_CA_CERT) is added as
+ * an extra trust anchor.
+ */
+function sslConfig(): { ca: string; rejectUnauthorized: true } | undefined {
+  const url = process.env.DATABASE_URL ?? "";
+  if (url.includes("sslmode=disable")) return undefined;
+  const custom = process.env.SUPABASE_DB_CA_CERT;
+  if (custom && custom.includes("BEGIN CERTIFICATE")) {
+    return { ca: custom, rejectUnauthorized: true };
+  }
+  const path = custom || join(process.cwd(), "supabase", "prod-ca-2021.crt");
+  if (!existsSync(path)) {
+    throw new Error(
+      `Supabase root CA not found at ${path}. Set SUPABASE_DB_CA_CERT to the certificate (or its path).`,
+    );
+  }
+  return { ca: readFileSync(path, "utf8"), rejectUnauthorized: true };
+}
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __reiwa_pool: Pool | undefined;
+}
+
+function createPool(): Pool {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not set — the Supabase Postgres connection string is required.");
+  }
+  return new Pool({
+    connectionString,
+    ssl: sslConfig(),
+    application_name: "reiwa-os",
+    // The Supabase transaction pooler multiplexes; keep the local pool modest
+    // and hand connections back quickly.
+    max: Number(process.env.DATABASE_POOL_MAX ?? 8),
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 15_000,
+    // Only unnamed (single-use) statements are issued, which the transaction
+    // pooler supports; node-postgres does this unless a query `name` is given.
+  });
+}
+
+/** Process-wide pool. Survives Next.js dev hot-reloads via globalThis. */
+export function getPool(): Pool {
+  if (!globalThis.__reiwa_pool) {
+    const pool = createPool();
+    // A pooled connection dying in the background must not crash the process.
+    pool.on("error", (err) => console.error("[db] idle client error:", err.message));
+    globalThis.__reiwa_pool = pool;
+  }
+  return globalThis.__reiwa_pool;
+}
+
+/** Close the pool (tests, scripts, graceful shutdown). */
+export async function closePool(): Promise<void> {
+  const pool = globalThis.__reiwa_pool;
+  globalThis.__reiwa_pool = undefined;
+  if (pool) await pool.end();
+}
+
+function wrap(client: PoolClient | Pool): Queryable {
+  return {
+    async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []) {
+      const res = await client.query(sql, params as unknown[]);
+      return { rows: res.rows as T[] };
+    },
+    async exec(sql: string) {
+      return client.query(sql);
+    },
+  };
+}
+
+// ---- Migrations ------------------------------------------------------------
 const MIGRATIONS_DIR = join(process.cwd(), "supabase", "migrations");
 
-export async function runMigrations(db: Queryable): Promise<string[]> {
-  await db.exec(`create table if not exists _migrations (
-    name text primary key, applied_at timestamptz not null default now());`);
-  const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
+/**
+ * Apply pending migrations on a single privileged connection. The ledger lives
+ * in the private `app` schema, not `public`, so it is never exposed by PostgREST.
+ */
+export async function runMigrations(pool: Pool = getPool()): Promise<string[]> {
+  const client = await pool.connect();
   const applied: string[] = [];
-  for (const name of files) {
-    const { rows } = await db.query<{ name: string }>("select name from _migrations where name = $1", [name]);
-    if (rows.length > 0) continue;
-    const sql = readFileSync(join(MIGRATIONS_DIR, name), "utf8");
-    await db.exec("begin");
-    try {
-      await db.exec(sql);
-      await db.query("insert into _migrations(name) values ($1)", [name]);
-      await db.exec("commit");
-      applied.push(name);
-    } catch (e) {
-      await db.exec("rollback");
-      throw new Error(`Migration ${name} failed: ${(e as Error).message}`);
+  try {
+    await client.query("create schema if not exists app");
+    await client.query(`create table if not exists app._migrations (
+      name text primary key, applied_at timestamptz not null default now());`);
+    const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
+    for (const name of files) {
+      const { rows } = await client.query("select name from app._migrations where name = $1", [name]);
+      if (rows.length > 0) continue;
+      const sql = readFileSync(join(MIGRATIONS_DIR, name), "utf8");
+      await client.query("begin");
+      try {
+        await client.query(sql);
+        await client.query("insert into app._migrations(name) values ($1)", [name]);
+        await client.query("commit");
+        applied.push(name);
+      } catch (e) {
+        await client.query("rollback");
+        throw new Error(`Migration ${name} failed: ${(e as Error).message}`);
+      }
     }
+  } finally {
+    client.release();
   }
   return applied;
 }
 
-// ---- Access helpers (parametrised on a db so tests can pass their own) ------
+// ---- Access helpers (parametrised on a pool so scripts/tests can pass theirs) ----
 export async function adminQueryOn<T = Record<string, unknown>>(
   db: Queryable, sql: string, params: unknown[] = [],
 ): Promise<T[]> {
@@ -60,54 +168,57 @@ export async function adminQueryOn<T = Record<string, unknown>>(
   return rows;
 }
 
+/** The Supabase claims this session presents to RLS inside a transaction. */
+export function sessionClaims(session: Session): Record<string, unknown> {
+  return {
+    sub: session.userId,
+    role: "authenticated",
+    app_metadata: {
+      global_role: session.role,
+      org_ids: session.orgIds,
+      can_write: session.canWrite,
+    },
+  };
+}
+
+/**
+ * Run `fn` inside one transaction as the `authenticated` role with this
+ * session's claims installed. Both the role and the claims are SET LOCAL, so
+ * they are discarded at COMMIT/ROLLBACK and never leak to the next borrower of
+ * the pooled connection.
+ */
 export async function withSessionOn<T>(
-  db: PGlite, session: Session, fn: (tx: Queryable) => Promise<T>,
+  pool: Pool, session: Session, fn: (tx: Queryable) => Promise<T>,
 ): Promise<T> {
-  return db.transaction(async (tx) => {
-    await tx.exec("set local role authenticated");
-    await tx.query("select set_config('app.user_id', $1, true)", [session.userId]);
-    await tx.query("select set_config('app.org_ids', $1, true)", [session.orgIds.join(",")]);
-    await tx.query("select set_config('app.role', $1, true)", [session.role]);
-    await tx.query("select set_config('app.can_write', $1, true)", [session.canWrite ? "true" : "false"]);
-    return fn(tx as unknown as Queryable);
-  }) as Promise<T>;
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    try {
+      await client.query("set local role authenticated");
+      await client.query("select set_config('request.jwt.claims', $1, true)", [
+        JSON.stringify(sessionClaims(session)),
+      ]);
+      const out = await fn(wrap(client));
+      await client.query("commit");
+      return out;
+    } catch (e) {
+      try { await client.query("rollback"); } catch { /* connection already gone */ }
+      throw e;
+    }
+  } finally {
+    client.release();
+  }
 }
 
-/** Fresh in-memory migrated database — for tests. */
-export async function createTestDb(): Promise<PGlite> {
-  const db = new PGlite();
-  await runMigrations(db as unknown as Queryable);
-  return db;
+// ---- Application-level helpers ---------------------------------------------
+/** Privileged query — bypasses RLS. Never reachable from a user-supplied path. */
+export async function adminQuery<T = Record<string, unknown>>(
+  sql: string, params: unknown[] = [],
+): Promise<T[]> {
+  return adminQueryOn<T>(wrap(getPool()), sql, params);
 }
 
-// ---- Application singleton (file-persistent) -------------------------------
-function dataDir(): string {
-  return process.env.PGLITE_DATA_DIR || join(process.cwd(), ".data", "pg");
-}
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __reiwa_db: Promise<PGlite> | undefined;
-}
-
-async function bootstrap(): Promise<PGlite> {
-  const db = new PGlite(dataDir());
-  await db.waitReady;
-  await runMigrations(db as unknown as Queryable);
-  const { seedIfEmpty } = await import("@/lib/db/seed");
-  await seedIfEmpty(db);
-  return db;
-}
-
-export function getDb(): Promise<PGlite> {
-  if (!globalThis.__reiwa_db) globalThis.__reiwa_db = bootstrap();
-  return globalThis.__reiwa_db;
-}
-
-export async function adminQuery<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
-  return adminQueryOn<T>((await getDb()) as unknown as Queryable, sql, params);
-}
-
+/** RLS-gated unit of work for a signed-in user. */
 export async function withSession<T>(session: Session, fn: (tx: Queryable) => Promise<T>): Promise<T> {
-  return withSessionOn(await getDb(), session, fn);
+  return withSessionOn(getPool(), session, fn);
 }

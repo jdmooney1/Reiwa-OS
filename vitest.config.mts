@@ -8,8 +8,14 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
-    testTimeout: 60000,
-    hookTimeout: 60000,
+    // Integration tests hit the real Supabase Postgres over the network.
+    testTimeout: 120000,
+    hookTimeout: 180000,
     include: ["tests/**/*.test.ts"],
+    globalSetup: ["tests/global-setup.ts"],
+    setupFiles: ["tests/setup.ts"],
+    // One shared database: files must not interleave.
+    fileParallelism: false,
+    sequence: { concurrent: false },
   },
 });

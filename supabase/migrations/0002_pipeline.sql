@@ -64,8 +64,8 @@ create table if not exists opportunities (
   equity_multiple    numeric(7,4),
   probability        int,
   summary            text,
-  owner_user_id      uuid references users(user_id),
-  created_by         uuid references users(user_id),
+  owner_user_id      uuid references profiles(user_id),
+  created_by         uuid references profiles(user_id),
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now(),
   archived_at        timestamptz

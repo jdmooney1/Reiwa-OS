@@ -3,6 +3,10 @@
 -- ----------------------------------------------------------------------------
 -- Portfolio aggregation reads rates from here and surfaces the source + date in
 -- the UI. Replace the seeded demo rates with a live feed for production.
+--
+-- Reference data: not org-scoped, but RLS is still enabled (every table in
+-- `public` on Supabase must be), with read access for signed-in users only.
+-- Writes are reserved for the privileged connection.
 -- ============================================================================
 create table if not exists fx_rates (
   currency    text primary key,
@@ -10,6 +14,12 @@ create table if not exists fx_rates (
   as_of_date  date not null,
   source      text not null
 );
+
+alter table fx_rates enable row level security;
+
+drop policy if exists fx_rates_select on fx_rates;
+create policy fx_rates_select on fx_rates for select to authenticated
+  using (true);
 
 grant select on fx_rates to authenticated;
 

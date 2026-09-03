@@ -1,9 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // PGlite ships WASM; keep it external so it is required at runtime, not bundled.
+  // node-postgres opens raw TCP/TLS sockets; keep it out of the server bundle so
+  // it is required at runtime.
   experimental: {
-    serverComponentsExternalPackages: ["@electric-sql/pglite"],
+    serverComponentsExternalPackages: ["pg"],
   },
 };
 
