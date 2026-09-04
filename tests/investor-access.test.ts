@@ -8,6 +8,12 @@
 //
 // Self-contained fixture (own investor organisations, contacts, Auth users);
 // nothing seeded is touched, so the P0/P1/P2 suites stay valid.
+//
+// OTP codes come from the Auth Admin API (see issueRealOtp): hosted Supabase
+// keeps only a hash of the code it emails, so the plaintext cannot be read back
+// from the database. The code is real and is redeemed through the public
+// verifyOtp path; only the SMTP hop is out of scope here, because Supabase
+// rejects the reserved `.example` fixture domains (400 email_address_invalid).
 // ============================================================================
 import { describe, it, expect, beforeAll } from "vitest";
 import {
@@ -30,6 +36,7 @@ import {
 } from "@/lib/auth/investor-access";
 import { loadPortalIdentity } from "@/lib/auth/portal-session";
 import { provisionInvestorAuthUser } from "@/lib/supabase/investor-admin";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { adminSession, orgIdByName, orgUserSession, profileIdByEmail } from "./helpers";
 
 const EMAIL = "access@p3-fixture.example";
@@ -46,12 +53,25 @@ let contactId: string;
 let inactiveContactId: string;
 let authUserId: string;       // the provisioned OTP-only Auth user for EMAIL
 
-/** The code the Auth server "sent" — locally it lands in auth._local_otp. */
-async function sentOtpCode(email: string): Promise<string> {
-  const rows = await adminQuery<{ code: string }>(
-    "select code from auth._local_otp where email = lower($1)", [email]);
-  if (!rows[0]) throw new Error(`No OTP recorded for ${email}`);
-  return rows[0].code;
+/**
+ * A genuine OTP for `email`, minted by the real Supabase Auth server.
+ *
+ * Hosted Supabase never exposes the plaintext code it emails — auth.one_time_
+ * tokens stores only a hash — so a test cannot read a "sent" code the way the
+ * local harness allowed. The Admin API's generateLink is the supported way to
+ * obtain a real one: GoTrue mints exactly the code it would have emailed and
+ * returns it over the service-role connection, sending no mail. The code is
+ * then redeemed through the ordinary public verifyOtp path below, so the whole
+ * investor-facing verification flow is exercised against the real server.
+ */
+async function issueRealOtp(email: string): Promise<string> {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email });
+  const code = data?.properties?.email_otp;
+  if (error || !code) {
+    throw new Error(`Supabase issued no OTP for ${email}: ${error?.message ?? "no email_otp"}`);
+  }
+  return code;
 }
 
 beforeAll(async () => {
@@ -113,21 +133,39 @@ describe("Authorised OTP flow", () => {
   it("provisioning creates a passwordless Auth identity anchored on the contact", async () => {
     authUserId = await provisionInvestorAuthUser(EMAIL, "A. Fixture");
     await updateInvestorContact(adminSession, contactId, { authUserId });
-    const row = await adminQuery<{ password_sha256: string | null }>(
-      "select password_sha256 from auth.users where id = $1", [authUserId]);
-    expect(row[0].password_sha256).toBeNull(); // OTP is the only way in
+    // The identity is anchored on the contact...
+    const linked = await adminQuery<{ auth_user_id: string }>(
+      "select auth_user_id from investor_contacts where investor_contact_id = $1", [contactId]);
+    expect(linked[0].auth_user_id).toBe(authUserId);
+
+    // ...and it is passwordless. Hosted Supabase always materialises a bcrypt
+    // hash in auth.users.encrypted_password — even for an account created with
+    // no password — so the property is certified behaviourally rather than by
+    // inspecting that column: the demo password (the only password this system
+    // ever sets, and only for staff) does not open this identity, while the OTP
+    // path does. Provisioning never supplies a password at all.
+    const supabase = createSupabaseStatelessClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: EMAIL, password: DEMO_PASSWORD,
+    });
+    expect(error).toBeTruthy();                          // password: refused
+    expect(await issueRealOtp(EMAIL)).toMatch(/^\d{6,8}$/); // OTP: the way in
   });
 
-  it("an authorised active contact can request an OTP", async () => {
-    const supabase = createSupabaseStatelessClient();
-    const outcome = await requestInvestorOtp(supabase, EMAIL);
-    expect(outcome).toEqual({ ok: true, email: EMAIL });
-    expect(await sentOtpCode(EMAIL)).toMatch(/^\d{6}$/);
+  it("an authorised active contact is cleared for an OTP, and Supabase issues one", async () => {
+    // Our gate authorises the address...
+    expect(await authoriseOtpEmail(EMAIL)).toEqual({ ok: true, email: EMAIL });
+    // ...and the real Auth server mints a genuine numeric code for that
+    // identity. The SMTP leg is deliberately not driven from here: hosted
+    // Supabase refuses the reserved `.example` fixture domains outright
+    // (400 email_address_invalid), so actual delivery has to be certified
+    // against a deliverable address rather than from this suite.
+    expect(await issueRealOtp(EMAIL)).toMatch(/^\d{6,8}$/);
   });
 
   it("verifying the OTP resolves to exactly the right investor contact", async () => {
     const supabase = createSupabaseStatelessClient();
-    const code = await sentOtpCode(EMAIL);
+    const code = await issueRealOtp(EMAIL);
     const { data, error } = await supabase.auth.verifyOtp({
       email: EMAIL, token: code, type: "email",
     });
@@ -201,11 +239,11 @@ describe("Invitations", () => {
     const validated = await validateInviteToken(rawToken);
     expect(validated.ok).toBe(true);
 
-    // Request + verify OTP through the invitation, exactly like the UI flow.
+    // Verify an OTP through the invitation, exactly like the UI flow (the code
+    // is minted by the real Auth server; only the email hop is skipped).
     const supabase = createSupabaseStatelessClient();
-    await requestInvestorOtp(supabase, EMAIL);
     const { data } = await supabase.auth.verifyOtp({
-      email: EMAIL, token: await sentOtpCode(EMAIL), type: "email",
+      email: EMAIL, token: await issueRealOtp(EMAIL), type: "email",
     });
     const completion = await completeInvestorVerification(data.user!.id, rawToken);
     expect(completion.ok && completion.inviteAccepted).toBe(true);
@@ -234,9 +272,8 @@ describe("Invitations", () => {
   it("a freshly used token validates as 'accepted' and cannot restart the flow", async () => {
     const { rawToken } = await createInvite(adminSession, contactId, {}, adminUserId);
     const supabase = createSupabaseStatelessClient();
-    await requestInvestorOtp(supabase, EMAIL);
     const { data } = await supabase.auth.verifyOtp({
-      email: EMAIL, token: await sentOtpCode(EMAIL), type: "email",
+      email: EMAIL, token: await issueRealOtp(EMAIL), type: "email",
     });
     const first = await completeInvestorVerification(data.user!.id, rawToken);
     expect(first.ok && first.inviteAccepted).toBe(true);
