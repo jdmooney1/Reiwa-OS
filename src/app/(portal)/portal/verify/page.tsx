@@ -3,6 +3,7 @@ import { resolveIdentity } from "@/lib/auth/portal-session";
 import { validateInviteToken } from "@/lib/data/investor-invites";
 import { maskEmail } from "@/lib/auth/investor-access";
 import { VerifyForm } from "@/components/portal/verify-form";
+import { AccessFrame } from "@/components/portal/access-frame";
 
 export const dynamic = "force-dynamic";
 
@@ -24,14 +25,16 @@ export default async function PortalVerifyPage({
     // A token that stopped being valid mid-flow gets the explanatory page.
     if (!invite.ok) redirect(`/access/${encodeURIComponent(inviteToken)}`);
     return (
-      <VerifyForm
-        mode="invite"
-        inviteToken={inviteToken}
-        maskedEmail={maskEmail(invite.contactEmail)}
-        orgName={invite.investorOrgName}
-      />
+      <AccessFrame>
+        <VerifyForm
+          mode="invite"
+          inviteToken={inviteToken}
+          maskedEmail={maskEmail(invite.contactEmail)}
+          orgName={invite.investorOrgName}
+        />
+      </AccessFrame>
     );
   }
 
-  return <VerifyForm mode="direct" />;
+  return <AccessFrame><VerifyForm mode="direct" /></AccessFrame>;
 }

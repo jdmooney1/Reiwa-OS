@@ -3,6 +3,7 @@ import { validateInviteToken } from "@/lib/data/investor-invites";
 import { maskEmail } from "@/lib/auth/investor-access";
 import { requestOtpForInviteAction } from "@/app/actions/portal-access";
 import { formatDate } from "@/lib/format";
+import { AccessFrame } from "@/components/portal/access-frame";
 
 export const dynamic = "force-dynamic";
 
@@ -85,5 +86,9 @@ export default async function AccessPage({ params }: { params: { token: string }
 }
 
 function PortalCard({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-lg border border-line bg-surface-card px-7 py-7">{children}</div>;
+  return (
+    <AccessFrame>
+      <div className="rounded-lg border border-line bg-surface-card px-7 py-7">{children}</div>
+    </AccessFrame>
+  );
 }
