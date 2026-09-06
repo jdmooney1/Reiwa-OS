@@ -17,6 +17,7 @@ import {
   requestInvestorOtp, completeInvestorVerification,
 } from "@/lib/auth/investor-access";
 import { validateInviteToken } from "@/lib/data/investor-invites";
+import { recordPortalEvent } from "@/lib/data/portal-feed";
 
 export interface AccessFormState {
   error?: string;
@@ -75,6 +76,12 @@ export async function verifyOtpAction(
   }
 
   const completion = await completeInvestorVerification(data.user.id, inviteToken);
+  if (completion.ok) {
+    // The one factual sign-in event (P1's `login`). Recorded here, once per
+    // verified sign-in, rather than per page view — "last portal login" in the
+    // admin surface means exactly this and nothing inferred.
+    await recordPortalEvent(data.user.id, "login");
+  }
   if (!completion.ok) {
     // Verified with Supabase, but not an active investor contact (or a staff
     // account): no portal session may exist. End the Auth session immediately.

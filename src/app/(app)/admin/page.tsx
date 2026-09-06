@@ -3,6 +3,8 @@ import { ArrowRight, FileSearch, EyeOff, UserX } from "lucide-react";
 import { requireAdminAuth } from "@/lib/auth/admin";
 import { toDbSession } from "@/lib/auth/session";
 import { getAdminOverview } from "@/lib/data/admin-portal";
+import { getActivitySignals } from "@/lib/data/admin-activity";
+import { timeAgo } from "@/lib/activity-labels";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
@@ -11,7 +13,8 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminHomePage() {
   const auth = await requireAdminAuth();
-  const overview = await getAdminOverview(toDbSession(auth));
+  const db = toDbSession(auth);
+  const [overview, signals] = await Promise.all([getAdminOverview(db), getActivitySignals(db)]);
   const { counts } = overview;
 
   const stats: { label: string; value: number; href: string }[] = [
@@ -42,6 +45,62 @@ export default async function AdminHomePage() {
             </Link>
           ))}
         </div>
+
+        {/* Operational commercial signals (P5). Counts and timestamps only —
+            deliberately not an analytics dashboard. */}
+        <Card>
+          <CardHeader
+            eyebrow={`Recorded investor activity · last ${signals.windowDays} days`}
+            title="Commercial signals"
+            action={
+              <Link href="/admin/activity" className="text-2xs font-medium text-ink-muted hover:text-gold-deep">
+                Full activity record →
+              </Link>
+            }
+          />
+          <CardBody className="grid gap-6 md:grid-cols-3">
+            <div>
+              <div className="eyebrow mb-1.5">Open investor requests</div>
+              {signals.openRequests === 0 ? (
+                <p className="text-xs text-ink-faint">Nothing awaiting a response.</p>
+              ) : (
+                <Link href="/admin/activity" className="font-serif text-2xl text-ink hover:text-gold-deep">
+                  {signals.openRequests}
+                </Link>
+              )}
+            </div>
+            <div>
+              <div className="eyebrow mb-1.5">Investors active recently</div>
+              {signals.activeOrganisations.length === 0 ? (
+                <p className="text-xs text-ink-faint">No portal activity recorded.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {signals.activeOrganisations.slice(0, 5).map((o) => (
+                    <li key={o.investorOrgId} className="flex items-baseline justify-between gap-3">
+                      <Link href={`/admin/investors/${o.investorOrgId}`} className="truncate text-xs text-ink hover:text-gold-deep">{o.name}</Link>
+                      <span className="shrink-0 text-2xs text-ink-faint">{timeAgo(o.lastActivityAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <div className="eyebrow mb-1.5">Opportunities receiving attention</div>
+              {signals.activePublications.length === 0 ? (
+                <p className="text-xs text-ink-faint">No opportunity activity recorded.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {signals.activePublications.slice(0, 5).map((p) => (
+                    <li key={p.publicationId} className="flex items-baseline justify-between gap-3">
+                      <Link href={`/admin/publications/${p.publicationId}`} className="truncate text-xs text-ink hover:text-gold-deep">{p.title}</Link>
+                      <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{p.events}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </CardBody>
+        </Card>
 
         {/* Workflow queues */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">

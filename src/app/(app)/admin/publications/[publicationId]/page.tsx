@@ -9,6 +9,8 @@ import {
   getPublicationSourcePanel, listVersionDrift, listEntitlementsForPublication,
 } from "@/lib/data/admin-portal";
 import { PublicationDetail } from "@/components/admin/publication-detail";
+import { getPublicationActivity, listRequests } from "@/lib/data/admin-activity";
+import { PublicationActivitySection } from "@/components/admin/activity-sections";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +25,14 @@ export default async function AdminPublicationPage({
   const publication = await getPublication(db, params.publicationId).catch(() => null);
   if (!publication) notFound();
 
-  const [versions, source, drift, entitlements, investorOrgs] = await Promise.all([
+  const [versions, source, drift, entitlements, investorOrgs, activity, requests] = await Promise.all([
     listPublicationVersions(db, publication.publicationId),
     getPublicationSourcePanel(db, publication.publicationId),
     listVersionDrift(db, publication.publicationId),
     listEntitlementsForPublication(db, publication.publicationId),
     listInvestorOrganizations(db),
+    getPublicationActivity(db, publication.publicationId),
+    listRequests(db, { publicationId: publication.publicationId }),
   ]);
 
   // The one editable (or in-review) version, and the live one.
@@ -43,7 +47,8 @@ export default async function AdminPublicationPage({
   ]);
 
   return (
-    <PublicationDetail
+    <>
+      <PublicationDetail
       publication={publication}
       versions={versions}
       working={working}
@@ -55,5 +60,13 @@ export default async function AdminPublicationPage({
       entitlements={entitlements}
       investorOrgs={investorOrgs}
     />
+      <div className="mx-auto w-full max-w-6xl px-6 pb-10">
+        <PublicationActivitySection
+          activity={activity}
+          requests={requests}
+          publicationId={publication.publicationId}
+        />
+      </div>
+    </>
   );
 }

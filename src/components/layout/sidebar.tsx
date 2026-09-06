@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Boxes, Building2, LogOut, Landmark, Users, FileText } from "lucide-react";
+import { LayoutGrid, Boxes, Building2, LogOut, Landmark, Users, FileText , Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAction } from "@/app/actions/auth";
 
@@ -39,6 +39,7 @@ export function Sidebar({
             { href: "/admin", label: "Portal Overview", icon: Landmark },
             { href: "/admin/investors", label: "Investors", icon: Users },
             { href: "/admin/publications", label: "Publications", icon: FileText },
+            { href: "/admin/activity", label: "Activity", icon: Activity },
           ],
         }]
       : []),

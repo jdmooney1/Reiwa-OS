@@ -360,7 +360,8 @@ function isPolicyRefusal(e: unknown): boolean {
 // nothing here derives a score, a duration or an inferred preference.
 
 export type PortalEventType =
-  | "opportunity_viewed" | "saved" | "unsaved" | "compared" | "information_requested";
+  | "login" | "opportunity_viewed" | "saved" | "unsaved" | "compared"
+  | "information_requested";
 
 /**
  * Record one factual event. Never throws: an activity write failing must not
