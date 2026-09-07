@@ -8,6 +8,7 @@ import {
   type OppStage, type OppStatus,
 } from "@/lib/data/opportunities";
 import { convertToAsset } from "@/lib/data/conversion";
+import { AppError } from "@/lib/errors";
 
 const numOrNull = (v: FormDataEntryValue | null): number | null => {
   const s = String(v ?? "").trim();
@@ -17,7 +18,7 @@ const numOrNull = (v: FormDataEntryValue | null): number | null => {
 export async function createOpportunityAction(formData: FormData): Promise<void> {
   const session = await requireDbSession();
   const orgId = String(formData.get("orgId") || "");
-  if (!orgId) throw new Error("Organisation is required");
+  if (!orgId) throw new AppError("Organisation is required");
   const id = await createOpportunity(session, {
     orgId,
     name: String(formData.get("name") || "").trim(),

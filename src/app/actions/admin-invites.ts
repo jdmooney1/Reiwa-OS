@@ -18,6 +18,7 @@ import {
   createInvite, revokeInvite, getInvestorContactForAdmin,
 } from "@/lib/data/investor-invites";
 import { provisionInvestorAuthUser } from "@/lib/supabase/investor-admin";
+import { AppError } from "@/lib/errors";
 
 function refreshInvestor(investorOrgId: string): void {
   revalidatePath("/admin/investors");
@@ -33,7 +34,7 @@ export async function provisionContactAccessAction(
 ): Promise<void> {
   const { db } = await requireAdminSession();
   const contact = await getInvestorContactForAdmin(db, investorContactId);
-  if (!contact) throw new Error("Contact not found.");
+  if (!contact) throw new AppError("Contact not found.");
   if (contact.authUserId) { refreshInvestor(investorOrgId); return; }
 
   const authUserId = await provisionInvestorAuthUser(contact.email, contact.name);
@@ -57,12 +58,12 @@ export async function createInviteForContactAction(
 ): Promise<CreatedInvite> {
   const { db, auth } = await requireAdminSession();
   const contact = await getInvestorContactForAdmin(db, investorContactId);
-  if (!contact) throw new Error("Contact not found.");
+  if (!contact) throw new AppError("Contact not found.");
   if (!contact.authUserId) {
-    throw new Error("Provision the contact's sign-in before creating an invitation.");
+    throw new AppError("Provision the contact's sign-in before creating an invitation.");
   }
   if (!contact.isActive) {
-    throw new Error("Reactivate the contact before creating an invitation.");
+    throw new AppError("Reactivate the contact before creating an invitation.");
   }
 
   const invite = await createInvite(db, investorContactId, {}, auth.userId);

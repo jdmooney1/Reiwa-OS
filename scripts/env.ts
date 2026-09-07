@@ -3,22 +3,20 @@
 import { config } from "dotenv";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { requireEnvironment } from "@/lib/env";
 
 for (const file of [".env.local", ".env"]) {
   const path = join(process.cwd(), file);
   if (existsSync(path)) config({ path, quiet: true });
 }
 
-const REQUIRED = [
-  "DATABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-  "SUPABASE_SECRET_KEY",
-];
-
+/**
+ * Fail unless every required variable is present.
+ *
+ * One list, shared with the application (src/lib/env.ts), so a script and a
+ * request can never disagree about what "configured" means — and neither has a
+ * default to fall back on.
+ */
 export function requireEnv(): void {
-  const missing = REQUIRED.filter((name) => !process.env[name]);
-  if (missing.length > 0) {
-    throw new Error(`Missing required environment variable(s): ${missing.join(", ")}`);
-  }
+  requireEnvironment();
 }

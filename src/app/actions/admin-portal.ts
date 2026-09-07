@@ -30,6 +30,7 @@ import {
 import {
   checkUpload, newObjectPath, putDocumentObject, deleteDocumentObject,
 } from "@/lib/documents/storage";
+import { AppError, reportError } from "@/lib/errors";
 
 const trimmed = (v: FormDataEntryValue | null): string => String(v ?? "").trim();
 const orNull = (v: FormDataEntryValue | null): string | null => trimmed(v) || null;
@@ -58,7 +59,7 @@ function refreshPublication(publicationId: string): void {
 export async function createInvestorOrgAction(formData: FormData): Promise<void> {
   const { db } = await requireAdminSession();
   const name = trimmed(formData.get("name"));
-  if (!name) throw new Error("The organisation name is required.");
+  if (!name) throw new AppError("The organisation name is required.");
   const id = await createInvestorOrganization(db, {
     name,
     status: (trimmed(formData.get("status")) || "active") as InvestorOrgStatus,
@@ -74,7 +75,7 @@ export async function updateInvestorOrgAction(
 ): Promise<void> {
   const { db } = await requireAdminSession();
   const name = trimmed(formData.get("name"));
-  if (!name) throw new Error("The organisation name is required.");
+  if (!name) throw new AppError("The organisation name is required.");
   await updateInvestorOrganization(db, investorOrgId, {
     name,
     status: (trimmed(formData.get("status")) || "active") as InvestorOrgStatus,
@@ -92,7 +93,7 @@ export async function createInvestorContactAction(
   const { db } = await requireAdminSession();
   const name = trimmed(formData.get("name"));
   const email = trimmed(formData.get("email"));
-  if (!name || !email) throw new Error("A contact needs a name and an email address.");
+  if (!name || !email) throw new AppError("A contact needs a name and an email address.");
   await createInvestorContact(db, {
     investorOrgId,
     name,
@@ -108,7 +109,7 @@ export async function updateInvestorContactAction(
   const { db } = await requireAdminSession();
   const name = trimmed(formData.get("name"));
   const email = trimmed(formData.get("email"));
-  if (!name || !email) throw new Error("A contact needs a name and an email address.");
+  if (!name || !email) throw new AppError("A contact needs a name and an email address.");
   await updateInvestorContact(db, investorContactId, {
     name,
     email,
@@ -133,7 +134,7 @@ export async function assignPublicationAction(
 ): Promise<void> {
   const { db, auth } = await requireAdminSession();
   const publicationId = trimmed(formData.get("publicationId"));
-  if (!publicationId) throw new Error("Choose a publication to assign.");
+  if (!publicationId) throw new AppError("Choose a publication to assign.");
   await grantEntitlement(db, {
     investorOrgId,
     publicationId,
@@ -153,7 +154,7 @@ export async function grantAccessAction(
 ): Promise<void> {
   const { db, auth } = await requireAdminSession();
   const investorOrgId = trimmed(formData.get("investorOrgId"));
-  if (!investorOrgId) throw new Error("Choose an investor organisation.");
+  if (!investorOrgId) throw new AppError("Choose an investor organisation.");
   await grantEntitlement(db, {
     investorOrgId,
     publicationId,
@@ -243,7 +244,7 @@ export async function updateDraftVersionAction(
 ): Promise<void> {
   const { db } = await requireAdminSession();
   const title = trimmed(formData.get("title"));
-  if (!title) throw new Error("The publication title is required.");
+  if (!title) throw new AppError("The publication title is required.");
   const highlights = String(formData.get("highlights") ?? "")
     .split("\n").map((h) => h.trim()).filter(Boolean);
   await updateDraftVersion(db, versionId, {
@@ -319,7 +320,7 @@ export async function startDraftFromSourceAction(publicationId: string): Promise
   const { db, auth } = await requireAdminSession();
   await assertNoOpenVersion(db, publicationId);
   const provenance = await getPublicationProvenance(db, publicationId);
-  if (!provenance) throw new Error("This publication has no linked internal opportunity.");
+  if (!provenance) throw new AppError("This publication has no linked internal opportunity.");
   await createPublicationFromOpportunity(db, provenance.opportunityId, auth.userId);
   refreshPublication(publicationId);
 }
@@ -374,7 +375,8 @@ export async function addDocumentAction(
     // The row did not land, so the object must not survive it: an object with
     // no row is unreachable and unaccounted for.
     await deleteDocumentObject(storagePath);
-    throw e;
+    const { message } = reportError("admin.document.upload", e, { versionId, title });
+    return { error: message };
   }
 
   refreshPublication(publicationId);
@@ -397,7 +399,7 @@ export async function updateDocumentAction(
 ): Promise<void> {
   const { db } = await requireAdminSession();
   const title = trimmed(formData.get("title"));
-  if (!title) throw new Error("The document title is required.");
+  if (!title) throw new AppError("The document title is required.");
   await updatePublicationDocument(db, documentId, {
     title,
     category: trimmed(formData.get("category")) || "other",

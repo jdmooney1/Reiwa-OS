@@ -19,6 +19,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getPortalSession } from "@/lib/auth/portal-session";
 import { issueDocumentDownload } from "@/lib/documents/secure-delivery";
+import { reportError } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,19 @@ export async function GET(
   const investor = await getPortalSession();
   if (!investor) return refuse();
 
-  const grant = await issueDocumentDownload(investor.authUserId, params.documentId);
+  let grant;
+  try {
+    grant = await issueDocumentDownload(investor.authUserId, params.documentId);
+  } catch (e) {
+    // A genuine fault, not a refusal. The log gets the whole story; the
+    // investor gets the same 404 as every other refusal, so a failure here
+    // cannot be told apart from "you may not have this".
+    reportError("portal.document.download", e, {
+      documentId: params.documentId,
+      investorContactId: investor.investorContactId,
+    });
+    return refuse();
+  }
   if (!grant) return refuse();
 
   return new NextResponse(null, {

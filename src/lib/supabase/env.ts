@@ -5,10 +5,16 @@
 // NOT the database credential: privileged Postgres access lives behind
 // DATABASE_URL in src/lib/db/client.ts and the two are never interchanged.
 // ============================================================================
+import { missingEnv, missingEnvMessage, type RequiredEnvName } from "@/lib/env";
 
-function required(name: string): string {
+// No defaults and no fallback anywhere below: see src/lib/env.ts for why. A
+// missing variable throws with the full list of what is missing and what each
+// one is for, rather than the first name it happens to trip over.
+function required(name: RequiredEnvName): string {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is not set — required to reach the Supabase project.`);
+  if (!value || value.trim() === "") {
+    throw new Error(missingEnvMessage(missingEnv()));
+  }
   return value;
 }
 

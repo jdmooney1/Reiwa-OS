@@ -64,7 +64,10 @@ export async function requestOtpDirectAction(
 export async function verifyOtpAction(
   _prev: AccessFormState, formData: FormData,
 ): Promise<AccessFormState> {
-  const code = String(formData.get("code") ?? "").trim();
+  // Whitespace only — no length check and no digit assumption. A project's OTP
+  // length is a Supabase setting, so the code is passed through as typed and
+  // Supabase decides whether it is valid.
+  const code = String(formData.get("code") ?? "").replace(/\s+/g, "");
   // From the httpOnly cookie, never a hidden form field: the token is not in
   // the page's markup, so it cannot be read, copied or replayed from there.
   const inviteToken = readInviteToken();

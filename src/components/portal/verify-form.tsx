@@ -69,11 +69,21 @@ export function VerifyForm(props:
           {!invite && (
             <input type="hidden" name="email" value={verifyState.email ?? directEmail ?? ""} />
           )}
-          <label className="block">
+          <label className="block" htmlFor="otp-code">
             <span className="eyebrow">Access code</span>
-            <input name="code" inputMode="numeric" autoComplete="one-time-code" required autoFocus
-              placeholder="6-digit code"
+            {/* No length is assumed anywhere: a Supabase project's OTP length is
+                a project setting (6 by default, 8 once an operator raises it),
+                so there is no "6-digit" in the copy, no maxLength, and no
+                client-side length check. The code is passed through as typed
+                and Supabase decides whether it is valid. */}
+            <input id="otp-code" name="code" inputMode="numeric" autoComplete="one-time-code"
+              required autoFocus spellCheck={false} autoCapitalize="off"
+              aria-describedby="otp-code-hint"
+              placeholder="Enter the code from your email"
               className="mt-1 h-11 w-full rounded border border-line bg-surface px-3 text-center font-serif text-xl tracking-[0.4em] text-ink placeholder:tracking-normal placeholder:font-sans placeholder:text-sm focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+            <span id="otp-code-hint" className="mt-1.5 block text-2xs text-ink-faint">
+              Enter the code exactly as it appears in the email.
+            </span>
           </label>
           {verifyState.error && <FormError text={verifyState.error} />}
           <SubmitButton label="Verify and enter the portal" />

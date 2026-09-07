@@ -54,9 +54,8 @@ types.setTypeParser(OID_TIMESTAMPTZ, toIso(defaultTimestamptz as (v: string) => 
  * (supabase/prod-ca-2021.crt, overridable with SUPABASE_DB_CA_CERT) is added as
  * an extra trust anchor.
  */
-function sslConfig(): { ca: string; rejectUnauthorized: true } | undefined {
-  const url = process.env.DATABASE_URL ?? "";
-  if (url.includes("sslmode=disable")) return undefined;
+function sslConfig(connectionString: string): { ca: string; rejectUnauthorized: true } | undefined {
+  if (connectionString.includes("sslmode=disable")) return undefined;
   const custom = process.env.SUPABASE_DB_CA_CERT;
   if (custom && custom.includes("BEGIN CERTIFICATE")) {
     return { ca: custom, rejectUnauthorized: true };
@@ -82,7 +81,7 @@ function createPool(): Pool {
   }
   return new Pool({
     connectionString,
-    ssl: sslConfig(),
+    ssl: sslConfig(connectionString),
     application_name: "reiwa-os",
     // The Supabase transaction pooler multiplexes; keep the local pool modest
     // and hand connections back quickly.
