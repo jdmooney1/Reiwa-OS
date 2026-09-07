@@ -423,13 +423,15 @@ describe("Investor-generated records", () => {
       tx.query("select * from investor_activity_events"));
     expect(theirs.rows.length).toBe(0);
 
-    // Events cannot be rewritten or removed: no update/delete policy exists.
-    const updated = await withInvestorSession(kitanoUid, (tx) =>
-      tx.query("update investor_activity_events set event_type = 'login' returning event_id"));
-    expect(updated.rows.length).toBe(0);
-    const deleted = await withInvestorSession(kitanoUid, (tx) =>
-      tx.query("delete from investor_activity_events returning event_id"));
-    expect(deleted.rows.length).toBe(0);
+    // Events cannot be rewritten or removed. Since 0007 this is refused at the
+    // privilege layer rather than filtered to zero rows by policy, so the
+    // statement does not merely do nothing — it is not allowed to run.
+    await expect(withInvestorSession(kitanoUid, (tx) =>
+      tx.query("update investor_activity_events set event_type = 'login' returning event_id")))
+      .rejects.toThrow(/permission denied/i);
+    await expect(withInvestorSession(kitanoUid, (tx) =>
+      tx.query("delete from investor_activity_events returning event_id")))
+      .rejects.toThrow(/permission denied/i);
   });
 
   it("a request may be raised only against a readable publication, and not triaged by the investor", async () => {
