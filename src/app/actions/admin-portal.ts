@@ -27,6 +27,9 @@ import {
   createDraftFromVersion, assertNoOpenVersion, updatePublicationDocument,
   getPublicationForOpportunity, reorderSecondaryEntitlements,
 } from "@/lib/data/admin-portal";
+import {
+  checkUpload, newObjectPath, putDocumentObject, deleteDocumentObject,
+} from "@/lib/documents/storage";
 
 const trimmed = (v: FormDataEntryValue | null): string => String(v ?? "").trim();
 const orNull = (v: FormDataEntryValue | null): string | null => trimmed(v) || null;
@@ -322,26 +325,71 @@ export async function startDraftFromSourceAction(publicationId: string): Promise
 }
 
 // ============================================================================
-// Documents (metadata — storage objects are wired in a later phase)
+// Documents
+// ----------------------------------------------------------------------------
+// A document is a file in the private `publication-documents` bucket plus the
+// row that describes it. The object path is generated HERE, on the server, from
+// a random UUID — the browser supplies the file, never a location for it — and
+// the file's type and size are validated before anything is stored.
 // ============================================================================
+export interface DocumentFormState {
+  ok?: boolean;
+  error?: string;
+}
+
 export async function addDocumentAction(
-  versionId: string, publicationId: string, formData: FormData,
-): Promise<void> {
+  versionId: string, publicationId: string,
+  _prev: DocumentFormState, formData: FormData,
+): Promise<DocumentFormState> {
   const { db, auth } = await requireAdminSession();
+
   const title = trimmed(formData.get("title"));
-  if (!title) throw new Error("The document title is required.");
-  const fileName = orNull(formData.get("fileName"));
-  const slug = (fileName ?? title).toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "");
-  await addPublicationDocument(db, {
-    versionId,
-    title,
-    category: (trimmed(formData.get("category")) || "other") as DocumentCategory,
-    accessLevel: (trimmed(formData.get("accessLevel")) || "standard") as DocumentAccessLevel,
-    // Private-bucket object path, reserved now, uploaded when storage lands (P4).
-    storagePath: `publications/${versionId}/${slug || "document"}`,
-    fileName,
-  }, auth.userId);
+  if (!title) return { error: "The document title is required." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Choose a file to upload." };
+  }
+
+  // Validate against what the server sees, not what the form claimed.
+  const check = checkUpload(file.type, file.size);
+  if (!check.ok) return { error: check.reason };
+
+  // Random, server-generated, and only ever known to the server and the row.
+  const storagePath = newObjectPath(versionId, check.mimeType);
+  await putDocumentObject(storagePath, await file.arrayBuffer(), check.mimeType);
+
+  try {
+    await addPublicationDocument(db, {
+      versionId,
+      title,
+      category: (trimmed(formData.get("category")) || "other") as DocumentCategory,
+      accessLevel: (trimmed(formData.get("accessLevel")) || "standard") as DocumentAccessLevel,
+      storagePath,
+      fileName: safeFileName(file.name),
+      mimeType: check.mimeType,
+      sizeBytes: check.sizeBytes,
+    }, auth.userId);
+  } catch (e) {
+    // The row did not land, so the object must not survive it: an object with
+    // no row is unreachable and unaccounted for.
+    await deleteDocumentObject(storagePath);
+    throw e;
+  }
+
   refreshPublication(publicationId);
+  return { ok: true };
+}
+
+/**
+ * The original file name, kept for display and for the download's Content-
+ * Disposition only. It never influences where the object is stored, so path
+ * separators and traversal segments are simply removed rather than escaped.
+ */
+function safeFileName(name: string): string | null {
+  const base = (name ?? "").split(/[\\/]/).pop() ?? "";
+  const cleaned = base.replace(/[^\w.\- ]+/g, "_").replace(/^\.+/, "").trim();
+  return cleaned ? cleaned.slice(0, 160) : null;
 }
 
 export async function updateDocumentAction(
@@ -362,6 +410,9 @@ export async function removeDocumentAction(
   documentId: string, publicationId: string,
 ): Promise<void> {
   const { db } = await requireAdminSession();
-  await removePublicationDocument(db, documentId);
+  // The path comes back from the deleted row, so the object removed is exactly
+  // the one that row owned — the browser never names it.
+  const storagePath = await removePublicationDocument(db, documentId);
+  if (storagePath) await deleteDocumentObject(storagePath);
   refreshPublication(publicationId);
 }

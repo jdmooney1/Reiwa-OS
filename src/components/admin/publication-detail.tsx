@@ -24,6 +24,7 @@ import {
   DOC_CATEGORY_LABEL, DOC_LEVEL_LABEL, DOC_LEVEL_TONE, PLACEMENT_LABEL,
   INVESTOR_ORG_STATUS_LABEL, INVESTOR_ORG_STATUS_TONE,
 } from "@/lib/portal-labels";
+import { UPLOAD_ACCEPT } from "@/lib/documents/constraints";
 import { ASSET_TYPE_LABEL, STRATEGY_LABEL } from "@/lib/domain";
 import { formatDate, formatMoneyCompact, formatPct, formatMultiple, formatArea } from "@/lib/format";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -445,6 +446,7 @@ function DocumentsCard({
 }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   return (
@@ -459,8 +461,9 @@ function DocumentsCard({
       <CardBody className="p-0">
         {adding && editable && (
           <form action={async (fd) => {
-            await addDocumentAction(versionId, publicationId, fd);
-            setAdding(false);
+            const result = await addDocumentAction(versionId, publicationId, {}, fd);
+            setUploadError(result.error ?? null);
+            if (result.ok) setAdding(false);
           }} className="grid grid-cols-1 gap-3 border-b border-line bg-surface-sunken/50 px-5 py-4 md:grid-cols-4">
             <label className="block md:col-span-2">
               <span className="eyebrow">Title</span>
@@ -469,15 +472,24 @@ function DocumentsCard({
             </label>
             <DocSelects />
             <label className="block md:col-span-3">
-              <span className="eyebrow">File name (optional)</span>
-              <input name="fileName" placeholder="e.g. teaser.pdf"
-                className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+              <span className="eyebrow">File</span>
+              <input name="file" type="file" required accept={UPLOAD_ACCEPT}
+                className="mt-1 block w-full rounded border border-line bg-surface-card px-2.5 py-1.5 text-xs text-ink file:mr-3 file:rounded file:border-0 file:bg-navy file:px-2.5 file:py-1 file:text-2xs file:font-semibold file:text-surface focus:border-gold focus:outline-none" />
             </label>
             <div className="flex items-end justify-end">
               <button type="submit" className="rounded bg-navy px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-navy-50">
-                Add Document
+                Upload Document
               </button>
             </div>
+            {uploadError && (
+              <p role="alert" className="md:col-span-4 flex items-center gap-1.5 text-2xs text-negative">
+                <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" /> {uploadError}
+              </p>
+            )}
+            <p className="md:col-span-4 text-2xs text-ink-faint">
+              Stored privately at a server-generated path. Investors receive a short-lived signed
+              link, never the file&rsquo;s location.
+            </p>
           </form>
         )}
         {documents.length === 0 ? (
@@ -516,8 +528,10 @@ function DocumentsCard({
                           {d.accessLevel === "internal" && " — never investor-visible"}
                         </Badge>
                       </div>
+                      {/* The object path is never rendered — not even for staff. */}
                       <div className="mt-0.5 truncate text-2xs text-ink-faint">
-                        {d.fileName ?? d.storagePath}
+                        {d.fileName ?? "Stored document"}
+                        {d.sizeBytes != null && ` · ${Math.max(1, Math.round(d.sizeBytes / 1024))} KB`}
                       </div>
                     </div>
                     {editable && (

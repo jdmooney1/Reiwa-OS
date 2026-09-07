@@ -88,6 +88,29 @@ create or replace function auth.uid() returns uuid
 grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated, service_role;
 
+-- Storage. Hosted Supabase owns this schema; locally it backs the Storage
+-- stand-in in scripts/local-auth.ts so the private-bucket upload/signed-URL
+-- path is exercised for real rather than mocked. Objects live as bytea, so a
+-- reset of the application schema leaves them alone — exactly as a real bucket
+-- does when the database is reset.
+create schema if not exists storage;
+create table if not exists storage._local_buckets (
+  id                 text primary key,
+  name               text not null,
+  public             boolean not null default false,
+  file_size_limit    bigint,
+  allowed_mime_types text[],
+  created_at         timestamptz not null default now()
+);
+create table if not exists storage._local_objects (
+  bucket_id  text not null references storage._local_buckets(id) on delete cascade,
+  path       text not null,
+  mime_type  text,
+  content    bytea not null,
+  created_at timestamptz not null default now(),
+  primary key (bucket_id, path)
+);
+
 -- Supabase's stock grants on public: new tables are handed to every API role
 -- unless a migration revokes them. Reproduced so the migrations' explicit
 -- revokes (and the tests pinning them) exercise the same starting point.

@@ -15,6 +15,18 @@
 //   GET  /auth/v1/admin/users                      seed: find user by email
 //   POST /auth/v1/admin/users                      seed: provision user
 //   DELETE /auth/v1/admin/users/:id                dev tidy-up
+//   POST /auth/v1/admin/generate_link              real OTP for a test (P3)
+//
+// It also stands in for Supabase Storage, so the private-bucket document path
+// (P6) is exercised end to end rather than mocked:
+//
+//   POST   /storage/v1/bucket                      create a bucket
+//   GET    /storage/v1/bucket/:id                  read one
+//   POST   /storage/v1/object/:bucket/*            upload an object
+//   POST   /storage/v1/object/sign/:bucket/*       mint a signed URL
+//   GET    /storage/v1/object/sign/:bucket/*       redeem one (expiry enforced)
+//   GET    /storage/v1/object/public/:bucket/*     refused for a private bucket
+//   DELETE /storage/v1/object/:bucket              remove objects by path
 //
 // OTP codes are not emailed locally — they are written to auth._local_otp so a
 // developer or a test on the privileged connection can read what "was sent".
@@ -159,10 +171,151 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   try { return JSON.parse(text); } catch { return {}; }
 }
 
+// ---- Storage stand-in ------------------------------------------------------
+
+/** Raw request body, for object uploads (which are not JSON). */
+async function readBody(req: IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks);
+}
+
+/** A signature over exactly what the URL grants, and until when. */
+function signObject(bucket: string, path: string, expiresAt: number): string {
+  return createHmac("sha256", JWT_SECRET).update(`${bucket}:${path}:${expiresAt}`).digest("hex");
+}
+
+async function handleStorage(
+  req: IncomingMessage, res: ServerResponse, url: URL, path: string, method: string,
+): Promise<boolean> {
+  const pool = getPool();
+
+  // ---- Buckets ------------------------------------------------------------
+  if (path === "/storage/v1/bucket" && method === "POST") {
+    const body = await readJson(req);
+    const id = String(body.id ?? body.name ?? "").trim();
+    if (!id) return send(res, 400, { message: "bucket id is required" }), true;
+    await pool.query(
+      `insert into storage._local_buckets(id, name, public, file_size_limit, allowed_mime_types)
+       values ($1, $2, $3, $4, $5) on conflict (id) do nothing`,
+      [id, String(body.name ?? id), body.public === true,
+       body.file_size_limit ?? null, (body.allowed_mime_types as string[]) ?? null]);
+    return send(res, 200, { name: id }), true;
+  }
+
+  const bucketGet = path.match(/^\/storage\/v1\/bucket\/([^/]+)$/);
+  if (bucketGet && method === "GET") {
+    const { rows } = await pool.query(
+      "select id, name, public, created_at from storage._local_buckets where id = $1",
+      [decodeURIComponent(bucketGet[1])]);
+    if (!rows[0]) return send(res, 404, { message: "Bucket not found" }), true;
+    return send(res, 200, rows[0]), true;
+  }
+
+  // ---- Sign (mint) --------------------------------------------------------
+  const sign = path.match(/^\/storage\/v1\/object\/sign\/([^/]+)\/(.+)$/);
+  if (sign && method === "POST") {
+    const bucket = decodeURIComponent(sign[1]);
+    const objectPath = decodeURIComponent(sign[2]);
+    const body = await readJson(req);
+    const { rows } = await pool.query(
+      "select 1 from storage._local_objects where bucket_id = $1 and path = $2",
+      [bucket, objectPath]);
+    if (!rows[0]) return send(res, 404, { message: "Object not found" }), true;
+    const expiresAt = Math.floor(Date.now() / 1000) + Number(body.expiresIn ?? 60);
+    const token = `${expiresAt}.${signObject(bucket, objectPath, expiresAt)}`;
+    // GoTrue's storage API returns a RELATIVE url; storage-js prefixes it.
+    return send(res, 200, {
+      signedURL: `/object/sign/${bucket}/${encodeURI(objectPath)}?token=${token}`,
+    }), true;
+  }
+
+  // ---- Sign (redeem) ------------------------------------------------------
+  if (sign && method === "GET") {
+    const bucket = decodeURIComponent(sign[1]);
+    const objectPath = decodeURIComponent(sign[2]);
+    const [expiryRaw, signature] = String(url.searchParams.get("token") ?? "").split(".");
+    const expiresAt = Number(expiryRaw);
+    if (!signature || !Number.isFinite(expiresAt)) {
+      return send(res, 400, { message: "Invalid token" }), true;
+    }
+    if (signature !== signObject(bucket, objectPath, expiresAt)) {
+      return send(res, 403, { message: "Invalid signature" }), true;
+    }
+    if (expiresAt < Date.now() / 1000) {
+      return send(res, 400, { message: "Expired signature" }), true;
+    }
+    const { rows } = await pool.query<{ content: Buffer; mime_type: string | null }>(
+      "select content, mime_type from storage._local_objects where bucket_id = $1 and path = $2",
+      [bucket, objectPath]);
+    if (!rows[0]) return send(res, 404, { message: "Object not found" }), true;
+    const download = url.searchParams.get("download");
+    res.writeHead(200, {
+      "content-type": rows[0].mime_type ?? "application/octet-stream",
+      "content-length": rows[0].content.length,
+      ...(download ? { "content-disposition": `attachment; filename="${download}"` } : {}),
+    });
+    res.end(rows[0].content);
+    return true;
+  }
+
+  // ---- Public URL: never valid for a private bucket ------------------------
+  const publicGet = path.match(/^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+  if (publicGet && method === "GET") {
+    const { rows } = await pool.query<{ public: boolean }>(
+      "select public from storage._local_buckets where id = $1", [decodeURIComponent(publicGet[1])]);
+    if (!rows[0]?.public) return send(res, 400, { message: "Bucket not found" }), true;
+    return send(res, 404, { message: "Object not found" }), true;
+  }
+
+  // ---- Remove -------------------------------------------------------------
+  const objectBucket = path.match(/^\/storage\/v1\/object\/([^/]+)$/);
+  if (objectBucket && method === "DELETE") {
+    const body = await readJson(req);
+    const prefixes = Array.isArray(body.prefixes) ? body.prefixes.map(String) : [];
+    await pool.query(
+      "delete from storage._local_objects where bucket_id = $1 and path = any($2::text[])",
+      [decodeURIComponent(objectBucket[1]), prefixes]);
+    return send(res, 200, prefixes.map((p) => ({ name: p }))), true;
+  }
+
+  // ---- Upload -------------------------------------------------------------
+  const upload = path.match(/^\/storage\/v1\/object\/([^/]+)\/(.+)$/);
+  if (upload && method === "POST") {
+    const bucket = decodeURIComponent(upload[1]);
+    const objectPath = decodeURIComponent(upload[2]);
+    const { rows } = await pool.query("select 1 from storage._local_buckets where id = $1", [bucket]);
+    if (!rows[0]) return send(res, 404, { message: "Bucket not found" }), true;
+    const content = await readBody(req);
+    const mime = String(req.headers["content-type"] ?? "application/octet-stream");
+    const upsert = String(req.headers["x-upsert"] ?? "false") === "true";
+    const { rowCount } = await pool.query(
+      upsert
+        ? `insert into storage._local_objects(bucket_id, path, mime_type, content)
+           values ($1,$2,$3,$4)
+           on conflict (bucket_id, path) do update set content = excluded.content,
+             mime_type = excluded.mime_type`
+        : `insert into storage._local_objects(bucket_id, path, mime_type, content)
+           values ($1,$2,$3,$4) on conflict (bucket_id, path) do nothing`,
+      [bucket, objectPath, mime, content]);
+    if (!rowCount) {
+      return send(res, 409, { message: "The resource already exists" }), true;
+    }
+    return send(res, 200, { Key: `${bucket}/${objectPath}`, Id: objectPath }), true;
+  }
+
+  return false;
+}
+
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
   const path = url.pathname.replace(/\/+$/, "");
   const method = req.method ?? "GET";
+
+  if (path.startsWith("/storage/v1/")) {
+    if (await handleStorage(req, res, url, path, method)) return;
+    return send(res, 404, { message: `No storage route for ${method} ${path}` });
+  }
 
   // ---- Health -----------------------------------------------------------
   if (path === "/auth/v1/health") return send(res, 200, { name: "local-auth", description: "dev stand-in" });

@@ -747,9 +747,22 @@ export async function addPublicationDocument(
   });
 }
 
-export async function removePublicationDocument(session: Session, documentId: string): Promise<void> {
-  await withSession(session, (tx) =>
-    tx.query("delete from publication_documents where document_id = $1", [documentId]));
+/**
+ * Delete a document row and report the object it pointed at, so the caller can
+ * remove the stored object too. The path is returned from the DELETE itself —
+ * it is whatever the row held, never anything the caller supplied — and comes
+ * back null when the row was not there or policy refused the delete, in which
+ * case there is nothing to remove from the store either.
+ */
+export async function removePublicationDocument(
+  session: Session, documentId: string,
+): Promise<string | null> {
+  return withSession(session, async (tx) => {
+    const { rows } = await tx.query<{ storage_path: string }>(
+      "delete from publication_documents where document_id = $1 returning storage_path",
+      [documentId]);
+    return rows[0]?.storage_path ?? null;
+  });
 }
 
 export async function listPublicationDocuments(
