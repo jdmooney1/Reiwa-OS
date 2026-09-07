@@ -36,7 +36,7 @@ export function MetricTile({
         <div
           className={cn(
             "tabular text-xs",
-            dark ? "text-surface/50" : "text-ink-faint",
+            dark ? "text-surface/60" : "text-ink-faint",
           )}
         >
           {sub}

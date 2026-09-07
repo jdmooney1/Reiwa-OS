@@ -182,10 +182,17 @@ describe("Server-only secrets stay on the server", () => {
   });
 
   it("reads no non-public environment variable from any client component", () => {
+    // NODE_ENV is the one exception, and it is not a secret: Next inlines it at
+    // build time, and it is the supported way to keep a development-only
+    // affordance (the demonstration credentials on /sign-in) out of the
+    // production bundle entirely rather than merely hidden with CSS.
+    const ALLOWED = new Set(["NODE_ENV"]);
     const offenders: string[] = [];
     for (const { file, code } of CLIENT_FILES) {
       for (const match of code.matchAll(/process\.env\.([A-Z0-9_]+)/g)) {
-        if (!match[1].startsWith("NEXT_PUBLIC_")) offenders.push(`${file}:${match[1]}`);
+        const name = match[1];
+        if (name.startsWith("NEXT_PUBLIC_") || ALLOWED.has(name)) continue;
+        offenders.push(`${file}:${name}`);
       }
     }
     expect(offenders).toEqual([]);

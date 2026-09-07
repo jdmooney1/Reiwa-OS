@@ -61,7 +61,7 @@ export function ScoreDial({
         >
           {display}
         </span>
-        <span className={cn("text-[9px] uppercase tracking-label", dark ? "text-surface/50" : "text-ink-faint")}>
+        <span className={cn("text-[9px] uppercase tracking-label", dark ? "text-surface/60" : "text-ink-faint")}>
           / {max}
         </span>
       </div>

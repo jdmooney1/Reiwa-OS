@@ -28,8 +28,16 @@ export function InvestorOrgDirectory({ orgs }: { orgs: InvestorOrgSummary[] }) {
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
+          {/* A placeholder is not a label: it disappears on the first keystroke
+              and screen readers are not required to announce it. */}
+          <label htmlFor="investor-org-search" className="sr-only">
+            Search investor organisations
+          </label>
+          <Search aria-hidden="true"
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
           <input
+            id="investor-org-search"
+            type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search organisations…"

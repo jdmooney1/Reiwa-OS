@@ -15,7 +15,9 @@ export function AccessFrame({ children }: { children: React.ReactNode }) {
       <main className="flex flex-1 items-start justify-center px-6 py-14">
         <div className="w-full max-w-lg">{children}</div>
       </main>
-      <footer className="px-8 py-5 text-center text-2xs text-surface/30">
+      {/* surface/30 measured 2.6:1 against the navy — below the 4.5:1 needed
+          for small text. surface/55 keeps the same recessive weight at 5.5:1. */}
+      <footer className="px-8 py-5 text-center text-2xs text-surface/60">
         Private &amp; confidential. Access is by invitation of Reiwa Capital only.
       </footer>
     </div>

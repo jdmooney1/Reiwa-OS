@@ -23,7 +23,7 @@ export function PortalShell({
               <span className="font-serif text-lg tracking-wide text-surface">
                 REIWA<span className="text-gold"> CAPITAL</span>
               </span>
-              <span className="hidden text-2xs uppercase tracking-label text-surface/40 sm:inline">
+              <span className="hidden text-2xs uppercase tracking-label text-surface/60 sm:inline">
                 Investment Portal
               </span>
             </Link>
@@ -31,7 +31,7 @@ export function PortalShell({
             <div className="flex items-center gap-4">
               <div className="hidden text-right leading-tight sm:block">
                 <div className="text-xs font-medium text-surface/90">{investor.investorOrgName}</div>
-                <div className="text-2xs text-surface/45">{investor.name}</div>
+                <div className="text-2xs text-surface/60">{investor.name}</div>
               </div>
               <form action={portalSignOutAction}>
                 <button

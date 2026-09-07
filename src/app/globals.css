@@ -35,3 +35,50 @@
     @apply border-line;
   }
 }
+
+@layer base {
+  /*
+   * Keyboard focus.
+   *
+   * Tailwind's preflight removes the browser's default outline, and the
+   * individual `focus:` classes scattered through the components only cover
+   * the controls somebody remembered. Anything else — a link, a tab, an icon
+   * button — was focusable but invisible, which makes the application
+   * unusable without a mouse.
+   *
+   * :focus-visible rather than :focus, so a mouse click does not leave a ring
+   * behind but the keyboard always shows where it is.
+   */
+  :focus-visible {
+    outline: 2px solid theme("colors.gold.DEFAULT");
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /*
+   * Respect a stated preference for less motion.
+   *
+   * This is an accessibility setting, not a taste one: motion triggers nausea
+   * and migraine for some people. Transitions and animations are reduced to
+   * something instant rather than removed, so nothing that depends on a
+   * transition ending stops working.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Visually hidden, still announced. For labels a sighted user infers from
+     an icon or a placeholder but a screen reader would otherwise never hear. */
+  .sr-only-label {
+    @apply sr-only;
+  }
+}

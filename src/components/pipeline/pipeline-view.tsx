@@ -116,8 +116,14 @@ export function PipelineView({ deals }: { deals: DealSummary[] }) {
 
           {/* Search */}
           <div className="relative w-64">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
+            <label htmlFor="pipeline-search" className="sr-only">
+              Search the pipeline by asset or broker
+            </label>
+            <Search aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
             <input
+              id="pipeline-search"
+              type="search"
               value={filters.search}
               onChange={(e) => set("search")(e.target.value)}
               placeholder="Search assets, brokers…"

@@ -89,7 +89,7 @@ export function Sidebar({
           </div>
           <div className="min-w-0 leading-tight">
             <div className="truncate text-xs text-surface">{user.name}</div>
-            <div className="text-2xs text-surface/40">{ROLE_LABEL[user.role] ?? user.role}</div>
+            <div className="text-2xs text-surface/60">{ROLE_LABEL[user.role] ?? user.role}</div>
           </div>
         </div>
         <form action={signOutAction}>

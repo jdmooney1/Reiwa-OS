@@ -20,7 +20,7 @@ export function DealHeader({
       <div className="px-8 pt-5">
         <Link
           href="/pipeline"
-          className="inline-flex items-center gap-1 text-2xs text-surface/50 transition-colors hover:text-surface"
+          className="inline-flex items-center gap-1 text-2xs text-surface/60 transition-colors hover:text-surface"
         >
           <ChevronLeft className="h-3 w-3" /> Pipeline
         </Link>
@@ -37,9 +37,9 @@ export function DealHeader({
           <div className="mt-1.5 flex items-center gap-1.5 text-sm text-surface/60">
             <MapPin className="h-3.5 w-3.5 text-gold/70" strokeWidth={1.75} />
             <span>{deal.address}</span>
-            <span className="text-surface/30">·</span>
+            <span className="text-surface/60">·</span>
             <span>{deal.city}</span>
-            <span className="text-surface/30">·</span>
+            <span className="text-surface/60">·</span>
             <span>{deal.country}</span>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -59,9 +59,9 @@ export function DealHeader({
                 {RECOMMENDATION_LABEL[score.recommendation]}
               </Badge>
             ) : (
-              <span className="text-sm text-surface/40">Not scored</span>
+              <span className="text-sm text-surface/60">Not scored</span>
             )}
-            <div className="mt-2 text-2xs text-surface/40">
+            <div className="mt-2 text-2xs text-surface/60">
               {deal.probability ?? 0}% probability
             </div>
           </div>

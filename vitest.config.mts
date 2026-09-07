@@ -12,6 +12,8 @@ export default defineConfig({
     testTimeout: 120000,
     hookTimeout: 180000,
     include: ["tests/**/*.test.ts"],
+    // e2e specs are Playwright's, not vitest's.
+    exclude: ["e2e/**", "node_modules/**"],
     globalSetup: ["tests/global-setup.ts"],
     setupFiles: ["tests/setup.ts"],
     // One shared database: files must not interleave.

@@ -36,7 +36,7 @@ export function PortalNav() {
             aria-current={active ? "page" : undefined}
             className={cn(
               "relative px-3 py-3 text-xs font-medium tracking-wide transition-colors",
-              active ? "text-surface" : "text-surface/55 hover:text-surface/85",
+              active ? "text-surface" : "text-surface/60 hover:text-surface/85",
             )}
           >
             {item.label}

@@ -13,7 +13,7 @@ export function AssetHeader({ file, portfolioName }: { file: AssetFile; portfoli
   return (
     <div className="bg-navy text-surface">
       <div className="px-8 pt-5">
-        <Link href="/portfolio" className="inline-flex items-center gap-1 text-2xs text-surface/50 transition-colors hover:text-surface">
+        <Link href="/portfolio" className="inline-flex items-center gap-1 text-2xs text-surface/60 transition-colors hover:text-surface">
           <ChevronLeft className="h-3 w-3" /> Portfolio
         </Link>
       </div>
@@ -26,8 +26,8 @@ export function AssetHeader({ file, portfolioName }: { file: AssetFile; portfoli
           </div>
           <div className="mt-1.5 flex items-center gap-1.5 text-sm text-surface/60">
             <MapPin className="h-3.5 w-3.5 text-gold/70" strokeWidth={1.75} />
-            <span>{a.address}</span><span className="text-surface/30">·</span>
-            <span>{a.city}</span><span className="text-surface/30">·</span><span>{a.country}</span>
+            <span>{a.address}</span><span className="text-surface/60">·</span>
+            <span>{a.city}</span><span className="text-surface/60">·</span><span>{a.country}</span>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {portfolioName && <Badge tone="neutral" dark>{portfolioName}</Badge>}
@@ -59,7 +59,7 @@ function HeadFig({ label, value, sub }: { label: string; value: string; sub?: st
     <div className="text-right">
       <div className="eyebrow-light mb-1">{label}</div>
       <div className="tabular text-lg font-semibold text-surface">{value}</div>
-      {sub && <div className="tabular text-2xs text-surface/40">{sub}</div>}
+      {sub && <div className="tabular text-2xs text-surface/60">{sub}</div>}
     </div>
   );
 }

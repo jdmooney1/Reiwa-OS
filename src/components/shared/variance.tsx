@@ -41,7 +41,9 @@ export function VarianceValue({
 
   return (
     <span className={cn("tabular inline-flex items-center gap-0.5 text-xs font-medium", TEXT[tone], className)}>
-      <Arrow className="h-3 w-3" strokeWidth={2.25} />
+      {/* Decorative: the direction is already in the sign of the magnitude,
+          so the movement is never signalled by colour or icon alone. */}
+      <Arrow aria-hidden="true" className="h-3 w-3" strokeWidth={2.25} />
       {magnitude}
     </span>
   );

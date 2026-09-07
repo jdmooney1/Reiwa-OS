@@ -61,7 +61,7 @@ export function PublicationDetail({
       {/* ---- Header: this is the INVESTOR side of the boundary ---- */}
       <div className="border-b border-line-dark bg-navy px-8 py-5 text-surface">
         <Link href="/admin/publications"
-          className="mb-2 inline-flex items-center gap-1 text-2xs text-surface/50 hover:text-surface">
+          className="mb-2 inline-flex items-center gap-1 text-2xs text-surface/60 hover:text-surface">
           <ChevronLeft className="h-3 w-3" /> Publications
         </Link>
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -71,12 +71,12 @@ export function PublicationDetail({
               <h1 className="font-serif text-2xl">{display?.title ?? "Untitled publication"}</h1>
               <Badge dark tone={WORKFLOW_TONE[state]} dot>{WORKFLOW_LABEL[state]}</Badge>
               {active && (
-                <span className="text-2xs text-surface/50">
+                <span className="text-2xs text-surface/60">
                   Live: v{active.versionNumber}{working ? ` · Editing: v${working.versionNumber}` : ""}
                 </span>
               )}
               {!active && working && (
-                <span className="text-2xs text-surface/50">Working on v{working.versionNumber} — nothing live yet</span>
+                <span className="text-2xs text-surface/60">Working on v{working.versionNumber} — nothing live yet</span>
               )}
             </div>
             <p className="mt-1.5 max-w-2xl text-xs text-surface/60">

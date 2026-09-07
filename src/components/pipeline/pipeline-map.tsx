@@ -31,7 +31,7 @@ export function PipelineMap({ deals }: { deals: DealSummary[] }) {
           <div className="flex flex-col items-center gap-2">
             <MapPin className="h-7 w-7 text-gold" strokeWidth={1.5} />
             <div className="text-sm font-medium text-surface">Geographic view</div>
-            <div className="max-w-md text-xs text-surface/50">
+            <div className="max-w-md text-xs text-surface/60">
               Interactive map integration (Mapbox) is planned. For now, deals are
               grouped by market.
             </div>
@@ -43,7 +43,7 @@ export function PipelineMap({ deals }: { deals: DealSummary[] }) {
                 className="rounded-lg border border-white/10 bg-white/5 px-5 py-4 text-left"
               >
                 <div className="text-sm font-medium text-surface">{city}</div>
-                <div className="tabular mt-1 text-2xs text-surface/50">
+                <div className="tabular mt-1 text-2xs text-surface/60">
                   {count} {count === 1 ? "deal" : "deals"} · {formatMoneyCompact(value, currency)}
                 </div>
               </div>
