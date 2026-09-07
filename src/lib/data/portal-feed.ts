@@ -190,6 +190,56 @@ export async function loadPortalDocuments(
   }));
 }
 
+/**
+ * Resolve one document for download, under the investor's OWN row level
+ * security — the single authorisation gate in front of Storage (P6).
+ *
+ * This one statement is the whole check, because `publication_documents_tiered`
+ * already encodes every condition the product requires:
+ *
+ *   * identity      — app.current_investor_contact_id() from auth.uid();
+ *   * active contact and active organisation — both resolved by that helper;
+ *   * visible entitlement to the publication;
+ *   * publication still `published`, version still the ACTIVE published one;
+ *   * document tier at or below the entitlement's tier;
+ *   * `internal` refused outright, at every tier.
+ *
+ * A revoked entitlement, a withdrawn publication, a superseded version, a
+ * deactivated contact or a suspended organisation therefore all produce the
+ * same answer — null — on the very next request, with no cache to invalidate.
+ *
+ * `storage_path` is read here and used only to mint a signed URL server-side.
+ * It is never returned to a caller that could send it to a browser.
+ */
+export async function resolveDocumentDownload(
+  authUserId: string, documentId: string,
+): Promise<{ storagePath: string; fileName: string; mimeType: string | null;
+             publicationId: string; versionId: string; title: string } | null> {
+  if (!isUuid(documentId)) return null;
+  const rows = await withInvestorSession(authUserId, async (tx) => {
+    const { rows } = await tx.query<{
+      storage_path: string; file_name: string | null; mime_type: string | null;
+      title: string; version_id: string; publication_id: string;
+    }>(
+      `select d.storage_path, d.file_name, d.mime_type, d.title,
+              d.version_id, v.publication_id
+         from publication_documents d
+         join publication_versions v on v.version_id = d.version_id
+        where d.document_id = $1`, [documentId]);
+    return rows;
+  });
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    storagePath: r.storage_path,
+    fileName: r.file_name ?? `${r.title}.pdf`,
+    mimeType: r.mime_type,
+    publicationId: r.publication_id,
+    versionId: r.version_id,
+    title: r.title,
+  };
+}
+
 // ---- Saved -----------------------------------------------------------------
 
 /**
@@ -361,7 +411,7 @@ function isPolicyRefusal(e: unknown): boolean {
 
 export type PortalEventType =
   | "login" | "opportunity_viewed" | "saved" | "unsaved" | "compared"
-  | "information_requested";
+  | "document_viewed" | "document_downloaded" | "information_requested";
 
 /**
  * Record one factual event. Never throws: an activity write failing must not

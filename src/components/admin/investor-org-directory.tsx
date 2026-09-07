@@ -32,6 +32,8 @@ export function InvestorOrgDirectory({ orgs }: { orgs: InvestorOrgSummary[] }) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search investor organisations"
+            type="search"
             placeholder="Search organisations…"
             className="h-9 w-72 rounded border border-line bg-surface-card pl-8 pr-3 text-sm text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30"
           />

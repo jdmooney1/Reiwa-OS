@@ -2,8 +2,11 @@
 // No-op when the database already holds organisations.
 //   npm run db:seed
 import { requireEnv } from "./env";
+import { installFailureHandlers, reportFailure } from "./fail";
 import { closePool, adminQuery } from "@/lib/db/client";
 import { seedIfEmpty, SEED_ACCOUNTS } from "@/lib/db/seed";
+
+installFailureHandlers("Seed");
 
 async function main(): Promise<void> {
   requireEnv();
@@ -38,5 +41,5 @@ async function main(): Promise<void> {
 }
 
 main()
-  .catch((e) => { console.error(`Seed failed: ${(e as Error).message}`); process.exitCode = 1; })
+  .catch((e) => reportFailure("Seed", e))
   .finally(closePool);

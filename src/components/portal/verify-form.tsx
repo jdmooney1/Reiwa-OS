@@ -70,7 +70,7 @@ export function VerifyForm(props:
           <label className="block">
             <span className="eyebrow">Access code</span>
             <input name="code" inputMode="numeric" autoComplete="one-time-code" required autoFocus
-              placeholder="6-digit code"
+              placeholder="Enter your code"
               className="mt-1 h-11 w-full rounded border border-line bg-surface px-3 text-center font-serif text-xl tracking-[0.4em] text-ink placeholder:tracking-normal placeholder:font-sans placeholder:text-sm focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
           </label>
           {verifyState.error && <FormError text={verifyState.error} />}

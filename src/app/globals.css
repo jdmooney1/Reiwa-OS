@@ -35,3 +35,26 @@
     @apply border-line;
   }
 }
+
+@layer base {
+  /*
+   * A visible keyboard focus indicator everywhere (P6 accessibility).
+   * :focus-visible only fires for keyboard traversal, so pointer users keep
+   * a clean surface while keyboard users never lose their place. The gold
+   * accent reads against both the warm-white canvas and the navy chrome.
+   */
+  :focus-visible {
+    outline: 2px solid theme("colors.gold.DEFAULT");
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  /* Respect a reduced-motion preference across the app. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { resolveIdentity } from "@/lib/auth/portal-session";
 import { validateInviteToken } from "@/lib/data/investor-invites";
 import { maskEmail } from "@/lib/auth/investor-access";
@@ -19,7 +20,9 @@ export default async function PortalVerifyPage({
   if (identity?.kind === "investor") redirect("/portal");
   if (identity?.kind === "internal") redirect("/portfolio");
 
-  const inviteToken = searchParams.invite ?? null;
+  // The token now travels in an httpOnly cookie (P6); the query parameter is
+  // still honoured so an older emailed link keeps working.
+  const inviteToken = cookies().get("reiwa_invite")?.value ?? searchParams.invite ?? null;
   if (inviteToken) {
     const invite = await validateInviteToken(inviteToken);
     // A token that stopped being valid mid-flow gets the explanatory page.

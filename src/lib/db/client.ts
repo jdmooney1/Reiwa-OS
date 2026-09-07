@@ -87,7 +87,15 @@ function createPool(): Pool {
     // The Supabase transaction pooler multiplexes; keep the local pool modest
     // and hand connections back quickly.
     max: Number(process.env.DATABASE_POOL_MAX ?? 8),
-    idleTimeoutMillis: 30_000,
+    // The pooler closes connections it considers idle. A socket we still hold
+    // in the pool is then dead, and the next borrower discovers that mid-query
+    // as 'Connection terminated unexpectedly' — which cannot be safely retried,
+    // because a statement may already have been sent. The fix is not to retry
+    // it but to stop holding stale sockets: recycle ours well before the
+    // pooler drops them, and keep the ones in use demonstrably alive.
+    idleTimeoutMillis: 10_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 5_000,
     connectionTimeoutMillis: 15_000,
     // Only unnamed (single-use) statements are issued, which the transaction
     // pooler supports; node-postgres does this unless a query `name` is given.
@@ -112,6 +120,72 @@ export async function closePool(): Promise<void> {
   if (pool) await pool.end();
 }
 
+// ---- Connection resilience -------------------------------------------------
+/**
+ * Transient failures seen against the Supabase pooler: a reset idle socket, a
+ * DNS blip, the pooler recycling a backend. They surface while ACQUIRING a
+ * connection, before any statement has run.
+ */
+const TRANSIENT = new Set([
+  "ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EPIPE", "ECONNREFUSED", "EAI_AGAIN",
+  "57P01", // admin_shutdown — the backend was terminated
+  "57P03", // cannot_connect_now — the server is starting up
+  "08006", "08001", "08004", // connection failure / rejected
+]);
+
+function isTransient(e: unknown): boolean {
+  const code = (e as { code?: unknown } | null)?.code;
+  return typeof code === "string" && TRANSIENT.has(code);
+}
+
+/**
+ * Acquire a pooled connection, retrying only a transient ACQUISITION failure.
+ *
+ * This is the one place a retry is safe: nothing has been sent to the server
+ * yet, so nothing can be applied twice. Transactions are never retried — a
+ * unit of work that fails part-way is rolled back and the error is raised, so
+ * a non-idempotent sequence can never be re-applied by this layer.
+ */
+async function acquire(pool: Pool): Promise<PoolClient> {
+  const delays = [150, 400];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await pool.connect();
+    } catch (e) {
+      if (attempt >= delays.length || !isTransient(e)) {
+        throw describeDbError(e, "acquiring a database connection");
+      }
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
+  }
+}
+
+/**
+ * A database failure an operator can act on, without leaking anything to a
+ * user. The message stays generic; the diagnostic detail rides on the error
+ * for the server log, never for a response body.
+ */
+export interface DbFailure extends Error {
+  dbCode?: string;
+  operation: string;
+  transient: boolean;
+}
+
+export function describeDbError(e: unknown, operation: string): DbFailure {
+  const code = typeof (e as { code?: unknown })?.code === "string"
+    ? (e as { code: string }).code : undefined;
+  const detail = e instanceof Error ? e.message : String(e);
+  const err = new Error(`Database error while ${operation}` + (code ? ` [${code}]` : "")) as DbFailure;
+  err.dbCode = code;
+  err.operation = operation;
+  err.transient = isTransient(e);
+  err.cause = e;
+  // Kept for the server log only. Never rendered.
+  err.stack = `${err.message}: ${detail}
+${e instanceof Error ? e.stack ?? "" : ""}`;
+  return err;
+}
+
 function wrap(client: PoolClient | Pool): Queryable {
   return {
     async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []) {
@@ -132,7 +206,7 @@ const MIGRATIONS_DIR = join(process.cwd(), "supabase", "migrations");
  * in the private `app` schema, not `public`, so it is never exposed by PostgREST.
  */
 export async function runMigrations(pool: Pool = getPool()): Promise<string[]> {
-  const client = await pool.connect();
+  const client = await acquire(pool);
   const applied: string[] = [];
   try {
     await client.query("create schema if not exists app");
@@ -190,7 +264,7 @@ export function sessionClaims(session: Session): Record<string, unknown> {
 export async function withSessionOn<T>(
   pool: Pool, session: Session, fn: (tx: Queryable) => Promise<T>,
 ): Promise<T> {
-  const client = await pool.connect();
+  const client = await acquire(pool);
   try {
     await client.query("begin");
     try {
@@ -238,7 +312,7 @@ export function investorSessionClaims(authUserId: string): Record<string, unknow
 export async function withInvestorSessionOn<T>(
   pool: Pool, authUserId: string, fn: (tx: Queryable) => Promise<T>,
 ): Promise<T> {
-  const client = await pool.connect();
+  const client = await acquire(pool);
   try {
     await client.query("begin");
     try {

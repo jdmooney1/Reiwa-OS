@@ -164,16 +164,16 @@ describe("Investor-written activity", () => {
         where investor_contact_id = $1 order by occurred_at limit 1`, [alphaContactId]);
     const target = before[0];
 
-    // No update or delete policy exists for investors, so both change nothing.
-    const updated = await withInvestorSession(alphaUid, (tx) =>
-      tx.query("update investor_activity_events set event_type = 'login' where event_id = $1 returning event_id",
-        [target.event_id]));
-    expect(updated.rows).toEqual([]);
+    // Since P6 the UPDATE and DELETE privileges are withdrawn from
+    // `authenticated` outright, so both are refused at the privilege layer
+    // rather than quietly matching no rows.
+    await expect(withInvestorSession(alphaUid, (tx) =>
+      tx.query("update investor_activity_events set event_type = 'login' where event_id = $1",
+        [target.event_id]))).rejects.toThrow(/permission denied/i);
 
-    const deleted = await withInvestorSession(alphaUid, (tx) =>
-      tx.query("delete from investor_activity_events where event_id = $1 returning event_id",
-        [target.event_id]));
-    expect(deleted.rows).toEqual([]);
+    await expect(withInvestorSession(alphaUid, (tx) =>
+      tx.query("delete from investor_activity_events where event_id = $1",
+        [target.event_id]))).rejects.toThrow(/permission denied/i);
 
     const after = await adminQuery<{ event_type: string }>(
       "select event_type from investor_activity_events where event_id = $1", [target.event_id]);

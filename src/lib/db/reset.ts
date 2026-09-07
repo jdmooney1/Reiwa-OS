@@ -49,14 +49,23 @@ export async function dropSchema(pool: Pool = getPool()): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("begin");
-    await client.query("drop view if exists public.investor_feed cascade");
-    for (const table of TABLES) {
-      await client.query(`drop table if exists public.${table} cascade`);
-    }
+    // Two things make a naive drop slow enough to hit the pooler statement
+    // timeout once the schema holds real data:
+    //   * every table DROP re-plans against the policies that reference the
+    //     `app` helper functions, so the dependency graph is walked repeatedly;
+    //   * dropping table by table walks it once per table.
+    // Dropping `app` FIRST cascades the functions and every policy built on
+    // them away, after which the tables come out in one statement against a
+    // graph that is already flat. SET LOCAL is discarded at COMMIT, so the
+    // pooled connection is handed back exactly as it was borrowed.
+    await client.query("set local statement_timeout = '300s'");
     await client.query("drop schema if exists app cascade");
+    await client.query("drop view if exists public.investor_feed cascade");
+    const list = TABLES.map((t) => `public.${t}`).join(", ");
+    await client.query(`drop table if exists ${list} cascade`);
     await client.query("commit");
   } catch (e) {
-    await client.query("rollback");
+    try { await client.query("rollback"); } catch { /* connection already gone */ }
     throw e;
   } finally {
     client.release();

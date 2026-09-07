@@ -469,9 +469,13 @@ function DocumentsCard({
             </label>
             <DocSelects />
             <label className="block md:col-span-3">
-              <span className="eyebrow">File name (optional)</span>
-              <input name="fileName" placeholder="e.g. teaser.pdf"
-                className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+              <span className="eyebrow">File</span>
+              <input name="file" type="file"
+                accept=".pdf,.xlsx,.xls,.docx,.doc,.png,.jpg,.jpeg"
+                className="mt-1 block w-full text-xs text-ink file:mr-3 file:rounded file:border file:border-line file:bg-surface-card file:px-2.5 file:py-1 file:text-2xs file:font-medium file:text-ink-muted hover:file:border-gold/40" />
+              <span className="mt-1 block text-2xs text-ink-faint">
+                Uploaded to the private bucket. Investors receive a short-lived signed link, never the file path.
+              </span>
             </label>
             <div className="flex items-end justify-end">
               <button type="submit" className="rounded bg-navy px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-navy-50">

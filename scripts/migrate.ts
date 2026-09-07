@@ -1,7 +1,10 @@
 // Apply pending migrations to the configured Supabase database.
 //   npm run db:migrate
 import { requireEnv } from "./env";
+import { installFailureHandlers, reportFailure } from "./fail";
 import { runMigrations, closePool, adminQuery } from "@/lib/db/client";
+
+installFailureHandlers("Migration");
 
 async function main(): Promise<void> {
   requireEnv();
@@ -18,5 +21,5 @@ async function main(): Promise<void> {
 }
 
 main()
-  .catch((e) => { console.error(`Migration failed: ${(e as Error).message}`); process.exitCode = 1; })
+  .catch((e) => reportFailure("Migration", e))
   .finally(closePool);

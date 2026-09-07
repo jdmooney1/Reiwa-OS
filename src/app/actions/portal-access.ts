@@ -12,12 +12,46 @@
 //     endpoints cannot be used to enumerate authorised addresses.
 // ============================================================================
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   requestInvestorOtp, completeInvestorVerification,
 } from "@/lib/auth/investor-access";
 import { validateInviteToken } from "@/lib/data/investor-invites";
 import { recordPortalEvent } from "@/lib/data/portal-feed";
+
+
+/**
+ * The invitation token is carried from the access page to the code screen in
+ * an httpOnly cookie rather than in the URL (P6).
+ *
+ * The emailed link must contain the token — that is what a link is. What it
+ * must not do is keep re-appearing: a token in /portal/verify?invite=... would
+ * land in reverse-proxy access logs, browser history and any Referer sent from
+ * that page. Moving it into a short-lived, httpOnly, SameSite cookie removes
+ * every one of those copies without weakening the token itself: it is still
+ * validated server-side on each use, still single-use, still revocable.
+ */
+const INVITE_COOKIE = "reiwa_invite";
+const INVITE_COOKIE_MAX_AGE = 15 * 60; // long enough to read an email, no longer
+
+function rememberInvite(token: string): void {
+  cookies().set(INVITE_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: INVITE_COOKIE_MAX_AGE,
+  });
+}
+
+function rememberedInvite(): string | null {
+  return cookies().get(INVITE_COOKIE)?.value ?? null;
+}
+
+function forgetInvite(): void {
+  cookies().set(INVITE_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+}
 
 export interface AccessFormState {
   error?: string;
@@ -36,7 +70,8 @@ export async function requestOtpForInviteAction(rawToken: string): Promise<void>
 
   const supabase = createSupabaseServerClient();
   await requestInvestorOtp(supabase, invite.contactEmail);
-  redirect(`/portal/verify?invite=${encodeURIComponent(rawToken)}`);
+  rememberInvite(rawToken);
+  redirect("/portal/verify");
 }
 
 /** Direct path: for people who are already authorised contacts. */
@@ -56,7 +91,7 @@ export async function verifyOtpAction(
   _prev: AccessFormState, formData: FormData,
 ): Promise<AccessFormState> {
   const code = String(formData.get("code") ?? "").trim();
-  const inviteToken = String(formData.get("invite") ?? "").trim() || null;
+  const inviteToken = rememberedInvite() ?? (String(formData.get("invite") ?? "").trim() || null);
   if (!code) return { error: "Enter the access code from your email." };
 
   // The address the code was sent to: from the invitation when there is one,
@@ -75,6 +110,7 @@ export async function verifyOtpAction(
     return { error: "That code is not valid or has expired. Request a new one.", email };
   }
 
+  forgetInvite();
   const completion = await completeInvestorVerification(data.user.id, inviteToken);
   if (completion.ok) {
     // The one factual sign-in event (P1's `login`). Recorded here, once per

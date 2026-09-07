@@ -2,8 +2,11 @@
 // Development databases only. Requires --yes to run.
 //   npm run db:reset -- --yes
 import { requireEnv } from "./env";
+import { installFailureHandlers, reportFailure } from "./fail";
 import { closePool } from "@/lib/db/client";
 import { resetDatabase } from "@/lib/db/reset";
+
+installFailureHandlers("Reset");
 
 async function main(): Promise<void> {
   requireEnv();
@@ -22,5 +25,5 @@ async function main(): Promise<void> {
 }
 
 main()
-  .catch((e) => { console.error(`Reset failed: ${(e as Error).message}`); process.exitCode = 1; })
+  .catch((e) => reportFailure("Reset", e))
   .finally(closePool);

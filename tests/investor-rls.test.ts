@@ -423,13 +423,16 @@ describe("Investor-generated records", () => {
       tx.query("select * from investor_activity_events"));
     expect(theirs.rows.length).toBe(0);
 
-    // Events cannot be rewritten or removed: no update/delete policy exists.
-    const updated = await withInvestorSession(kitanoUid, (tx) =>
-      tx.query("update investor_activity_events set event_type = 'login' returning event_id"));
-    expect(updated.rows.length).toBe(0);
-    const deleted = await withInvestorSession(kitanoUid, (tx) =>
-      tx.query("delete from investor_activity_events returning event_id"));
-    expect(deleted.rows.length).toBe(0);
+    // Events cannot be rewritten or removed. Since P6 the UPDATE and DELETE
+    // privileges are withdrawn from `authenticated` entirely, so PostgreSQL
+    // refuses before row level security is consulted — stronger than a policy
+    // that simply matches no rows.
+    await expect(withInvestorSession(kitanoUid, (tx) =>
+      tx.query("update investor_activity_events set event_type = 'login'")))
+      .rejects.toThrow(/permission denied/i);
+    await expect(withInvestorSession(kitanoUid, (tx) =>
+      tx.query("delete from investor_activity_events")))
+      .rejects.toThrow(/permission denied/i);
   });
 
   it("a request may be raised only against a readable publication, and not triaged by the investor", async () => {

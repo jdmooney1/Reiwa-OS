@@ -645,3 +645,18 @@ export async function listPublicationOptions(session: Session): Promise<Publicat
     }));
   });
 }
+
+/**
+ * The private object path behind one document, for the admin delete path only.
+ * Read under the caller's own RLS (the `_admin` policy), so a non-admin session
+ * resolves nothing and can delete nothing from the bucket.
+ */
+export async function getDocumentStoragePath(
+  session: Session, documentId: string,
+): Promise<string | null> {
+  return withSession(session, async (tx) => {
+    const { rows } = await tx.query<{ storage_path: string }>(
+      "select storage_path from publication_documents where document_id = $1", [documentId]);
+    return rows[0]?.storage_path ?? null;
+  });
+}

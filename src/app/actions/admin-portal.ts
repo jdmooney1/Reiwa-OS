@@ -1,5 +1,10 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import {
+  uploadDocumentObject, removeDocumentObject, MAX_DOCUMENT_BYTES, ALLOWED_DOCUMENT_MIME,
+} from "@/lib/supabase/storage";
+
 // ============================================================================
 // Investment Portal admin actions (P2).
 // ----------------------------------------------------------------------------
@@ -26,6 +31,7 @@ import {
 import {
   createDraftFromVersion, assertNoOpenVersion, updatePublicationDocument,
   getPublicationForOpportunity, reorderSecondaryEntitlements,
+  getDocumentStoragePath,
 } from "@/lib/data/admin-portal";
 
 const trimmed = (v: FormDataEntryValue | null): string => String(v ?? "").trim();
@@ -330,16 +336,42 @@ export async function addDocumentAction(
   const { db, auth } = await requireAdminSession();
   const title = trimmed(formData.get("title"));
   if (!title) throw new Error("The document title is required.");
-  const fileName = orNull(formData.get("fileName"));
-  const slug = (fileName ?? title).toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "");
+
+  const accessLevel = (trimmed(formData.get("accessLevel")) || "standard") as DocumentAccessLevel;
+  const category = (trimmed(formData.get("category")) || "other") as DocumentCategory;
+
+  // The object path is generated here and carries a random segment, so it can
+  // never be guessed from a title and is never supplied by a client.
+  const upload = formData.get("file");
+  const file = upload instanceof File && upload.size > 0 ? upload : null;
+
+  const rawName = file?.name ?? orNull(formData.get("fileName")) ?? title;
+  const slug = rawName.toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "") || "document";
+  const storagePath = `publications/${versionId}/${randomUUID()}-${slug}`;
+
+  if (file) {
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      throw new Error(`That file is larger than the ${Math.round(MAX_DOCUMENT_BYTES / 1048576)} MB limit.`);
+    }
+    const contentType = file.type || "application/octet-stream";
+    if (!ALLOWED_DOCUMENT_MIME.includes(contentType)) {
+      throw new Error(`Files of type ${contentType} are not accepted.`);
+    }
+    const result = await uploadDocumentObject(storagePath, await file.arrayBuffer(), contentType);
+    if (!result.ok) throw new Error(`The document could not be uploaded: ${result.error}`);
+  }
+
   await addPublicationDocument(db, {
     versionId,
     title,
-    category: (trimmed(formData.get("category")) || "other") as DocumentCategory,
-    accessLevel: (trimmed(formData.get("accessLevel")) || "standard") as DocumentAccessLevel,
-    // Private-bucket object path, reserved now, uploaded when storage lands (P4).
-    storagePath: `publications/${versionId}/${slug || "document"}`,
-    fileName,
+    category,
+    accessLevel,
+    // Private-bucket object path. Investors never receive this; a download is a
+    // short-lived signed URL minted only after the entitlement check (P6).
+    storagePath,
+    fileName: file?.name ?? orNull(formData.get("fileName")),
+    mimeType: file?.type ?? null,
+    sizeBytes: file?.size ?? null,
   }, auth.userId);
   refreshPublication(publicationId);
 }
@@ -362,6 +394,10 @@ export async function removeDocumentAction(
   documentId: string, publicationId: string,
 ): Promise<void> {
   const { db } = await requireAdminSession();
+  // Read the object path before the row goes, so the bytes can be removed too.
+  // A document deleted from the record must not survive in the bucket.
+  const existing = await getDocumentStoragePath(db, documentId);
   await removePublicationDocument(db, documentId);
+  if (existing) await removeDocumentObject(existing);
   refreshPublication(publicationId);
 }

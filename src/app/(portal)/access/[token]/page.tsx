@@ -7,6 +7,10 @@ import { AccessFrame } from "@/components/portal/access-frame";
 
 export const dynamic = "force-dynamic";
 
+// The invitation link necessarily carries the token. Suppress the Referer so
+// it cannot travel to any resource this page loads or links to.
+export const metadata = { referrer: "no-referrer" as const };
+
 // The invitation landing page. The token only identifies the intended access
 // context — every state below is decided server-side, and nothing is granted
 // until the OTP to the authorised email is verified.
