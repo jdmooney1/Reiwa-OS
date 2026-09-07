@@ -44,19 +44,43 @@ const TABLES = [
   "fx_rates",
 ];
 
-/** Drop every migration-owned object. Nothing outside `public`/`app` is touched. */
+/**
+ * Drop every migration-owned object. Nothing outside `public`/`app` is touched.
+ *
+ * Order matters, and not for correctness — `cascade` makes any order correct —
+ * but for how long it takes against a real pooler.
+ *
+ * The original version dropped the 27 tables first and `app` last. Every one of
+ * those drops had to re-resolve the triggers and RLS policies that referenced
+ * `app`'s functions, and each was a separate round trip through the transaction
+ * pooler. On a hosted database that added up until the teardown was flirting
+ * with the pooler's statement timeout.
+ *
+ * Dropping `app` FIRST removes the helper functions, and cascade takes the
+ * triggers and policies that depend on them with it — so by the time the tables
+ * are dropped there is almost nothing left hanging off them. The tables then go
+ * in ONE statement rather than 27, which is one round trip rather than 27 and
+ * lets PostgreSQL take its locks in a single pass.
+ *
+ * An explicit, generous statement_timeout is set for the transaction. It is not
+ * an attempt to escape the pooler's limit — it bounds this deliberately heavy
+ * DDL so a teardown that genuinely hangs fails with a clear error instead of
+ * being cut off somewhere unpredictable.
+ */
 export async function dropSchema(pool: Pool = getPool()): Promise<void> {
   const client = await pool.connect();
+  const qualified = TABLES.map((t) => `public.${t}`).join(", ");
   try {
     await client.query("begin");
-    await client.query("drop view if exists public.investor_feed cascade");
-    for (const table of TABLES) {
-      await client.query(`drop table if exists public.${table} cascade`);
-    }
+    await client.query("set local statement_timeout = '120s'");
+    // First: the helpers, and with them every trigger and policy that used one.
     await client.query("drop schema if exists app cascade");
+    await client.query("drop view if exists public.investor_feed cascade");
+    // Then the tables, in a single statement.
+    await client.query(`drop table if exists ${qualified} cascade`);
     await client.query("commit");
   } catch (e) {
-    await client.query("rollback");
+    try { await client.query("rollback"); } catch { /* connection already gone */ }
     throw e;
   } finally {
     client.release();

@@ -87,11 +87,65 @@ function createPool(): Pool {
     // The Supabase transaction pooler multiplexes; keep the local pool modest
     // and hand connections back quickly.
     max: Number(process.env.DATABASE_POOL_MAX ?? 8),
-    idleTimeoutMillis: 30_000,
+    // A pooled connection that has been idle for a while may already have been
+    // dropped by the pooler or by something in between, and the application
+    // only finds out when it borrows it and gets ECONNRESET mid-statement.
+    // Two settings make that rare rather than routine: retire local
+    // connections well before anything upstream is likely to, and keep the
+    // socket demonstrably alive while it is held.
+    idleTimeoutMillis: 10_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
     connectionTimeoutMillis: 15_000,
     // Only unnamed (single-use) statements are issued, which the transaction
     // pooler supports; node-postgres does this unless a query `name` is given.
   });
+}
+
+// ---- Connection acquisition ------------------------------------------------
+/** Attempts to BORROW a connection. Nothing about a statement is retried. */
+const CONNECT_ATTEMPTS = 3;
+const CONNECT_BACKOFF_MS = [100, 400];
+
+/**
+ * True for the failures that mean "this pooled socket was already dead", as
+ * opposed to a failure that says something about the work being attempted.
+ */
+function isTransientConnectionError(e: unknown): boolean {
+  const err = e as { code?: string; message?: string };
+  if (err?.code && ["ECONNRESET", "EPIPE", "ETIMEDOUT", "ECONNREFUSED", "57P01"].includes(err.code)) {
+    return true;
+  }
+  return /connection terminated|connection reset|server closed the connection/i
+    .test(err?.message ?? "");
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Borrow a connection, retrying ONLY the acquisition.
+ *
+ * This is the one place a retry is safe. A stale pooled socket fails before any
+ * statement of ours has been issued, so trying again cannot repeat work. The
+ * moment a transaction is open — or even a single implicit-transaction
+ * statement has been sent — a retry stops being safe: a write may already have
+ * committed on the far side of a connection that died before the acknowledgement
+ * came back, and re-running it would duplicate it. So nothing in this module
+ * retries a statement or replays a transaction. A caller that wants that has to
+ * decide it is idempotent and say so explicitly.
+ */
+async function acquire(pool: Pool): Promise<PoolClient> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < CONNECT_ATTEMPTS; attempt += 1) {
+    try {
+      return await pool.connect();
+    } catch (e) {
+      lastError = e;
+      if (!isTransientConnectionError(e) || attempt === CONNECT_ATTEMPTS - 1) throw e;
+      await sleep(CONNECT_BACKOFF_MS[attempt] ?? 400);
+    }
+  }
+  throw lastError;
 }
 
 /** Process-wide pool. Survives Next.js dev hot-reloads via globalThis. */
@@ -132,7 +186,7 @@ const MIGRATIONS_DIR = join(process.cwd(), "supabase", "migrations");
  * in the private `app` schema, not `public`, so it is never exposed by PostgREST.
  */
 export async function runMigrations(pool: Pool = getPool()): Promise<string[]> {
-  const client = await pool.connect();
+  const client = await acquire(pool);
   const applied: string[] = [];
   try {
     await client.query("create schema if not exists app");
@@ -190,7 +244,8 @@ export function sessionClaims(session: Session): Record<string, unknown> {
 export async function withSessionOn<T>(
   pool: Pool, session: Session, fn: (tx: Queryable) => Promise<T>,
 ): Promise<T> {
-  const client = await pool.connect();
+  // Acquisition may be retried; the transaction below runs exactly once.
+  const client = await acquire(pool);
   try {
     await client.query("begin");
     try {
@@ -211,11 +266,24 @@ export async function withSessionOn<T>(
 }
 
 // ---- Application-level helpers ---------------------------------------------
-/** Privileged query — bypasses RLS. Never reachable from a user-supplied path. */
+/**
+ * Privileged query — bypasses RLS. Never reachable from a user-supplied path.
+ *
+ * The connection is borrowed explicitly rather than through pool.query() so a
+ * stale pooled socket is retried at acquisition, where retrying is free of
+ * consequence. The statement itself is then issued exactly once: a single
+ * statement is its own transaction, and one that dies after being sent may
+ * already have committed, so re-sending it could duplicate a write.
+ */
 export async function adminQuery<T = Record<string, unknown>>(
   sql: string, params: unknown[] = [],
 ): Promise<T[]> {
-  return adminQueryOn<T>(wrap(getPool()), sql, params);
+  const client = await acquire(getPool());
+  try {
+    return await adminQueryOn<T>(wrap(client), sql, params);
+  } finally {
+    client.release();
+  }
 }
 
 /** RLS-gated unit of work for a signed-in user. */
@@ -238,7 +306,8 @@ export function investorSessionClaims(authUserId: string): Record<string, unknow
 export async function withInvestorSessionOn<T>(
   pool: Pool, authUserId: string, fn: (tx: Queryable) => Promise<T>,
 ): Promise<T> {
-  const client = await pool.connect();
+  // Acquisition may be retried; the transaction below runs exactly once.
+  const client = await acquire(pool);
   try {
     await client.query("begin");
     try {
