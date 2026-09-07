@@ -37,9 +37,31 @@ import { getPool } from "@/lib/db/client";
 const PORT = Number(process.env.LOCAL_AUTH_PORT ?? 54321);
 const JWT_SECRET = process.env.LOCAL_AUTH_JWT_SECRET ?? "reiwa-local-dev-jwt-secret";
 const TOKEN_TTL_SECONDS = 3600;
+// A Supabase project's email OTP length is a project setting: 6 by default, but
+// 8 (or more) once an operator raises it. The application must never assume one,
+// so the harness mints whatever length LOCAL_AUTH_OTP_DIGITS asks for.
+const OTP_DIGITS = Math.max(4, Math.min(10, Number(process.env.LOCAL_AUTH_OTP_DIGITS ?? 6)));
 
 const sha256 = (s: string): string => createHash("sha256").update(s).digest("hex");
 const b64url = (b: Buffer): string => b.toString("base64url");
+
+/** A numeric OTP of the project's configured length, mirroring GoTrue. */
+function mintOtp(): string {
+  let code = "";
+  for (let i = 0; i < OTP_DIGITS; i += 1) code += String(Math.floor(Math.random() * 10));
+  return code;
+}
+
+/** Store (or replace) the pending OTP for an email, as GoTrue would on send. */
+async function storeOtp(email: string, code: string): Promise<void> {
+  await getPool().query(
+    `insert into auth._local_otp(email, code, expires_at)
+     values (lower($1), $2, now() + interval '10 minutes')
+     on conflict (email) do update set code = excluded.code,
+       expires_at = excluded.expires_at, created_at = now()`,
+    [email, code],
+  );
+}
 
 interface UserRow {
   id: string;
@@ -195,13 +217,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       }
       return send(res, 422, { code: 422, error_code: "signup_disabled", msg: "Signups not allowed" });
     }
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    await getPool().query(
-      `insert into auth._local_otp(email, code, expires_at)
-       values (lower($1), $2, now() + interval '10 minutes')
-       on conflict (email) do update set code = excluded.code,
-         expires_at = excluded.expires_at, created_at = now()`,
-      [email, code]);
+    await storeOtp(email, mintOtp());
     return send(res, 200, {});
   }
 
@@ -262,6 +278,41 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
        JSON.stringify(body.user_metadata ?? {})]);
     return send(res, 200, userJson(rows[0]));
   }
+  // GoTrue's supported way to obtain the plaintext OTP a project would have
+  // emailed: it mints the code, returns it over the service-role connection and
+  // sends no mail. Hosted Supabase stores only a hash, so this is the only way a
+  // test can redeem a genuine code through the public verify path.
+  if (path === "/auth/v1/admin/generate_link" && method === "POST") {
+    const body = await readJson(req);
+    const email = String(body.email ?? "").trim();
+    const type = String(body.type ?? "magiclink");
+    if (!email) return send(res, 422, { code: 422, msg: "email is required" });
+    if (!["magiclink", "signup", "invite", "recovery"].includes(type)) {
+      return send(res, 400, { code: 400, msg: `Unsupported generate_link type ${type}` });
+    }
+    const user = await userByEmail(email);
+    // magiclink is a link for an EXISTING user; GoTrue refuses an unknown one.
+    if (!user) {
+      return send(res, 422, { code: 422, error_code: "user_not_found", msg: "User not found" });
+    }
+    const code = mintOtp();
+    await storeOtp(email, code);
+    const hashedToken = sha256(code);
+    const redirectTo = String(body.redirect_to ?? body.redirectTo ?? "");
+    // GoTrue answers with a FLAT object; supabase-js splits the link properties
+    // out of it into `data.properties` and the remainder into `data.user`.
+    return send(res, 200, {
+      ...userJson(user),
+      action_link:
+        `http://127.0.0.1:${PORT}/auth/v1/verify?token=${hashedToken}` +
+        `&type=${type}&redirect_to=${encodeURIComponent(redirectTo)}`,
+      email_otp: code,
+      hashed_token: hashedToken,
+      redirect_to: redirectTo,
+      verification_type: type,
+    });
+  }
+
   const adminUser = path.match(/^\/auth\/v1\/admin\/users\/([0-9a-f-]{36})$/);
   if (adminUser && method === "DELETE") {
     await getPool().query("delete from auth.users where id = $1", [adminUser[1]]);

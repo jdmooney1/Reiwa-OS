@@ -29,3 +29,6 @@ yarn-error.log*
 
 # Local scratch
 /.data
+
+# Sandbox scratch (never committed)
+/.scratch
