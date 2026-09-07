@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { validateInviteToken } from "@/lib/data/investor-invites";
+import { readInviteToken, readInviteStatus } from "@/lib/auth/invite-session";
 import { maskEmail } from "@/lib/auth/investor-access";
 import { requestOtpForInviteAction } from "@/app/actions/portal-access";
 import { formatDate } from "@/lib/format";
@@ -7,14 +8,22 @@ import { AccessFrame } from "@/components/portal/access-frame";
 
 export const dynamic = "force-dynamic";
 
-// The invitation landing page. The token only identifies the intended access
-// context — every state below is decided server-side, and nothing is granted
-// until the OTP to the authorised email is verified.
-export default async function AccessPage({ params }: { params: { token: string } }) {
-  const token = decodeURIComponent(params.token);
-  const invite = await validateInviteToken(token);
+// The invitation landing page. The token reached the server at
+// /access/<token>, which moved it into an httpOnly cookie and redirected here,
+// so this URL carries nothing: it is what history keeps, what a Referer would
+// disclose and what the recipient sees in the address bar.
+//
+// The invitation is re-validated on every render rather than trusted from the
+// hand-off, so an invitation revoked between the click and the click-through is
+// refused here too. The token still identifies the intended access context and
+// nothing more — no access is granted until the OTP to the authorised email is
+// verified.
+export default async function AccessPage() {
+  const rawToken = readInviteToken();
+  const invite = rawToken ? await validateInviteToken(rawToken) : null;
 
-  if (!invite.ok) {
+  if (!invite?.ok) {
+    const reason = invite ? invite.reason : (readInviteStatus() ?? "not_found");
     const copy: Record<string, { title: string; body: string }> = {
       expired: {
         title: "This invitation has expired",
@@ -45,12 +54,12 @@ export default async function AccessPage({ params }: { params: { token: string }
         body: "Check that the link was copied completely, or ask your Reiwa Capital contact for a new invitation.",
       },
     };
-    const c = copy[invite.reason] ?? copy.not_found;
+    const c = copy[reason] ?? copy.not_found;
     return (
       <PortalCard>
         <h1 className="font-serif text-xl text-ink">{c.title}</h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">{c.body}</p>
-        {invite.reason === "accepted" && (
+        {reason === "accepted" && (
           <Link href="/portal/verify"
             className="mt-5 inline-block rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
             Continue to sign in
@@ -71,7 +80,9 @@ export default async function AccessPage({ params }: { params: { token: string }
       <div className="mt-3 rounded border border-line bg-surface-sunken px-4 py-2.5 text-sm font-medium text-ink">
         {maskEmail(invite.contactEmail)}
       </div>
-      <form action={requestOtpForInviteAction.bind(null, token)} className="mt-5">
+      {/* The action takes no argument: it reads the invitation from the cookie,
+          so the token is not in this page's markup either. */}
+      <form action={requestOtpForInviteAction} className="mt-5">
         <button type="submit"
           className="w-full rounded bg-gold px-4 py-2.5 text-sm font-semibold text-navy hover:bg-gold-soft">
           Email me a secure access code

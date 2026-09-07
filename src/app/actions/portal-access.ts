@@ -17,6 +17,7 @@ import {
   requestInvestorOtp, completeInvestorVerification,
 } from "@/lib/auth/investor-access";
 import { validateInviteToken } from "@/lib/data/investor-invites";
+import { readInviteToken, clearInviteSession } from "@/lib/auth/invite-session";
 import { recordPortalEvent } from "@/lib/data/portal-feed";
 
 export interface AccessFormState {
@@ -28,15 +29,23 @@ export interface AccessFormState {
 const NEUTRAL_SENT =
   "If this address is authorised for the Reiwa Capital investment portal, an access code has been emailed to it.";
 
-/** Invitation path: the email is resolved from the token, server-side only. */
-export async function requestOtpForInviteAction(rawToken: string): Promise<void> {
-  const invite = await validateInviteToken(rawToken);
-  // An invalid token just re-renders the access page, which explains why.
-  if (!invite.ok) redirect(`/access/${encodeURIComponent(rawToken)}`);
+/**
+ * Invitation path: the email is resolved from the token, server-side only.
+ *
+ * The token is read from the httpOnly cookie the /access/<token> hand-off set,
+ * never from an argument the browser could supply and never from the URL — so
+ * neither this action's payload nor the redirect it issues carries it.
+ */
+export async function requestOtpForInviteAction(): Promise<void> {
+  const rawToken = readInviteToken();
+  const invite = rawToken ? await validateInviteToken(rawToken) : null;
+  // An invitation that is missing or no longer valid goes back to the access
+  // page, which explains why. Still no token in the URL.
+  if (!invite?.ok) redirect("/access");
 
   const supabase = createSupabaseServerClient();
   await requestInvestorOtp(supabase, invite.contactEmail);
-  redirect(`/portal/verify?invite=${encodeURIComponent(rawToken)}`);
+  redirect("/portal/verify");
 }
 
 /** Direct path: for people who are already authorised contacts. */
@@ -56,7 +65,9 @@ export async function verifyOtpAction(
   _prev: AccessFormState, formData: FormData,
 ): Promise<AccessFormState> {
   const code = String(formData.get("code") ?? "").trim();
-  const inviteToken = String(formData.get("invite") ?? "").trim() || null;
+  // From the httpOnly cookie, never a hidden form field: the token is not in
+  // the page's markup, so it cannot be read, copied or replayed from there.
+  const inviteToken = readInviteToken();
   if (!code) return { error: "Enter the access code from your email." };
 
   // The address the code was sent to: from the invitation when there is one,
@@ -77,6 +88,9 @@ export async function verifyOtpAction(
 
   const completion = await completeInvestorVerification(data.user.id, inviteToken);
   if (completion.ok) {
+    // The invitation has done its whole job. P3 already made it one-shot in the
+    // database; drop the browser's copy too rather than leave it to expire.
+    clearInviteSession();
     // The one factual sign-in event (P1's `login`). Recorded here, once per
     // verified sign-in, rather than per page view — "last portal login" in the
     // admin surface means exactly this and nothing inferred.
@@ -100,5 +114,6 @@ export async function verifyOtpAction(
 export async function portalSignOutAction(): Promise<void> {
   const supabase = createSupabaseServerClient();
   await supabase.auth.signOut();
+  clearInviteSession();
   redirect("/portal/verify");
 }

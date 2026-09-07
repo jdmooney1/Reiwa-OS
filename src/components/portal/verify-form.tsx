@@ -15,7 +15,7 @@ const EMPTY: AccessFormState = {};
  *    response is identical whether or not the address is authorised.
  */
 export function VerifyForm(props:
-  | { mode: "invite"; inviteToken: string; maskedEmail: string; orgName: string }
+  | { mode: "invite"; maskedEmail: string; orgName: string }
   | { mode: "direct" },
 ) {
   const [requestState, requestAction] = useFormState(requestOtpDirectAction, EMPTY);
@@ -64,9 +64,11 @@ export function VerifyForm(props:
 
       {codeStage && (
         <form action={verifyAction} className="mt-5 space-y-4">
-          {invite
-            ? <input type="hidden" name="invite" value={props.inviteToken} />
-            : <input type="hidden" name="email" value={verifyState.email ?? directEmail ?? ""} />}
+          {/* No hidden invitation field: the token lives in an httpOnly cookie
+              the server reads, so it is not in this markup to be read or replayed. */}
+          {!invite && (
+            <input type="hidden" name="email" value={verifyState.email ?? directEmail ?? ""} />
+          )}
           <label className="block">
             <span className="eyebrow">Access code</span>
             <input name="code" inputMode="numeric" autoComplete="one-time-code" required autoFocus
@@ -77,7 +79,8 @@ export function VerifyForm(props:
           <SubmitButton label="Verify and enter the portal" />
           {invite ? (
             <p className="text-center text-2xs text-ink-faint">
-              Code not arriving? Return to your invitation link to request a new one.
+              Code not arriving?{" "}
+              <a href="/access" className="text-gold-deep hover:underline">Request a new one</a>.
             </p>
           ) : (
             <p className="text-center text-2xs text-ink-faint">
