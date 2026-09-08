@@ -219,8 +219,20 @@ describe("Table privileges across the whole schema", () => {
 
   /**
    * Supabase's stock default privileges re-grant everything to `anon` on each
-   * new table. Correcting today's catalogue without correcting the default just
+   * new object. Correcting today's catalogue without correcting the default just
    * re-introduces the problem with the next migration.
+   *
+   * `pg_default_acl` is keyed BY OWNER ROLE, and that distinction is the whole
+   * point of this test. A hosted Supabase project ships rows owned by
+   * `supabase_admin` — a platform role the project owner is not a member of, so
+   * `ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin` is not ours to run. Those
+   * rows govern objects supabase_admin creates, which the migrations never do.
+   *
+   * What this project controls, and what therefore must be spotless, is the
+   * default for the role the migrations actually run as. So the assertion is
+   * scoped to that role rather than relaxed: a stray anon default on the
+   * migration role still fails here, and the companion test below proves
+   * empirically that a freshly created table inherits nothing for anon.
    */
   it("leaves no default privilege that would expose a future table to anon", async () => {
     const defaults = await adminQuery<{ grantor: string; objtype: string; acl: string }>(`
@@ -230,11 +242,29 @@ describe("Table privileges across the whole schema", () => {
         from pg_default_acl d
         join pg_namespace n on n.oid = d.defaclnamespace
        where n.nspname = 'public'`);
-    for (const row of defaults) {
+
+    const [{ role: migrationRole }] = await adminQuery<{ role: string }>(
+      "select current_user as role");
+    const ours = defaults.filter((row) => row.grantor === migrationRole);
+
+    // The migration role owns defaults for tables, sequences and functions, and
+    // every one of them must be clean. If 0007 stopped running, this is empty —
+    // which would silently pass — so the presence of the rows is asserted too.
+    expect(ours.length).toBeGreaterThan(0);
+    for (const row of ours) {
       expect({ ...row, exposesAnon: /\banon=/.test(row.acl) })
         .toEqual({ ...row, exposesAnon: false });
-      expect({ ...row, exposesPublic: /(^|\s)=[a-zA-Z]+\//.test(row.acl) })
+      expect({ ...row, exposesPublic: /(^|\s|\{)=[a-zA-Z]+\//.test(row.acl) })
         .toEqual({ ...row, exposesPublic: false });
+    }
+
+    // Anything left over must belong to a platform role we cannot alter. If a
+    // permissive default ever appears under a role this project DOES control,
+    // it is caught here rather than excused as "Supabase's".
+    const foreign = defaults.filter((row) => row.grantor !== migrationRole);
+    for (const row of foreign) {
+      expect({ grantor: row.grantor, platformOwned: row.grantor === "supabase_admin" })
+        .toEqual({ grantor: row.grantor, platformOwned: true });
     }
   });
 

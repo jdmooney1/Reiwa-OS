@@ -283,33 +283,88 @@ describe("Tiered delivery", () => {
 
 // ============================================================================
 describe("Signed URLs", () => {
+  // --------------------------------------------------------------------------
+  // A signed-URL token has two shapes, and these tests must hold for both.
+  //
+  //   hosted Supabase  a JWT: `header.payload.signature`, expiry in the
+  //                    payload's `exp` claim.
+  //   local stand-in   `<exp>.<signature>`, expiry in the first segment.
+  //
+  // The earlier version of these helpers understood only the stand-in. Against
+  // hosted Supabase `Number(token.split(".")[0])` is NaN, and a tamper written
+  // as a regex on `token=(\d+)\.` matched nothing at all — so the "tampered"
+  // request was the ORIGINAL VALID URL, and the test failed while claiming a
+  // security property it had never exercised. Hence `expect(tampered).not
+  // .toBe(token)` below: a tamper that silently does nothing must fail loudly
+  // rather than quietly assert nothing.
+  // --------------------------------------------------------------------------
+  const isJwt = (token: string): boolean => token.split(".").length === 3;
+
+  const jwtPayload = (token: string): { exp: number } =>
+    JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+
+  /** The expiry the token claims, in epoch seconds, whichever shape it is. */
+  const tokenExpiry = (token: string): number =>
+    isJwt(token) ? Number(jwtPayload(token).exp) : Number(token.split(".")[0]);
+
+  /** The same token with its signature altered and nothing else changed. */
+  const tamperSignature = (token: string): string => {
+    const parts = token.split(".");
+    const i = isJwt(token) ? 2 : 1;
+    parts[i] = (parts[i][0] === "a" ? "b" : "a") + parts[i].slice(1);
+    return parts.join(".");
+  };
+
+  /** The same token claiming a different expiry, carrying its original signature. */
+  const tamperExpiry = (token: string, expiresAt: number): string => {
+    const parts = token.split(".");
+    if (!isJwt(token)) return `${expiresAt}.${parts[1]}`;
+    parts[1] = Buffer.from(JSON.stringify({ ...jwtPayload(token), exp: expiresAt }))
+      .toString("base64url");
+    return parts.join(".");
+  };
+
+  const tokenOf = (signedUrl: string): string =>
+    new URL(signedUrl).searchParams.get("token") ?? "";
+
+  const withToken = (signedUrl: string, token: string): string => {
+    const url = new URL(signedUrl);
+    url.searchParams.set("token", token);
+    return url.toString();
+  };
+
   it("expires in sixty seconds", async () => {
     expect(SIGNED_URL_TTL_SECONDS).toBe(60);
     const grant = await issueDocumentDownload(standardUid, docs.standard);
-    const url = new URL(grant!.signedUrl);
-    const token = url.searchParams.get("token") ?? "";
-    // The stand-in carries the expiry in the token; hosted Supabase carries it
-    // in a JWT claim. Either way it must be one minute from now, not an hour.
-    const expiresAt = Number(token.split(".")[0]);
-    const ttl = expiresAt - Math.floor(Date.now() / 1000);
+    const token = tokenOf(grant!.signedUrl);
+    const ttl = tokenExpiry(token) - Math.floor(Date.now() / 1000);
+    expect(Number.isFinite(ttl)).toBe(true);
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(SIGNED_URL_TTL_SECONDS);
   });
 
+  it("is fetchable while it is still valid", async () => {
+    const grant = await issueDocumentDownload(standardUid, docs.standard);
+    const response = await fetch(grant!.signedUrl);
+    expect(response.ok).toBe(true);
+  });
+
   it("refuses a URL whose signature has been tampered with", async () => {
     const grant = await issueDocumentDownload(standardUid, docs.standard);
-    const tampered = grant!.signedUrl.replace(/token=(\d+)\.(\w)/, (_m, exp, first) =>
-      `token=${exp}.${first === "a" ? "b" : "a"}`);
-    const response = await fetch(tampered);
+    const token = tokenOf(grant!.signedUrl);
+    const tampered = tamperSignature(token);
+    expect(tampered).not.toBe(token); // the tamper must actually change something
+    const response = await fetch(withToken(grant!.signedUrl, tampered));
     expect(response.ok).toBe(false);
   });
 
   it("refuses a URL whose expiry has been pushed into the future", async () => {
     const grant = await issueDocumentDownload(standardUid, docs.standard);
-    const url = new URL(grant!.signedUrl);
-    const [, signature] = String(url.searchParams.get("token")).split(".");
-    url.searchParams.set("token", `${Math.floor(Date.now() / 1000) + 86_400}.${signature}`);
-    const response = await fetch(url.toString());
+    const token = tokenOf(grant!.signedUrl);
+    const tampered = tamperExpiry(token, Math.floor(Date.now() / 1000) + 86_400);
+    expect(tampered).not.toBe(token);
+    expect(tokenExpiry(tampered)).toBeGreaterThan(tokenExpiry(token));
+    const response = await fetch(withToken(grant!.signedUrl, tampered));
     expect(response.ok).toBe(false);
   });
 
@@ -319,10 +374,10 @@ describe("Signed URLs", () => {
     // Sign for a moment that has already passed, then present it.
     const signed = await signDocumentObject(rows[0].storage_path);
     expect(signed).not.toBeNull();
-    const url = new URL(signed!);
-    const [, signature] = String(url.searchParams.get("token")).split(".");
-    url.searchParams.set("token", `0.${signature}`);
-    const response = await fetch(url.toString());
+    const token = tokenOf(signed!);
+    const expired = tamperExpiry(token, 0);
+    expect(expired).not.toBe(token);
+    const response = await fetch(withToken(signed!, expired));
     expect(response.ok).toBe(false);
   });
 });

@@ -27,6 +27,19 @@ import {
 const run = promisify(execFile);
 const SRC = join(process.cwd(), "src");
 
+/**
+ * The tsx CLI, invoked through this process's own `node` rather than `npx`.
+ *
+ * `npx` is `npx.cmd` on Windows, and since the argument-injection fix in Node
+ * 18.20/20.12 `execFile` refuses to run a `.cmd` without `shell: true` — which
+ * would mean quoting every argument through a shell for no benefit. Running the
+ * CLI's entrypoint directly is portable, needs no shell, and spawns one fewer
+ * process. What is under test is the script's refusal, not how it was launched.
+ */
+const TSX_CLI = join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
+const runScript = (script: string, env: NodeJS.ProcessEnv) =>
+  run(process.execPath, [TSX_CLI, script], { env });
+
 interface SourceFile { file: string; text: string; code: string }
 
 function collectSources(root: string): SourceFile[] {
@@ -233,19 +246,19 @@ describe("The local harness cannot be pointed at a real database", () => {
   };
 
   it("refuses to prepare a database that is not on localhost", async () => {
-    await expect(run("npx", ["tsx", "scripts/local-db.ts"], { env: nonLocal }))
+    await expect(runScript("scripts/local-db.ts", nonLocal))
       .rejects.toMatchObject({ code: 1 });
   }, 60_000);
 
   it("says exactly which host it refused", async () => {
-    const result = await run("npx", ["tsx", "scripts/local-db.ts"], { env: nonLocal })
+    const result = await runScript("scripts/local-db.ts", nonLocal)
       .catch((e: { stderr: string }) => e);
     expect((result as { stderr: string }).stderr).toContain("LOCAL database only");
     expect((result as { stderr: string }).stderr).toContain("pooler.supabase.com");
   }, 60_000);
 
   it("refuses to serve auth for a database that is not on localhost", async () => {
-    const result = await run("npx", ["tsx", "scripts/local-auth.ts"], { env: nonLocal })
+    const result = await runScript("scripts/local-auth.ts", nonLocal)
       .catch((e: { stderr: string }) => e);
     expect((result as { stderr: string }).stderr).toContain("LOCAL database only");
   }, 60_000);
