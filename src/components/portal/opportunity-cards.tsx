@@ -150,7 +150,7 @@ export function OpportunityCard({
 }) {
   const metrics = headlineMetrics(o);
   return (
-    <article className="border-b border-line py-7 first:border-t first:pt-7">
+    <article className="border-b border-line py-7">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         <div>
           <h3 className="text-xl leading-snug tracking-[-0.01em] text-ink">
@@ -211,7 +211,7 @@ export function PortalEmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="border-t border-line py-10">
+    <div className="py-10">
       <h2 className="text-lg text-ink">{title}</h2>
       <p className="mt-2 max-w-measure text-sm leading-relaxed text-ink-muted">{body}</p>
       {action && <div className="mt-6">{action}</div>}

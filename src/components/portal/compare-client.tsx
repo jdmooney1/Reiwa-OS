@@ -21,8 +21,23 @@ export function CompareHydrator() {
     router.replace(`/portal/compare?ids=${encodeURIComponent(ids.join(","))}`);
   }, [router]);
 
+  // A quiet line and the rules the matrix will occupy, so the page does not
+  // jump when the real figures arrive. No spinner: the wait is a single
+  // client-side redirect, and a spinner would be the loudest thing on a page
+  // built out of hairlines.
   return (
-    <p className="py-16 text-center text-sm text-ink-muted">Preparing your comparison…</p>
+    <div aria-busy="true" aria-live="polite">
+      <p className="eyebrow">Preparing your comparison</p>
+      <div className="mt-6 border-t border-line">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-8 border-b border-line py-3.5">
+            <span className="h-2 w-32 rounded-sm bg-line/70" />
+            <span className="h-2 w-16 rounded-sm bg-line/50" />
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">Loading the selected opportunities.</span>
+    </div>
   );
 }
 

@@ -86,6 +86,14 @@ function ComparisonTable({ opportunities }: { opportunities: PortalOpportunity[]
 
   return (
     <>
+      {/* The matrix is wider than a phone. It scrolls inside its own container
+          — the page never does — but a clipped third column gives no sign that
+          anything is off-screen, so say so where the clipping happens. */}
+      {opportunities.length > 1 && (
+        <p className="mb-4 text-2xs uppercase tracking-label text-ink-faint lg:hidden">
+          Scroll sideways to compare all {opportunities.length} opportunities
+        </p>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[40rem] border-collapse text-sm">
           <caption className="sr-only">
