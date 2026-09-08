@@ -94,7 +94,21 @@ function createPool(): Pool {
     // socket demonstrably alive while it is held.
     idleTimeoutMillis: 10_000,
     keepAlive: true,
-    keepAliveInitialDelayMillis: 10_000,
+    // One second, not ten. Measured against the hosted pooler: a socket that
+    // sits idle in this pool for even a few seconds is sometimes killed
+    // upstream. At a ten-second initial delay no keepalive probe ever ran
+    // inside that window, so the death went UNDETECTED until the next borrower
+    // had already sent a statement — surfacing as "Connection terminated
+    // unexpectedly" mid-query, which is exactly the case this module refuses to
+    // retry (see acquire(), below). Probing from one second means a dead socket
+    // errors while it is still idle, where pool.on("error") discards it and the
+    // next borrow simply opens a fresh one.
+    //
+    // Reproduced at 1.7% of page reads spaced three seconds apart (1 HTTP 500 and
+    // 3 terminations in 60 reads); 0 of 300 gapped reads after the change. The
+    // alternative — retrying the read — was deliberately not taken: this costs
+    // one probe per second per idle socket and leaves the no-retry rule intact.
+    keepAliveInitialDelayMillis: 1_000,
     connectionTimeoutMillis: 15_000,
     // Only unnamed (single-use) statements are issued, which the transaction
     // pooler supports; node-postgres does this unless a query `name` is given.
