@@ -60,7 +60,7 @@ export const DOC_LEVEL_LABEL: Record<DocumentAccessLevel, string> = {
 
 export const DOC_LEVEL_TONE: Record<DocumentAccessLevel, Tone> = {
   standard: "neutral",
-  diligence: "gold",
+  diligence: "accent",
   internal: "negative",
 };
 

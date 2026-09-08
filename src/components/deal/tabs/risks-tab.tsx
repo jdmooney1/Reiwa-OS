@@ -13,7 +13,7 @@ const PROBS = [1, 2, 3, 4, 5]; // columns
 function cellTone(product: number): string {
   if (product >= 15) return "bg-negative/15";
   if (product >= 9) return "bg-caution/15";
-  if (product >= 4) return "bg-gold/10";
+  if (product >= 4) return "bg-surface-sunken";
   return "bg-positive/10";
 }
 
@@ -71,7 +71,7 @@ export function RisksTab({ risks }: { risks: Risk[] }) {
                           title={`P${prob} × I${impact} = ${prob * impact}`}
                         >
                           {inCell.length > 0 && (
-                            <span className="tabular flex h-6 w-6 items-center justify-center rounded-full bg-navy text-2xs font-semibold text-surface">
+                            <span className="tabular flex h-6 w-6 items-center justify-center rounded-full bg-purple text-2xs font-semibold text-surface">
                               {inCell.length}
                             </span>
                           )}
@@ -87,7 +87,7 @@ export function RisksTab({ risks }: { risks: Risk[] }) {
             </div>
             <div className="mt-4 flex items-center justify-center gap-3 text-2xs text-ink-muted">
               <Legend className="bg-positive/30" label="Low" />
-              <Legend className="bg-gold/30" label="Moderate" />
+              <Legend className="bg-surface-sunken" label="Moderate" />
               <Legend className="bg-caution/40" label="High" />
               <Legend className="bg-negative/40" label="Severe" />
             </div>

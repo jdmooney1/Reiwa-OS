@@ -11,7 +11,7 @@ export const LIFECYCLE_LABEL: Record<LifecycleStage, string> = {
 };
 export const LIFECYCLE_TONE: Record<LifecycleStage, Tone> = {
   underwriting: "muted", transaction: "caution", operating: "positive",
-  development: "gold", stabilising: "caution", exit: "neutral", realised: "muted",
+  development: "accent", stabilising: "caution", exit: "neutral", realised: "muted",
 };
 
 export const REFI_LABEL: Record<RefiStatus, string> = {
@@ -47,7 +47,7 @@ export const LEASE_STATUS_LABEL: Record<LeaseStatus, string> = {
 };
 export const LEASE_STATUS_TONE: Record<LeaseStatus, Tone> = {
   occupied: "positive", vacant: "negative", under_offer: "caution",
-  holdover: "caution", in_fit_out: "gold",
+  holdover: "caution", in_fit_out: "accent",
 };
 
 export const EVENT_TYPE_LABEL: Record<EventType, string> = {

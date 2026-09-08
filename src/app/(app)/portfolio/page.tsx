@@ -18,7 +18,7 @@ export default async function PortfolioPage() {
         eyebrow="Asset Intelligence"
         title="Portfolio Dashboard"
         description="Where should management focus? Aggregated live from each asset record."
-        actions={<Badge tone="gold">Demo data</Badge>}
+        actions={<Badge tone="accent">Demo data</Badge>}
       />
       <PortfolioDashboard files={files} rates={fx.rates} fxNote={fxNote} />
     </div>

@@ -57,7 +57,7 @@ export default async function AdminActivityPage({
     <div className="mx-auto w-full max-w-6xl px-6 py-8">
       <header className="mb-7 border-b border-line pb-5">
         <div className="eyebrow mb-1.5">Investment Portal</div>
-        <h1 className="font-serif text-2xl text-ink">Investor Activity</h1>
+        <h1 className="text-2xl text-ink">Investor Activity</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">
           Every action recorded in the investor portal, as it was recorded. Counts and timestamps
           only — no engagement scores, rankings or inferred intent.
@@ -133,7 +133,7 @@ function PageLink({
   return (
     <Link
       href={`/admin/activity${next.toString() ? `?${next}` : ""}`}
-      className="text-2xs font-medium text-ink-muted hover:text-gold-deep"
+      className="text-2xs font-medium text-ink-muted hover:text-ink-muted"
     >
       {children}
     </Link>
@@ -143,7 +143,7 @@ function PageLink({
 function SectionHeading({ title, note }: { title: string; note?: string }) {
   return (
     <div className="mb-4 flex items-baseline justify-between gap-4 border-b border-line pb-2">
-      <h2 className="font-serif text-lg text-ink">{title}</h2>
+      <h2 className="text-lg text-ink">{title}</h2>
       {note && <span className="text-2xs uppercase tracking-label text-ink-faint">{note}</span>}
     </div>
   );

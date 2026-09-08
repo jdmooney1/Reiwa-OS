@@ -34,7 +34,7 @@ export const PROVENANCE_LABEL: Record<Provenance, string> = {
 
 export const PROVENANCE_TONE: Record<Provenance, Tone> = {
   fact: "neutral",
-  calculation: "gold",
+  calculation: "accent",
   forecast: "caution",
   assumption: "muted",
   commentary: "positive",

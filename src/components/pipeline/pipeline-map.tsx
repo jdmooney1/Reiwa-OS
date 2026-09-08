@@ -17,7 +17,7 @@ export function PipelineMap({ deals }: { deals: DealSummary[] }) {
 
   return (
     <div className="px-8 py-6">
-      <div className="relative overflow-hidden rounded-lg border border-line bg-navy">
+      <div className="relative overflow-hidden rounded-lg border border-line bg-purple">
         {/* Faint grid to suggest a map canvas */}
         <div
           className="absolute inset-0 opacity-[0.06]"
@@ -29,9 +29,9 @@ export function PipelineMap({ deals }: { deals: DealSummary[] }) {
         />
         <div className="relative flex min-h-[420px] flex-col items-center justify-center gap-6 p-10 text-center">
           <div className="flex flex-col items-center gap-2">
-            <MapPin className="h-7 w-7 text-gold" strokeWidth={1.5} />
-            <div className="text-sm font-medium text-surface">Geographic view</div>
-            <div className="max-w-md text-xs text-surface/60">
+            <MapPin className="h-7 w-7 text-ink-faint" strokeWidth={1.5} />
+            <div className="text-sm font-medium text-ink">Geographic view</div>
+            <div className="max-w-md text-xs text-ink-faint">
               Interactive map integration (Mapbox) is planned. For now, deals are
               grouped by market.
             </div>
@@ -40,10 +40,10 @@ export function PipelineMap({ deals }: { deals: DealSummary[] }) {
             {markets.map(([city, { count, value, currency }]) => (
               <div
                 key={city}
-                className="rounded-lg border border-white/10 bg-white/5 px-5 py-4 text-left"
+                className="rounded-lg border border-line bg-surface-sunken px-5 py-4 text-left"
               >
-                <div className="text-sm font-medium text-surface">{city}</div>
-                <div className="tabular mt-1 text-2xs text-surface/60">
+                <div className="text-sm font-medium text-ink">{city}</div>
+                <div className="tabular mt-1 text-2xs text-ink-faint">
                   {count} {count === 1 ? "deal" : "deals"} · {formatMoneyCompact(value, currency)}
                 </div>
               </div>

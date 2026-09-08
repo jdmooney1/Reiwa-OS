@@ -21,7 +21,7 @@ export function ContactsTab({ contacts }: { contacts: Contact[] }) {
         <Card key={c.contact_id}>
           <CardBody className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gold/10 text-sm font-semibold text-gold-deep">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-sunken text-sm font-semibold text-ink-muted">
                 {initials(c.name)}
               </div>
               <div className="min-w-0">
@@ -37,7 +37,7 @@ export function ContactsTab({ contacts }: { contacts: Contact[] }) {
                 </div>
               )}
               {c.email && (
-                <a href={`mailto:${c.email}`} className="flex items-center gap-2 hover:text-gold-deep">
+                <a href={`mailto:${c.email}`} className="flex items-center gap-2 hover:text-ink-muted">
                   <Mail className="h-3.5 w-3.5 text-ink-faint" strokeWidth={1.75} />
                   {c.email}
                 </a>

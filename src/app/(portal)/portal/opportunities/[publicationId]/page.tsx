@@ -65,20 +65,23 @@ export default async function PortalOpportunityPage({
     <PortalShell investor={investor}>
       <BackLink />
 
-      <header className="mt-4 border-b border-line pb-6">
-        <div className="eyebrow mb-2">Prepared for {investor.investorOrgName}</div>
-        <h1 className="max-w-3xl font-serif text-3xl leading-tight text-ink">{o.title}</h1>
-        <p className="mt-2 text-sm text-ink-muted">
+      <header className="mt-6 border-b border-line-strong pb-8">
+        <div className="eyebrow">Prepared for</div>
+        <div className="mt-1.5 text-sm font-medium text-ink">{investor.investorOrgName}</div>
+        <h1 className="mt-6 max-w-3xl text-4xl leading-[1.1] tracking-[-0.025em] text-ink">
+          {o.title}
+        </h1>
+        <p className="mt-3 text-sm text-ink-muted">
           {locationLabel(o)}
-          <span className="px-2 text-line">|</span>
+          <span className="px-2 text-line-strong">|</span>
           {assetTypeLabel(o.assetType)}
-          <span className="px-2 text-line">·</span>
+          <span className="px-2 text-line-strong">·</span>
           {strategyLabel(o.strategy)}
         </p>
         {o.headline && (
-          <p className="mt-4 max-w-3xl font-serif text-lg leading-relaxed text-ink">{o.headline}</p>
+          <p className="mt-6 max-w-measure text-lg leading-relaxed text-ink">{o.headline}</p>
         )}
-        <div className="mt-5 flex flex-wrap items-center gap-2.5">
+        <div className="mt-7 flex flex-wrap items-center gap-3">
           <SaveButton
             publicationId={o.publicationId}
             saved={savedIds.includes(o.publicationId)}
@@ -88,11 +91,11 @@ export default async function PortalOpportunityPage({
         </div>
       </header>
 
-      <div className="mt-9 grid gap-10 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-12">
-        <div className="space-y-10">
+      <div className="mt-12 grid gap-12 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-16">
+        <div className="space-y-section-tight">
           {o.overview && (
             <Section title="Overview">
-              <p className="max-w-prose whitespace-pre-line text-sm leading-relaxed text-ink">
+              <p className="max-w-measure whitespace-pre-line text-sm leading-relaxed text-ink">
                 {o.overview}
               </p>
             </Section>
@@ -103,7 +106,7 @@ export default async function PortalOpportunityPage({
               <ul className="space-y-3">
                 {o.highlights.map((h) => (
                   <li key={h} className="flex gap-3 text-sm leading-relaxed text-ink">
-                    <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                    <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-line-strong" />
                     {h}
                   </li>
                 ))}
@@ -120,30 +123,26 @@ export default async function PortalOpportunityPage({
           </Section>
         </div>
 
-        <aside className="space-y-8 lg:sticky lg:top-8 lg:self-start">
+        <aside className="space-y-10 lg:sticky lg:top-10 lg:self-start">
           <section>
-            <h2 className="mb-3 border-b border-line pb-2 font-serif text-base text-ink">
+            <h2 className="section-rule text-2xs font-medium uppercase tracking-eyebrow text-ink">
               Investment snapshot
             </h2>
-            <dl className="divide-y divide-line rounded border border-line bg-surface-card">
+            <dl className="border-t border-line">
               {metrics.map((m) => (
-                <div key={m.key} className="flex items-baseline justify-between gap-4 px-4 py-3">
+                <div key={m.key} className="flex items-baseline justify-between gap-6 border-b border-line py-3">
                   <dt className="text-2xs uppercase tracking-label text-ink-faint">{m.label}</dt>
-                  <dd className="font-serif text-base tabular-nums text-ink">{m.value}</dd>
+                  <dd className="figure text-base text-ink">{m.value}</dd>
                 </div>
               ))}
             </dl>
-            <p className="mt-2.5 text-2xs leading-relaxed text-ink-faint">
+            <p className="mt-4 text-2xs leading-relaxed text-ink-faint">
               Targets are estimates prepared by Reiwa Capital on the assumptions set out in the
               investment materials. They are not forecasts or guarantees, and capital is at risk.
             </p>
           </section>
 
-          {o.investorNote && (
-            <div className="overflow-hidden rounded border border-line">
-              <InvestorNote note={o.investorNote} />
-            </div>
-          )}
+          {o.investorNote && <InvestorNote note={o.investorNote} />}
 
           {o.publishedAt && (
             <p className="text-2xs text-ink-faint">
@@ -171,7 +170,7 @@ function BackLink() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="mb-4 border-b border-line pb-2 font-serif text-lg text-ink">{title}</h2>
+      <h2 className="section-rule text-2xs font-medium uppercase tracking-eyebrow text-ink">{title}</h2>
       {children}
     </section>
   );

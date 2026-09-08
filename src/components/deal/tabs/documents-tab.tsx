@@ -110,7 +110,7 @@ export function DocumentsTab({ file }: { file: DealFile }) {
         </div>
         <button
           onClick={onUpload}
-          className="flex items-center gap-1.5 rounded bg-navy px-3.5 py-2 text-xs font-medium text-surface hover:bg-navy-50"
+          className="flex items-center gap-1.5 rounded bg-purple px-3.5 py-2 text-xs font-medium text-surface hover:bg-purple-70"
         >
           <UploadCloud className="h-3.5 w-3.5" /> Upload Document
         </button>
@@ -173,10 +173,10 @@ function DocumentCard({
   return (
     <button
       onClick={onOpen}
-      className="flex flex-col gap-3 rounded-lg border border-line bg-surface-card p-3.5 text-left transition-colors hover:border-gold/40"
+      className="flex flex-col gap-3 rounded-lg border border-line bg-surface-card p-3.5 text-left transition-colors hover:border-line"
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded bg-navy/5 text-ink-muted">
+        <div className="flex h-9 w-9 items-center justify-center rounded bg-surface-sunken text-ink-muted">
           <Icon className="h-4 w-4" strokeWidth={1.75} />
         </div>
         <Badge tone={INGEST_STATUS_TONE[doc.ingest_status]} dot>{INGEST_STATUS_LABEL[doc.ingest_status]}</Badge>

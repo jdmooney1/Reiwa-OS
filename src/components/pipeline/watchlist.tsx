@@ -38,16 +38,16 @@ export function Watchlist({ deals }: { deals: DealSummary[] }) {
             <li key={deal.deal_id}>
               <Link
                 href={`/deals/${deal.deal_id}`}
-                className="group flex items-center gap-4 border-b border-line px-5 py-3.5 last:border-0 hover:bg-gold/[0.04]"
+                className="group flex items-center gap-4 border-b border-line px-5 py-3.5 last:border-0 hover:bg-purple/[0.04]"
               >
-                <span className="tabular w-5 text-center font-serif text-base text-ink-faint">
+                <span className="tabular w-5 text-center text-base text-ink-faint">
                   {i + 1}
                 </span>
                 <div
                   className={cn(
                     "tabular flex h-9 w-9 shrink-0 items-center justify-center rounded text-sm font-semibold",
                     scoreTone(deal.overall_score) === "positive" && "bg-positive/10 text-positive",
-                    scoreTone(deal.overall_score) === "gold" && "bg-gold/10 text-gold-deep",
+                    scoreTone(deal.overall_score) === "accent" && "bg-surface-sunken text-ink-muted",
                     scoreTone(deal.overall_score) === "caution" && "bg-caution/10 text-caution",
                     scoreTone(deal.overall_score) === "negative" && "bg-negative/10 text-negative",
                   )}

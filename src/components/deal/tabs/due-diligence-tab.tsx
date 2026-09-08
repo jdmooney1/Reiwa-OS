@@ -51,8 +51,8 @@ function TemplateChooser({
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-5 text-center">
-        <ClipboardList className="mx-auto h-6 w-6 text-gold" strokeWidth={1.5} />
-        <h3 className="mt-2 font-serif text-lg text-ink">Initiate Due Diligence</h3>
+        <ClipboardList className="mx-auto h-6 w-6 text-ink-faint" strokeWidth={1.5} />
+        <h3 className="mt-2 text-lg text-ink">Initiate Due Diligence</h3>
         <p className="mx-auto mt-1 max-w-md text-sm text-ink-muted">
           Apply a Reiwa DD framework to open the standing risk-control workstreams for this deal.
         </p>
@@ -63,12 +63,12 @@ function TemplateChooser({
           return (
             <Card
               key={t.id}
-              className={cn(isRecommended && "border-gold/40 bg-gold/[0.03]")}
+              className={cn(isRecommended && "border-line bg-purple/[0.03]")}
             >
               <CardBody className="flex h-full flex-col gap-3">
                 <div className="flex items-center justify-between">
-                  <div className="font-serif text-base text-ink">{t.name}</div>
-                  {isRecommended && <Badge tone="gold">Recommended</Badge>}
+                  <div className="text-base text-ink">{t.name}</div>
+                  {isRecommended && <Badge tone="accent">Recommended</Badge>}
                 </div>
                 <p className="flex-1 text-xs leading-relaxed text-ink-muted">{t.description}</p>
                 <div className="text-2xs text-ink-faint">
@@ -79,7 +79,7 @@ function TemplateChooser({
                   className={cn(
                     "rounded px-3 py-2 text-xs font-medium transition-colors",
                     isRecommended
-                      ? "bg-navy text-surface hover:bg-navy-50"
+                      ? "bg-purple text-surface hover:bg-purple-70"
                       : "border border-line text-ink hover:bg-surface-sunken",
                   )}
                 >
@@ -151,7 +151,7 @@ function Tracker({
               </div>
               <div>
                 <div className="eyebrow">Due Diligence Control</div>
-                <div className="font-serif text-base text-ink">
+                <div className="text-base text-ink">
                   {progress.issues > 0
                     ? `${progress.issues} open ${progress.issues === 1 ? "issue" : "issues"} identified`
                     : "No open issues"}
@@ -165,7 +165,7 @@ function Tracker({
               <ControlStat label="Priority Open" value={highRiskOpen} tone={highRiskOpen > 0 ? "caution" : "positive"} />
               <div className="text-right">
                 <div className="eyebrow mb-0.5">Complete</div>
-                <div className="tabular font-serif text-2xl text-ink">{progress.pct}%</div>
+                <div className="tabular text-2xl text-ink">{progress.pct}%</div>
               </div>
             </div>
           </div>

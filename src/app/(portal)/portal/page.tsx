@@ -23,12 +23,13 @@ export default async function PortalHomePage() {
 
   return (
     <PortalShell investor={investor}>
-      <header className="mb-8 border-b border-line pb-5">
-        <div className="eyebrow mb-1.5">Prepared for {investor.investorOrgName}</div>
-        <h1 className="font-serif text-2xl leading-tight text-ink">
+      <header className="mb-12 border-b border-line-strong pb-6">
+        <div className="eyebrow">Prepared for</div>
+        <div className="mt-1.5 text-sm font-medium text-ink">{investor.investorOrgName}</div>
+        <h1 className="mt-6 text-3xl leading-tight tracking-[-0.02em] text-ink">
           Reiwa Capital Investment Portal
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">
+        <p className="mt-3 max-w-measure text-sm leading-relaxed text-ink-muted">
           A curated selection of opportunities released to {investor.investorOrgName} by Reiwa
           Capital. Each is presented from the approved investment publication.
         </p>
@@ -40,7 +41,7 @@ export default async function PortalHomePage() {
           body={`Reiwa Capital has not yet released an opportunity to ${investor.investorOrgName}. When one is made available it will appear here, and your Reiwa contact will let you know.`}
         />
       ) : (
-        <div className="space-y-12">
+        <div className="space-y-section">
           {feed.featured ? (
             <FeaturedOpportunity
               opportunity={feed.featured}
@@ -48,7 +49,6 @@ export default async function PortalHomePage() {
             />
           ) : (
             <section>
-              <SectionHeading title="Selected for your review" />
               <PortalEmptyState
                 title="No featured opportunity at present"
                 body="Reiwa Capital is not currently highlighting a single opportunity for your organisation. Those released to you appear below."
@@ -62,7 +62,7 @@ export default async function PortalHomePage() {
                 title="Also available"
                 note={`${feed.secondary.length} ${feed.secondary.length === 1 ? "opportunity" : "opportunities"}`}
               />
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div>
                 {feed.secondary.map((o) => (
                   <OpportunityCard
                     key={o.publicationId}
@@ -81,8 +81,8 @@ export default async function PortalHomePage() {
 
 function SectionHeading({ title, note }: { title: string; note?: string }) {
   return (
-    <div className="mb-5 flex items-baseline justify-between gap-4 border-b border-line pb-2.5">
-      <h2 className="font-serif text-lg text-ink">{title}</h2>
+    <div className="mb-2 flex items-baseline justify-between gap-4 border-b border-line-strong pb-3">
+      <h2 className="text-2xs font-medium uppercase tracking-eyebrow text-ink">{title}</h2>
       {note && <span className="text-2xs uppercase tracking-label text-ink-faint">{note}</span>}
     </div>
   );

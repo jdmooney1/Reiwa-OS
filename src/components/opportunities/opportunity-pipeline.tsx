@@ -19,7 +19,7 @@ const STATUS_LABEL: Record<OppStatus, string> = {
   active: "Active", rejected: "Rejected", withdrawn: "Withdrawn", lost: "Lost", converted: "Converted",
 };
 const STATUS_TONE = {
-  active: "positive", rejected: "negative", withdrawn: "muted", lost: "negative", converted: "gold",
+  active: "positive", rejected: "negative", withdrawn: "muted", lost: "negative", converted: "accent",
 } as const;
 
 export function OpportunityPipeline({ opportunities }: { opportunities: Opportunity[] }) {
@@ -34,7 +34,7 @@ export function OpportunityPipeline({ opportunities }: { opportunities: Opportun
           {([["board", "Board", LayoutGrid], ["table", "Table", Table2]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => setView(k)}
               className={cn("flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-colors",
-                view === k ? "bg-navy text-surface" : "text-ink-muted hover:text-ink")}>
+                view === k ? "bg-purple text-surface" : "text-ink-muted hover:text-ink")}>
               <Icon className="h-3.5 w-3.5" strokeWidth={1.75} /> {label}
             </button>
           ))}
@@ -51,7 +51,7 @@ export function OpportunityPipeline({ opportunities }: { opportunities: Opportun
                 <div key={stage} className="flex w-72 shrink-0 flex-col">
                   <div className="mb-3 flex items-center gap-2 border-b border-line pb-2">
                     <span className="text-xs font-semibold uppercase tracking-label text-ink">{STAGE_LABEL[stage]}</span>
-                    <span className="tabular rounded bg-navy/5 px-1.5 py-0.5 text-2xs font-medium text-ink-muted">{col.length}</span>
+                    <span className="tabular rounded bg-surface-sunken px-1.5 py-0.5 text-2xs font-medium text-ink-muted">{col.length}</span>
                   </div>
                   <div className="flex flex-1 flex-col gap-2.5">
                     {col.map((o) => <OppCard key={o.opportunityId} o={o} />)}
@@ -80,7 +80,7 @@ export function OpportunityPipeline({ opportunities }: { opportunities: Opportun
 function OppCard({ o }: { o: Opportunity }) {
   return (
     <Link href={`/opportunities/${o.opportunityId}`}>
-      <Card className="p-3.5 transition-colors hover:border-gold/40">
+      <Card className="p-3.5 transition-colors hover:border-line">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-ink">{o.name}</div>
@@ -121,8 +121,8 @@ function OppTable({ rows, muted }: { rows: Opportunity[]; muted?: boolean }) {
         </thead>
         <tbody className="tabular divide-y divide-line">
           {rows.map((o) => (
-            <tr key={o.opportunityId} className="hover:bg-gold/[0.04]">
-              <td className="px-3 py-2.5"><Link href={`/opportunities/${o.opportunityId}`} className="font-medium text-ink hover:text-gold-deep">{o.name}</Link></td>
+            <tr key={o.opportunityId} className="hover:bg-purple/[0.04]">
+              <td className="px-3 py-2.5"><Link href={`/opportunities/${o.opportunityId}`} className="font-medium text-ink hover:text-ink-muted">{o.name}</Link></td>
               <td className="px-3 py-2.5 text-ink-muted">{o.city ?? "—"}</td>
               <td className="px-3 py-2.5 text-ink-muted">{ASSET_TYPE_LABEL[o.assetType as AssetType] ?? o.assetType}</td>
               <td className="px-3 py-2.5 text-ink-muted">{o.strategy ? (STRATEGY_LABEL[o.strategy as Strategy] ?? o.strategy) : "—"}</td>

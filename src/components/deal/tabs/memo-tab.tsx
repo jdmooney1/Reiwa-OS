@@ -122,7 +122,7 @@ export function MemoTab({ file, narrative }: { file: DealFile; narrative?: DealN
               title={f.description}
               className={cn(
                 "rounded px-2.5 py-1 text-2xs font-medium transition-colors",
-                format === f.key ? "bg-navy text-surface" : "text-ink-muted hover:text-ink",
+                format === f.key ? "bg-purple text-surface" : "text-ink-muted hover:text-ink",
               )}
             >
               {f.label}
@@ -146,7 +146,7 @@ export function MemoTab({ file, narrative }: { file: DealFile; narrative?: DealN
           </button>
           <button
             onClick={onFirstDraft}
-            className="flex items-center gap-1.5 rounded bg-gold px-3 py-1.5 text-2xs font-semibold text-navy hover:bg-gold-soft"
+            className="flex items-center gap-1.5 rounded bg-purple px-3 py-1.5 text-2xs font-semibold text-ink hover:bg-surface-sunken"
           >
             {busy === "draft" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
             Generate First Draft
@@ -230,7 +230,7 @@ function NavItem({
       onClick={onClick}
       className={cn(
         "flex w-full items-center gap-2 px-4 py-1.5 text-left text-xs transition-colors",
-        active ? "bg-gold/10 text-ink" : "text-ink-muted hover:bg-surface-sunken/60 hover:text-ink",
+        active ? "bg-surface-sunken text-ink" : "text-ink-muted hover:bg-surface-sunken/60 hover:text-ink",
       )}
     >
       <span className="tabular w-4 shrink-0 text-2xs text-ink-faint">{index}</span>
@@ -257,11 +257,11 @@ function Editor({
       <div className="flex items-center justify-between border-b border-line px-5 py-2.5">
         <div className="flex items-baseline gap-2">
           {index != null && <span className="tabular text-2xs text-ink-faint">{index}</span>}
-          <h3 className="font-serif text-base text-ink">{title}</h3>
+          <h3 className="text-base text-ink">{title}</h3>
         </div>
         <button
           onClick={onRegenerate}
-          className="flex items-center gap-1.5 rounded border border-line px-2.5 py-1 text-2xs font-medium text-ink-muted hover:border-gold/40 hover:text-ink"
+          className="flex items-center gap-1.5 rounded border border-line px-2.5 py-1 text-2xs font-medium text-ink-muted hover:border-line hover:text-ink"
         >
           {regenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
           Regenerate
@@ -284,7 +284,7 @@ function SideOutputView({ output, onClose }: { output: { title: string; items: s
   return (
     <>
       <div className="flex items-center justify-between border-b border-line px-5 py-2.5">
-        <h3 className="font-serif text-base text-ink">{output.title}</h3>
+        <h3 className="text-base text-ink">{output.title}</h3>
         <button onClick={onClose} className="flex items-center gap-1 text-2xs text-ink-muted hover:text-ink">
           <X className="h-3 w-3" /> Back to memo
         </button>
@@ -292,7 +292,7 @@ function SideOutputView({ output, onClose }: { output: { title: string; items: s
       <ol className="flex-1 space-y-2.5 overflow-y-auto px-6 py-5">
         {output.items.map((item, i) => (
           <li key={i} className="flex gap-3 text-sm leading-relaxed text-ink/90">
-            <span className="tabular mt-0.5 shrink-0 text-2xs font-medium text-gold-deep">{i + 1}.</span>
+            <span className="tabular mt-0.5 shrink-0 text-2xs font-medium text-ink-muted">{i + 1}.</span>
             <span>{item}</span>
           </li>
         ))}
@@ -319,9 +319,9 @@ function Action({
     <button
       onClick={onClick}
       disabled={busy}
-      className="flex w-full items-start gap-2.5 rounded border border-line bg-surface-card px-2.5 py-2 text-left transition-colors hover:border-gold/40 disabled:opacity-60"
+      className="flex w-full items-start gap-2.5 rounded border border-line bg-surface-card px-2.5 py-2 text-left transition-colors hover:border-line disabled:opacity-60"
     >
-      <span className="mt-0.5 text-gold-deep">
+      <span className="mt-0.5 text-ink-muted">
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />}
       </span>
       <span className="min-w-0">

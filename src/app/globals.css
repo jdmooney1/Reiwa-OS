@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Georgia", serif;
+  /* One family. See src/app/layout.tsx — DM Sans, loaded by next/font. */
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -14,7 +14,6 @@
   }
   body {
     @apply bg-surface text-ink;
-    font-feature-settings: "ss01", "cv01";
   }
   /* Tabular figures everywhere numbers matter */
   .tabular {
@@ -24,15 +23,31 @@
 }
 
 @layer components {
-  /* Small uppercase field label used throughout the institutional UI */
+  /*
+   * The editorial vocabulary. Four classes carry most of the system, so a
+   * screen is built from headings, rules and space rather than from containers.
+   */
+
+  /* Small uppercase label. Never running text — the size and weight here are
+     what keep #6E666C above the contrast floor. */
   .eyebrow {
-    @apply text-2xs font-medium uppercase tracking-label text-ink-faint;
+    @apply text-2xs font-medium uppercase tracking-eyebrow text-ink-faint;
   }
-  .eyebrow-light {
-    @apply text-2xs font-medium uppercase tracking-label text-gold-soft/70;
+
+  /* A section heading sitting on its own rule. This replaces the bordered
+     panel: a heading, a rule, and its content. */
+  .section-rule {
+    @apply border-b border-line-strong pb-3 mb-6;
   }
+
+  /* Row separator. The default hairline. */
   .hairline {
     @apply border-line;
+  }
+
+  /* Figures line up in columns wherever they are compared. */
+  .figure {
+    @apply tabular font-medium tracking-[-0.01em];
   }
 }
 
@@ -47,10 +62,11 @@
    * unusable without a mouse.
    *
    * :focus-visible rather than :focus, so a mouse click does not leave a ring
-   * behind but the keyboard always shows where it is.
+   * behind but the keyboard always shows where it is. The ring moved from gold
+   * to the brand purple with the branding pass; it did not get quieter.
    */
   :focus-visible {
-    outline: 2px solid theme("colors.gold.DEFAULT");
+    outline: 2px solid theme("colors.purple.DEFAULT");
     outline-offset: 2px;
     border-radius: 2px;
   }

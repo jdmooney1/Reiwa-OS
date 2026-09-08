@@ -37,7 +37,7 @@ export function RemoveFromCompare({ publicationId, title }: { publicationId: str
         const next = removeCompare(publicationId);
         router.replace(`/portal/compare?ids=${encodeURIComponent(next.join(","))}`);
       }}
-      className="rounded p-1 text-ink-faint transition-colors hover:bg-navy/5 hover:text-ink"
+      className="rounded p-1 text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
     >
       <X className="h-3.5 w-3.5" strokeWidth={2} />
     </button>

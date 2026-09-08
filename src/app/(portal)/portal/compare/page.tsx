@@ -64,7 +64,7 @@ export default async function PortalComparePage({
           action={
             <Link
               href="/portal"
-              className="rounded bg-navy px-5 py-2.5 text-xs font-semibold text-surface hover:bg-navy-50"
+              className="rounded bg-purple px-5 py-2.5 text-xs font-medium text-surface transition-colors hover:bg-purple-70"
             >
               Browse opportunities
             </Link>
@@ -98,11 +98,11 @@ function ComparisonTable({ opportunities }: { opportunities: PortalOpportunity[]
               </th>
               {byOpportunity.map(({ o }) => (
                 <th key={o.publicationId} scope="col"
-                  className="border-b border-line px-4 py-3 text-left align-bottom">
+                  className="border-b border-line-strong py-3 pr-6 text-left align-bottom">
                   <div className="flex items-start justify-between gap-2">
                     <Link
                       href={`/portal/opportunities/${o.publicationId}`}
-                      className="font-serif text-base font-normal leading-snug text-ink hover:text-gold-deep"
+                      className="text-base font-normal leading-snug text-ink hover:text-ink-muted"
                     >
                       {o.title}
                     </Link>
@@ -114,15 +114,15 @@ function ComparisonTable({ opportunities }: { opportunities: PortalOpportunity[]
           </thead>
           <tbody>
             {rows.map((key) => (
-              <tr key={key} className="border-b border-line last:border-b-0 even:bg-surface-sunken/40">
-                <th scope="row" className="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-label text-ink-faint">
+              <tr key={key} className="border-b border-line last:border-b-0">
+                <th scope="row" className="py-3 pr-6 text-left text-2xs font-medium uppercase tracking-label text-ink-faint">
                   {labels.get(key)}
                 </th>
                 {byOpportunity.map(({ o, values }) => {
                   const m = values.get(key);
                   return (
                     <td key={o.publicationId}
-                      className={`px-4 py-2.5 tabular-nums ${m?.present ? "text-ink" : "text-ink-faint"}`}>
+                      className={`figure py-3 pr-6 ${m?.present ? "text-ink" : "text-ink-faint"}`}>
                       {m?.value ?? "—"}
                     </td>
                   );
@@ -134,18 +134,18 @@ function ComparisonTable({ opportunities }: { opportunities: PortalOpportunity[]
       </div>
 
       <section className="mt-10">
-        <h2 className="mb-4 border-b border-line pb-2 font-serif text-lg text-ink">
+        <h2 className="section-rule text-2xs font-medium uppercase tracking-eyebrow text-ink">
           Investment rationale
         </h2>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {opportunities.map((o) => (
             <div key={o.publicationId}>
-              <h3 className="font-serif text-base text-ink">{o.title}</h3>
+              <h3 className="text-base text-ink">{o.title}</h3>
               {o.highlights.length > 0 ? (
                 <ul className="mt-2.5 space-y-2">
                   {o.highlights.map((h) => (
                     <li key={h} className="flex gap-2.5 text-sm leading-relaxed text-ink-muted">
-                      <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                      <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-line-strong" />
                       {h}
                     </li>
                   ))}
@@ -160,7 +160,7 @@ function ComparisonTable({ opportunities }: { opportunities: PortalOpportunity[]
         </div>
       </section>
 
-      <p className="mt-8 max-w-prose text-2xs leading-relaxed text-ink-faint">
+      <p className="mt-10 max-w-measure text-2xs leading-relaxed text-ink-faint">
         A dash indicates a figure Reiwa Capital has not released for that opportunity. Figures are
         not adjusted or estimated to make this comparison complete, and opportunities may be
         prepared on differing assumptions.

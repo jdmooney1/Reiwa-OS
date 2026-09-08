@@ -7,57 +7,82 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Institutional palette — dark navy base, warm white, muted gold.
-        navy: {
-          DEFAULT: "#0B1B2B",
-          50: "#1B3047",
-          100: "#16293D",
-          900: "#081420",
+        // ────────────────────────────────────────────────────────────────────
+        // Reiwa Capital. One brand colour, one ground, three ink tones, two
+        // rule weights.
+        //
+        // The purple is sampled from the supplied logo
+        // (public/brand/reiwa-capital-logo.png): #271430 on 9,037 of 9,069
+        // opaque samples. It is the only brand colour, and it is an ACCENT —
+        // buttons, the active indicator, one rule — never a large dark field.
+        // The previous navy/gold palette appeared nowhere in the brand and has
+        // been removed entirely rather than kept as an alias, so a stale class
+        // fails the build audit instead of silently rendering transparent.
+        // ────────────────────────────────────────────────────────────────────
+        purple: {
+          DEFAULT: "#271430", // principal — 14.8:1 on ground
+          70: "#5F4A68",      // hover / pressed only
+          10: "#EDE8EE",      // the faintest wash; active nav row, selected cell
         },
+        // Surfaces. `surface` is the page; `card` is the one step up, used
+        // sparingly. Both are warm — the ground value is the cream already
+        // shipping in the live OTP email, so the email and the product agree.
         surface: {
-          DEFAULT: "#F6F2EA", // warm white
-          card: "#FBF8F2",
-          sunken: "#EFEAE0",
+          DEFAULT: "#F3EFE7",
+          card: "#FAF8F4",
+          sunken: "#EAE4D9",
         },
-        // Text tones. Each of these carries small text (the .eyebrow label is
-        // 11px), so each must clear WCAG AA's 4.5:1 against the LIGHTEST
-        // surface it sits on. The hues are unchanged — only lightness — so the
-        // palette reads the same; the previous values were 2.5-3.6:1, which is
-        // below the threshold and genuinely hard to read on a laptop in
-        // daylight.
+        // Text tones. `muted` carries body copy at length and `faint` carries
+        // uppercase labels only — the sizes each is used at are what keep them
+        // above the contrast floor, so they are not interchangeable.
         ink: {
-          DEFAULT: "#12222F",  // 13.5:1
-          muted: "#5A6B78",    //  4.6:1
-          faint: "#5E6B75",    //  4.6:1 (was #8A97A1, 2.5:1)
+          DEFAULT: "#271430", // 14.8:1 on ground — the mark's own colour
+          muted: "#5F585F",   //  7.0:1 on ground
+          faint: "#6E666C",   //  5.3:1 on ground (label use)
         },
-        gold: {
-          DEFAULT: "#C2A14E", // muted gold accent; decorative, not body text
-          soft: "#D8C285",    // on navy only — 9.9:1 there
-          deep: "#6E5A26",    //  4.5:1 on its own 10% tint (badge background)
+        // Two rule weights and nothing else. Containers do not get borders.
+        line: {
+          DEFAULT: "#DDD5C8",  // row separators
+          strong: "#C7BCAB",   // section boundaries, table headers
         },
-        line: "#E2DBCD",
-        "line-dark": "#1C3147",
-        // status accents (used sparingly)
-        // Each is also used as text ON its own 10% tint (the Badge component),
-        // which lightens the effective background — so these clear 4.5:1
-        // against that tint, not merely against the plain surface.
-        positive: "#34674B", // was #3E7C5A (3.4:1 on tint)
-        caution: "#795619",  // was #B98427 (2.3:1 on tint)
-        negative: "#984238", // was #A6483D (4.0:1 on tint)
+        // Semantic state. Reserved for genuine state — predominantly the
+        // internal admin surfaces. Investor-facing pages stay neutral unless
+        // the state itself is the information.
+        //
+        // Each clears 4.5:1 against the DARKEST surface it can sit on
+        // (surface-sunken #EAE4D9), not merely against the page ground —
+        // positive 5.8, caution 5.2, negative 5.8. The first caution value tried
+        // here was #8A6A2F, which reads fine on the page but is 3.97 on sunken.
+        positive: "#3F5D4A",
+        caution: "#755925",
+        negative: "#8C3F38",
       },
       fontFamily: {
+        // One family across the whole system. Hierarchy is carried by size,
+        // weight and space rather than by a change of voice.
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        serif: ["var(--font-serif)", "Georgia", "serif"],
       },
       fontSize: {
         "2xs": ["0.6875rem", { lineHeight: "1rem" }],
       },
       letterSpacing: {
-        label: "0.08em",
+        label: "0.12em",
+        eyebrow: "0.14em",
       },
       borderRadius: {
-        DEFAULT: "4px",
-        lg: "6px",
+        // 2px maximum: enough to avoid a hard corner, not enough to read as a
+        // card.
+        DEFAULT: "2px",
+        lg: "2px",
+      },
+      spacing: {
+        // The editorial rhythm. Section separation on investor pages starts at
+        // `section` (72px); admin uses `section-tight` (48px).
+        section: "4.5rem",
+        "section-tight": "3rem",
+      },
+      maxWidth: {
+        measure: "70ch",
       },
     },
   },

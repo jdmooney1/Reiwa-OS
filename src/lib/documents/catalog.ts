@@ -50,6 +50,6 @@ export const INGEST_STATUS_LABEL: Record<DocIngestStatus, string> = {
 export const INGEST_STATUS_TONE: Record<DocIngestStatus, Tone> = {
   uploaded: "muted",
   processing: "caution",
-  extracted: "gold",
+  extracted: "accent",
   reviewed: "positive",
 };

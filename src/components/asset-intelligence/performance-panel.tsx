@@ -116,7 +116,7 @@ function F({ label, name, type = "text", placeholder, step, required }: {
     <label className="block">
       <span className="eyebrow">{label}</span>
       <input name={name} type={type} placeholder={placeholder} step={step} required={required}
-        className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+        className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
     </label>
   );
 }
@@ -125,7 +125,7 @@ function Submit() {
   const { pending } = useFormStatus();
   return (
     <button type="submit" disabled={pending}
-      className="rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50 disabled:opacity-60">
+      className="rounded bg-purple px-4 py-2 text-xs font-semibold text-surface hover:bg-purple-70 disabled:opacity-60">
       {pending ? "Recording…" : "Record Period"}
     </button>
   );

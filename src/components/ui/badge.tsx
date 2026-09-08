@@ -1,58 +1,52 @@
 import { cn } from "@/lib/utils";
 import type { Tone } from "@/lib/domain";
 
-const TONE_CLASS: Record<Tone, string> = {
-  neutral: "bg-navy/5 text-ink border-line",
-  gold: "bg-gold/10 text-gold-deep border-gold/30",
-  positive: "bg-positive/10 text-positive border-positive/25",
-  caution: "bg-caution/10 text-caution border-caution/25",
-  negative: "bg-negative/10 text-negative border-negative/25",
-  muted: "bg-ink/[0.04] text-ink-muted border-line",
-};
+// ============================================================================
+// Status and label.
+// ----------------------------------------------------------------------------
+// A dot and a word, not a filled pill.
+//
+// The pill was carrying no information the word did not already carry: every
+// row had one, so none of them read as notable. Removing the fill and the
+// border leaves the state itself — and gives the semantic colours somewhere to
+// land, because now they are the only colour on the row.
+//
+// Colour is reserved for genuine state (published, withdrawn, in review). A
+// label that is merely a category — an asset type, a market, a tier — takes
+// `neutral` and stays in ink, which is why investor-facing surfaces read as
+// predominantly neutral.
+// ============================================================================
 
-// Same tones, tuned for the dark navy header.
-const TONE_CLASS_DARK: Record<Tone, string> = {
-  neutral: "bg-white/10 text-surface border-white/15",
-  gold: "bg-gold/15 text-gold-soft border-gold/40",
-  positive: "bg-positive/20 text-emerald-200 border-positive/40",
-  caution: "bg-caution/20 text-amber-200 border-caution/40",
-  negative: "bg-negative/20 text-rose-200 border-negative/40",
-  muted: "bg-white/5 text-surface/70 border-white/10",
+const TONE_CLASS: Record<Tone, string> = {
+  neutral: "text-ink",
+  accent: "text-purple",
+  positive: "text-positive",
+  caution: "text-caution",
+  negative: "text-negative",
+  muted: "text-ink-muted",
 };
 
 export function Badge({
   children,
   tone = "neutral",
-  dark = false,
   className,
   dot = false,
 }: {
   children: React.ReactNode;
   tone?: Tone;
-  dark?: boolean;
   className?: string;
+  /** Show the state dot. Omit for a plain category label. */
   dot?: boolean;
 }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-2xs font-medium",
-        (dark ? TONE_CLASS_DARK : TONE_CLASS)[tone],
+        "inline-flex items-center gap-1.5 text-2xs font-medium",
+        TONE_CLASS[tone],
         className,
       )}
     >
-      {dot && (
-        <span
-          className={cn(
-            "h-1.5 w-1.5 rounded-full",
-            tone === "positive" && "bg-positive",
-            tone === "caution" && "bg-caution",
-            tone === "negative" && "bg-negative",
-            tone === "gold" && "bg-gold",
-            (tone === "neutral" || tone === "muted") && "bg-ink-faint",
-          )}
-        />
-      )}
+      {dot && <span aria-hidden="true" className="h-1 w-1 shrink-0 rounded-full bg-current" />}
       {children}
     </span>
   );

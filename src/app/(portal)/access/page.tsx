@@ -57,11 +57,11 @@ export default async function AccessPage() {
     const c = copy[reason] ?? copy.not_found;
     return (
       <PortalCard>
-        <h1 className="font-serif text-xl text-ink">{c.title}</h1>
+        <h1 className="text-2xl leading-tight tracking-[-0.02em] text-ink">{c.title}</h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">{c.body}</p>
         {reason === "accepted" && (
           <Link href="/portal/verify"
-            className="mt-5 inline-block rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
+            className="mt-6 inline-block rounded bg-purple px-4 py-2.5 text-xs font-medium text-surface transition-colors hover:bg-purple-70">
             Continue to sign in
           </Link>
         )}
@@ -71,24 +71,27 @@ export default async function AccessPage() {
 
   return (
     <PortalCard>
-      <div className="eyebrow mb-2">Invitation · {invite.investorOrgName}</div>
-      <h1 className="font-serif text-xl text-ink">Welcome, {invite.contactName}</h1>
-      <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+      <div className="eyebrow">Invitation</div>
+      <div className="mt-1.5 text-sm text-ink-muted">{invite.investorOrgName}</div>
+      <h1 className="mt-5 text-2xl leading-tight tracking-[-0.02em] text-ink">
+        Welcome, {invite.contactName}
+      </h1>
+      <p className="mt-3 max-w-measure text-sm leading-relaxed text-ink-muted">
         Reiwa Capital has invited you to its private investment portal. To continue,
         we will email a one-time access code to your authorised address:
       </p>
-      <div className="mt-3 rounded border border-line bg-surface-sunken px-4 py-2.5 text-sm font-medium text-ink">
+      <div className="mt-4 border-y border-line py-3 text-sm font-medium tabular text-ink">
         {maskEmail(invite.contactEmail)}
       </div>
       {/* The action takes no argument: it reads the invitation from the cookie,
           so the token is not in this page's markup either. */}
-      <form action={requestOtpForInviteAction} className="mt-5">
+      <form action={requestOtpForInviteAction} className="mt-8">
         <button type="submit"
-          className="w-full rounded bg-gold px-4 py-2.5 text-sm font-semibold text-navy hover:bg-gold-soft">
+          className="w-full rounded bg-purple px-4 py-3 text-sm font-medium text-surface transition-colors hover:bg-purple-70">
           Email me a secure access code
         </button>
       </form>
-      <p className="mt-4 text-2xs text-ink-faint">
+      <p className="mt-4 max-w-measure text-2xs leading-relaxed text-ink-faint">
         This invitation is valid until {formatDate(invite.expiresAt)} and does not itself grant
         access — only the code sent to the authorised address can sign you in.
       </p>
@@ -97,9 +100,5 @@ export default async function AccessPage() {
 }
 
 function PortalCard({ children }: { children: React.ReactNode }) {
-  return (
-    <AccessFrame>
-      <div className="rounded-lg border border-line bg-surface-card px-7 py-7">{children}</div>
-    </AccessFrame>
-  );
+  return <AccessFrame>{children}</AccessFrame>;
 }

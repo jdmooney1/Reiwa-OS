@@ -22,7 +22,7 @@ export function PipelineBoard({ deals }: { deals: DealSummary[] }) {
                 <span className="text-xs font-semibold uppercase tracking-label text-ink">
                   {stage}
                 </span>
-                <span className="tabular rounded bg-navy/5 px-1.5 py-0.5 text-2xs font-medium text-ink-muted">
+                <span className="tabular rounded bg-surface-sunken px-1.5 py-0.5 text-2xs font-medium text-ink-muted">
                   {column.length}
                 </span>
               </div>

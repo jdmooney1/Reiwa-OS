@@ -55,7 +55,7 @@ export function AssetOverview({ file }: { file: AssetFile }) {
       </Card>
 
       {/* AI intelligence brief (interpretive layer — provenance-tagged) */}
-      <Card className="border-navy/15">
+      <Card className="border-line">
         <CardHeader eyebrow="Asset Intelligence" title="Executive Brief"
           action={<span className="text-2xs text-ink-faint">Generated from structured data</span>} />
         <CardBody className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
@@ -215,7 +215,7 @@ function ProvenanceDot({ p, className }: { p: keyof typeof PROVENANCE_TONE; clas
     <span
       title={PROVENANCE_LABEL[p]}
       className={cn("h-1.5 w-1.5 shrink-0 rounded-full",
-        tone === "gold" && "bg-gold", tone === "caution" && "bg-caution",
+        tone === "accent" && "bg-purple", tone === "caution" && "bg-caution",
         tone === "positive" && "bg-positive", tone === "neutral" && "bg-ink-faint",
         tone === "muted" && "bg-line", tone === "negative" && "bg-negative", className)}
     />

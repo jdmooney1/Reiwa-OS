@@ -32,7 +32,7 @@ export function RequestForm({
 
   if (state.ok) {
     return (
-      <div className="rounded border border-positive/30 bg-positive/[0.07] px-5 py-5">
+      <div className="border-l-2 border-positive py-1 pl-5">
         <div className="flex items-center gap-2 text-positive">
           <CheckCircle2 className="h-4 w-4" strokeWidth={1.75} />
           <span className="text-xs font-semibold uppercase tracking-label">Request received</span>
@@ -46,7 +46,7 @@ export function RequestForm({
   }
 
   return (
-    <form action={formAction} className="rounded border border-line bg-surface-sunken/40 px-5 py-5">
+    <form action={formAction}>
       {submittedCount > 0 && (
         <p className="mb-4 text-2xs text-ink-faint">
           You have previously submitted {submittedCount}{" "}
@@ -66,7 +66,7 @@ export function RequestForm({
                 name="requestType"
                 value={o.value}
                 defaultChecked={i === 0}
-                className="mt-1 accent-navy"
+                className="mt-1 accent-purple"
               />
               <span>
                 <span className="block text-sm font-medium text-ink">{o.label}</span>
@@ -86,7 +86,7 @@ export function RequestForm({
           rows={3}
           maxLength={2000}
           placeholder="Anything specific you would like us to cover."
-          className="mt-1.5 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/30"
+          className="mt-1.5 w-full rounded border border-line bg-surface-card px-3 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-purple focus:outline-none focus:ring-0"
         />
       </label>
 
@@ -105,7 +105,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="mt-4 rounded bg-navy px-5 py-2.5 text-xs font-semibold text-surface transition-colors hover:bg-navy-50 disabled:opacity-60"
+      className="mt-6 rounded bg-purple px-5 py-2.5 text-xs font-medium text-surface transition-colors hover:bg-purple-70 disabled:opacity-60"
     >
       {pending ? "Sending…" : "Send request"}
     </button>

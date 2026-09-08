@@ -5,7 +5,7 @@ import type {
   PriorityLevel, DdStatus, RiskStatus, RiskLevel, DdSection, DdJurisdiction,
 } from "@/types/database";
 
-export type Tone = "neutral" | "gold" | "positive" | "caution" | "negative" | "muted";
+export type Tone = "neutral" | "accent" | "positive" | "caution" | "negative" | "muted";
 
 // ---- Pipeline stages (Reiwa pipeline board order) --------------------------
 // Note: the DB enum is the canonical lifecycle; the pipeline board adds
@@ -86,7 +86,7 @@ export const STATUS_LABEL: Record<DealStatus, string> = {
 export const STATUS_TONE: Record<DealStatus, Tone> = {
   active: "positive",
   on_hold: "caution",
-  completed: "gold",
+  completed: "accent",
   withdrawn: "muted",
   dead: "negative",
 };
@@ -136,7 +136,7 @@ export const DD_STATUS_TONE: Record<DdStatus, Tone> = {
   not_started: "muted",
   requested: "neutral",
   in_progress: "caution",
-  received: "gold",
+  received: "accent",
   reviewed: "positive",
   issue_identified: "negative",
   resolved: "positive",
@@ -159,7 +159,7 @@ export const JURISDICTION_LABEL: Record<DdJurisdiction, string> = {
 };
 
 export const JURISDICTION_TONE: Record<DdJurisdiction, Tone> = {
-  UK: "neutral", Netherlands: "neutral", Japan: "gold", "Cross-border": "caution",
+  UK: "neutral", Netherlands: "neutral", Japan: "accent", "Cross-border": "caution",
 };
 
 // The Reiwa DD framework sections, in memo order.
@@ -191,7 +191,7 @@ export const RISK_LEVEL_TONE: Record<RiskLevel, Tone> = {
 export function scoreTone(score: number | null | undefined): Tone {
   if (score == null) return "muted";
   if (score >= 70) return "positive"; // Strong Proceed / Proceed
-  if (score >= 55) return "gold"; // Proceed with Caution
+  if (score >= 55) return "accent"; // Proceed with Caution
   if (score >= 40) return "caution"; // Weak
   return "negative"; // Reject
 }
@@ -200,7 +200,7 @@ export function scoreTone(score: number | null | undefined): Tone {
 export function pillarTone(score: number | null | undefined): Tone {
   if (score == null) return "muted";
   if (score >= 7.5) return "positive";
-  if (score >= 5.5) return "gold";
+  if (score >= 5.5) return "accent";
   if (score >= 4) return "caution";
   return "negative";
 }

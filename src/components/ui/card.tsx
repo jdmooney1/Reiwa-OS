@@ -40,7 +40,7 @@ export function CardHeader({
       <div>
         {eyebrow && <div className="eyebrow mb-1">{eyebrow}</div>}
         {title && (
-          <h3 className="font-serif text-base text-ink">{title}</h3>
+          <h3 className="text-base text-ink">{title}</h3>
         )}
       </div>
       {action}

@@ -36,16 +36,16 @@ export function DocumentDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-navy/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-surface-sunken backdrop-blur-sm" onClick={onClose} />
       <aside className="relative flex h-full w-full max-w-xl flex-col bg-surface shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-line bg-surface-card px-5 py-4">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-navy/5 text-ink-muted">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-muted">
               <Icon className="h-5 w-5" strokeWidth={1.5} />
             </div>
             <div className="min-w-0">
-              <h3 className="truncate font-serif text-base text-ink">{doc.file_name}</h3>
+              <h3 className="truncate text-base text-ink">{doc.file_name}</h3>
               <div className="mt-0.5 flex items-center gap-2 text-2xs text-ink-faint">
                 <span>{doc.uploaded_by ?? "—"}</span>
                 <span>·</span>
@@ -84,7 +84,7 @@ export function DocumentDrawer({
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {!ex ? (
             <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-line bg-surface-card py-10 text-center">
-              <Sparkles className="h-6 w-6 text-gold" strokeWidth={1.5} />
+              <Sparkles className="h-6 w-6 text-ink-faint" strokeWidth={1.5} />
               <div className="text-sm font-medium text-ink">Not yet ingested</div>
               <p className="max-w-xs text-xs text-ink-muted">
                 Run AI ingestion to extract key facts, financial figures, lease terms, risks and
@@ -93,7 +93,7 @@ export function DocumentDrawer({
               <button
                 onClick={onIngest}
                 disabled={ingesting}
-                className="mt-1 flex items-center gap-1.5 rounded bg-gold px-3.5 py-2 text-2xs font-semibold text-navy hover:bg-gold-soft disabled:opacity-60"
+                className="mt-1 flex items-center gap-1.5 rounded bg-purple px-3.5 py-2 text-2xs font-semibold text-ink hover:bg-surface-sunken disabled:opacity-60"
               >
                 {ingesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 {ingesting ? "Extracting…" : "Run AI Ingestion"}
@@ -102,7 +102,7 @@ export function DocumentDrawer({
           ) : (
             <div className="space-y-5">
               {/* Summary */}
-              <div className="rounded-lg border border-gold/30 bg-gold/[0.03] px-4 py-3">
+              <div className="rounded-lg border border-line bg-purple/[0.03] px-4 py-3">
                 <div className="eyebrow mb-1">AI Summary</div>
                 <p className="text-sm leading-relaxed text-ink/90">{ex.summary}</p>
               </div>
@@ -203,7 +203,7 @@ function FindingList({
             {action && ActionIcon && (
               <button
                 onClick={() => action.onClick(item)}
-                className="flex shrink-0 items-center gap-0.5 rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-ink-muted opacity-0 transition-opacity hover:border-gold/40 hover:text-gold-deep group-hover:opacity-100"
+                className="flex shrink-0 items-center gap-0.5 rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-ink-muted opacity-0 transition-opacity hover:border-line hover:text-ink-muted group-hover:opacity-100"
               >
                 <ActionIcon className="h-2.5 w-2.5" /> {action.label}
               </button>

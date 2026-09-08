@@ -24,7 +24,7 @@ export function PortalNav() {
   }, []);
 
   return (
-    <nav aria-label="Portal" className="flex items-center gap-1">
+    <nav aria-label="Portal" className="-mb-px flex items-center gap-8">
       {ITEMS.map((item) => {
         const active = item.href === "/portal"
           ? pathname === "/portal" || pathname.startsWith("/portal/opportunities")
@@ -35,18 +35,18 @@ export function PortalNav() {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "relative px-3 py-3 text-xs font-medium tracking-wide transition-colors",
-              active ? "text-surface" : "text-surface/60 hover:text-surface/85",
+              "relative pb-3 text-xs font-medium tracking-wide transition-colors",
+              active ? "text-ink" : "text-ink-muted hover:text-ink",
             )}
           >
             {item.label}
             {item.label === "Compare" && compareCount > 0 && (
-              <span className="ml-1.5 rounded-sm bg-gold/20 px-1.5 py-0.5 text-2xs font-semibold text-gold-soft">
-                {compareCount}
+              <span className="tabular ml-1.5 text-2xs font-medium text-ink-faint">
+                ({compareCount})
               </span>
             )}
             {active && (
-              <span className="absolute inset-x-3 -bottom-px h-px bg-gold" aria-hidden="true" />
+              <span className="absolute inset-x-0 -bottom-px h-0.5 bg-purple" aria-hidden="true" />
             )}
           </Link>
         );

@@ -75,7 +75,7 @@ export function InvestorOrgDetail({
           <ChevronLeft className="h-3 w-3" /> Investor Organisations
         </Link>
         <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="font-serif text-2xl text-ink">{org.name}</h1>
+          <h1 className="text-2xl text-ink">{org.name}</h1>
           <Badge tone={INVESTOR_ORG_STATUS_TONE[org.status]} dot>
             {INVESTOR_ORG_STATUS_LABEL[org.status]}
           </Badge>
@@ -100,7 +100,7 @@ export function InvestorOrgDetail({
               {/* Featured slot */}
               <div>
                 <div className="mb-2 flex items-center gap-1.5">
-                  <Star className="h-3.5 w-3.5 text-gold-deep" strokeWidth={1.75} />
+                  <Star className="h-3.5 w-3.5 text-ink-muted" strokeWidth={1.75} />
                   <span className="eyebrow">Featured</span>
                   <span className="text-2xs text-ink-faint">— one visible featured opportunity per organisation</span>
                 </div>
@@ -166,7 +166,7 @@ export function InvestorOrgDetail({
                 <p className="text-xs text-ink-faint">
                   Every existing publication is already assigned to this organisation.
                   Create publications from internal opportunities under{" "}
-                  <Link href="/admin/publications" className="text-gold-deep hover:underline">Publications</Link>.
+                  <Link href="/admin/publications" className="text-ink-muted hover:underline">Publications</Link>.
                 </p>
               ) : (
                 <form action={assignPublicationAction.bind(null, org.investorOrgId)}
@@ -174,7 +174,7 @@ export function InvestorOrgDetail({
                   <label className="block md:col-span-2">
                     <span className="eyebrow">Publication</span>
                     <select name="publicationId" required defaultValue=""
-                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-gold focus:outline-none">
+                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-line-strong focus:outline-none">
                       <option value="" disabled>Choose a publication…</option>
                       {assignable.map((o) => (
                         <option key={o.publicationId} value={o.publicationId}>
@@ -186,7 +186,7 @@ export function InvestorOrgDetail({
                   <label className="block">
                     <span className="eyebrow">Placement</span>
                     <select name="placement" defaultValue="secondary"
-                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-gold focus:outline-none">
+                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-line-strong focus:outline-none">
                       <option value="secondary">Also Available</option>
                       <option value="featured">Featured (replaces current)</option>
                     </select>
@@ -194,7 +194,7 @@ export function InvestorOrgDetail({
                   <label className="block">
                     <span className="eyebrow">Document access</span>
                     <select name="documentAccessLevel" defaultValue="standard"
-                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-gold focus:outline-none">
+                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-line-strong focus:outline-none">
                       <option value="standard">Standard</option>
                       <option value="diligence">Diligence</option>
                     </select>
@@ -202,15 +202,15 @@ export function InvestorOrgDetail({
                   <label className="block md:col-span-2 xl:col-span-3">
                     <span className="eyebrow">Investor note (optional)</span>
                     <input name="investorNote" placeholder="A line the investor sees against this opportunity"
-                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
                   </label>
                   <div className="flex items-end justify-between gap-3 md:col-span-2 xl:col-span-1">
                     <label className="flex items-center gap-2 pb-2 text-xs text-ink">
-                      <input type="checkbox" name="isVisible" defaultChecked className="accent-gold" />
+                      <input type="checkbox" name="isVisible" defaultChecked className="accent-purple" />
                       Visible immediately
                     </label>
                     <button type="submit"
-                      className="rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
+                      className="rounded bg-purple px-4 py-2 text-xs font-semibold text-surface hover:bg-purple-70">
                       Assign
                     </button>
                   </div>
@@ -229,12 +229,12 @@ export function InvestorOrgDetail({
                 <label className="block">
                   <span className="eyebrow">Name</span>
                   <input name="name" defaultValue={org.name} required
-                    className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+                    className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
                 </label>
                 <label className="block">
                   <span className="eyebrow">Status</span>
                   <select name="status" defaultValue={org.status}
-                    className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-gold focus:outline-none">
+                    className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-line-strong focus:outline-none">
                     <option value="active">Active</option>
                     <option value="suspended">Suspended — portal access paused</option>
                     <option value="closed">Closed</option>
@@ -243,12 +243,12 @@ export function InvestorOrgDetail({
                 <label className="block">
                   <span className="eyebrow">Notes (internal)</span>
                   <textarea name="notes" rows={3} defaultValue={org.notes ?? ""}
-                    className="mt-1 w-full rounded border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+                    className="mt-1 w-full rounded border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
                 </label>
                 <div className="flex items-center justify-between">
                   <span className="text-2xs text-ink-faint">Created {formatDate(org.createdAt)}</span>
                   <button type="submit"
-                    className="rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
+                    className="rounded bg-purple px-4 py-2 text-xs font-semibold text-surface hover:bg-purple-70">
                     Save
                   </button>
                 </div>
@@ -289,20 +289,20 @@ function AssignmentRow({
   return (
     <div className={cn(
       "rounded-lg border px-4 py-3",
-      featured ? "border-gold/40 bg-gold/5" : "border-line bg-surface",
+      featured ? "border-line bg-surface-sunken" : "border-line bg-surface",
       hidden && "opacity-70",
     )}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Link href={`/admin/publications/${a.publication.publicationId}`}
-              className="truncate text-sm font-medium text-ink hover:text-gold-deep">
+              className="truncate text-sm font-medium text-ink hover:text-ink-muted">
               {title}
             </Link>
             <Badge tone={WORKFLOW_TONE[a.publication.status]} dot>
               {WORKFLOW_LABEL[a.publication.status]}
             </Badge>
-            <Badge tone={e.documentAccessLevel === "diligence" ? "gold" : "neutral"}>
+            <Badge tone={e.documentAccessLevel === "diligence" ? "accent" : "neutral"}>
               {e.documentAccessLevel === "diligence" ? "Diligence docs" : "Standard docs"}
             </Badge>
           </div>
@@ -327,8 +327,8 @@ function AssignmentRow({
             >
               <input name="investorNote" defaultValue={e.investorNote ?? ""} autoFocus
                 placeholder="A line the investor sees against this opportunity"
-                className="h-8 w-72 rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
-              <button type="submit" className="rounded bg-navy px-2.5 py-1.5 text-2xs font-semibold text-surface">Save</button>
+                className="h-8 w-72 rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-line-strong focus:outline-none" />
+              <button type="submit" className="rounded bg-purple px-2.5 py-1.5 text-2xs font-semibold text-surface">Save</button>
               <button type="button" onClick={() => setEditingNote(false)} className="text-2xs text-ink-faint hover:text-ink">Cancel</button>
             </form>
           )}
@@ -407,7 +407,7 @@ function ContactsCard({
         title="Contacts"
         action={
           <button onClick={() => setAdding((v) => !v)}
-            className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-gold/40 hover:text-ink">
+            className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-line hover:text-ink">
             {adding ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {adding ? "Cancel" : "Add contact"}
           </button>
         }
@@ -420,7 +420,7 @@ function ContactsCard({
           }} className="space-y-3 border-b border-line bg-surface-sunken/50 px-5 py-4">
             <ContactFields />
             <div className="flex justify-end">
-              <button type="submit" className="rounded bg-navy px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-navy-50">
+              <button type="submit" className="rounded bg-purple px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-purple-70">
                 Add Contact
               </button>
             </div>
@@ -443,7 +443,7 @@ function ContactsCard({
                     <div className="flex justify-end gap-2">
                       <button type="button" onClick={() => setEditingId(null)}
                         className="text-2xs text-ink-faint hover:text-ink">Cancel</button>
-                      <button type="submit" className="rounded bg-navy px-3 py-1.5 text-2xs font-semibold text-surface">Save</button>
+                      <button type="submit" className="rounded bg-purple px-3 py-1.5 text-2xs font-semibold text-surface">Save</button>
                     </div>
                   </form>
                 ) : (
@@ -527,7 +527,7 @@ function ContactAccess({
   }
 
   const stateBadge = invite && (
-    invite.state === "active" ? <Badge tone="gold" dot>Invite active until {formatDate(invite.expiresAt)}</Badge>
+    invite.state === "active" ? <Badge tone="accent" dot>Invite active until {formatDate(invite.expiresAt)}</Badge>
     : invite.state === "accepted" ? <Badge tone="positive" dot>Invite accepted {formatDate(invite.acceptedAt)}</Badge>
     : invite.state === "expired" ? <Badge tone="caution" dot>Invite expired {formatDate(invite.expiresAt)}</Badge>
     : <Badge tone="muted" dot>Invite revoked</Badge>
@@ -560,7 +560,7 @@ function ContactAccess({
         </div>
       </div>
       {issued && (
-        <div className="mt-2 rounded border border-gold/40 bg-gold/5 px-3 py-2">
+        <div className="mt-2 rounded border border-line bg-surface-sunken px-3 py-2">
           <div className="eyebrow mb-1">Invitation link — shown once, copy it now</div>
           <input readOnly
             value={typeof window !== "undefined" ? `${window.location.origin}${issued.path}` : issued.path}
@@ -582,17 +582,17 @@ function ContactFields({ contact }: { contact?: InvestorContact }) {
       <label className="block">
         <span className="eyebrow">Name</span>
         <input name="name" required defaultValue={contact?.name ?? ""}
-          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-line-strong focus:outline-none" />
       </label>
       <label className="block">
         <span className="eyebrow">Title</span>
         <input name="title" defaultValue={contact?.title ?? ""}
-          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-line-strong focus:outline-none" />
       </label>
       <label className="block md:col-span-2">
         <span className="eyebrow">Email</span>
         <input name="email" type="email" required defaultValue={contact?.email ?? ""}
-          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-line-strong focus:outline-none" />
       </label>
     </div>
   );
@@ -612,7 +612,7 @@ function SmallBtn({
     <button type="button" onClick={onClick} disabled={disabled} title={title}
       className={cn(
         "flex items-center gap-1 rounded border border-line px-2 py-1 text-2xs font-medium text-ink-muted transition-colors disabled:opacity-50",
-        tone === "negative" ? "hover:border-negative/40 hover:text-negative" : "hover:border-gold/40 hover:text-ink",
+        tone === "negative" ? "hover:border-negative/40 hover:text-negative" : "hover:border-line hover:text-ink",
       )}>
       {children}
     </button>
@@ -629,7 +629,7 @@ function IconBtn({
 }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled} aria-label={label} title={label}
-      className="rounded border border-line p-1 text-ink-muted hover:border-gold/40 hover:text-ink disabled:opacity-50">
+      className="rounded border border-line p-1 text-ink-muted hover:border-line hover:text-ink disabled:opacity-50">
       {children}
     </button>
   );

@@ -3,10 +3,10 @@ import { scoreTone, pillarTone, type Tone } from "@/lib/domain";
 
 const RING_STROKE: Record<Tone, string> = {
   positive: "#3E7C5A",
-  gold: "#C2A14E",
+  accent: "#5F4A68",
   caution: "#B98427",
   negative: "#A6483D",
-  neutral: "#C2A14E",
+  neutral: "#5F4A68",
   muted: "#8A97A1",
 };
 
@@ -56,12 +56,12 @@ export function ScoreDial({
         <span
           className={cn(
             "tabular text-lg font-semibold",
-            dark ? "text-surface" : "text-ink",
+            dark ? "text-ink" : "text-ink",
           )}
         >
           {display}
         </span>
-        <span className={cn("text-[9px] uppercase tracking-label", dark ? "text-surface/60" : "text-ink-faint")}>
+        <span className={cn("text-[9px] uppercase tracking-label", dark ? "text-ink-faint" : "text-ink-faint")}>
           / {max}
         </span>
       </div>

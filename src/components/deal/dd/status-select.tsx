@@ -6,12 +6,12 @@ import { cn } from "@/lib/utils";
 
 const TONE_DOT: Record<Tone, string> = {
   positive: "bg-positive", caution: "bg-caution", negative: "bg-negative",
-  gold: "bg-gold", neutral: "bg-ink-faint", muted: "bg-ink-faint",
+  accent: "bg-purple", neutral: "bg-ink-faint", muted: "bg-ink-faint",
 };
 
 const TONE_TEXT: Record<Tone, string> = {
   positive: "text-positive", caution: "text-caution", negative: "text-negative",
-  gold: "text-gold-deep", neutral: "text-ink", muted: "text-ink-muted",
+  accent: "text-ink-muted", neutral: "text-ink", muted: "text-ink-muted",
 };
 
 /** Inline status control — reads like a chip, edits like a select. */
@@ -31,7 +31,7 @@ export function StatusSelect({
         onChange={(e) => onChange(e.target.value as DdStatus)}
         className={cn(
           "h-7 cursor-pointer appearance-none rounded border border-line bg-surface-card pl-5 pr-6 text-2xs font-medium",
-          "focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30",
+          "focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30",
           TONE_TEXT[tone],
         )}
       >

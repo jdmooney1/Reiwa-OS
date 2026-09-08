@@ -13,7 +13,7 @@ export function PageHeader({
     <div className="flex items-end justify-between gap-6 border-b border-line px-8 py-6">
       <div>
         {eyebrow && <div className="eyebrow mb-1.5">{eyebrow}</div>}
-        <h1 className="font-serif text-2xl text-ink">{title}</h1>
+        <h1 className="text-2xl text-ink">{title}</h1>
         {description && (
           <p className="mt-1 max-w-2xl text-sm text-ink-muted">{description}</p>
         )}

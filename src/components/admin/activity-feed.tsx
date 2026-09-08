@@ -61,7 +61,7 @@ export function ActivityFeed({
                 <td className="px-3 py-2.5">
                   <Link
                     href={`/admin/investors/${r.investorOrgId}`}
-                    className="text-sm text-ink hover:text-gold-deep"
+                    className="text-sm text-ink hover:text-ink-muted"
                   >
                     {r.investorOrgName}
                   </Link>
@@ -77,7 +77,7 @@ export function ActivityFeed({
                 {r.publicationId && r.publicationTitle ? (
                   <Link
                     href={`/admin/publications/${r.publicationId}`}
-                    className="text-sm text-ink hover:text-gold-deep"
+                    className="text-sm text-ink hover:text-ink-muted"
                   >
                     {r.publicationTitle}
                   </Link>
@@ -121,7 +121,7 @@ export function ActivityCounts({
           <dt className="text-2xs uppercase tracking-label text-ink-faint">
             {EVENT_LABEL[type as keyof typeof EVENT_LABEL] ?? type}
           </dt>
-          <dd className="font-serif text-lg tabular-nums text-ink">{n}</dd>
+          <dd className="text-lg tabular-nums text-ink">{n}</dd>
         </div>
       ))}
     </dl>

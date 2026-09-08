@@ -50,7 +50,7 @@ export function PublicationsDirectory({
             <button key={f.key} onClick={() => setFilter(f.key)}
               className={cn(
                 "rounded px-3 py-1.5 text-xs font-medium transition-colors",
-                filter === f.key ? "bg-navy text-surface" : "text-ink-muted hover:text-ink",
+                filter === f.key ? "bg-purple text-surface" : "text-ink-muted hover:text-ink",
               )}>
               {f.label}
               {f.key === "source_changed" && publications.some((p) => p.sourceChanged) && (
@@ -60,7 +60,7 @@ export function PublicationsDirectory({
           ))}
         </div>
         <button onClick={() => setCreating((v) => !v)}
-          className="flex items-center gap-1.5 rounded bg-navy px-3.5 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
+          className="flex items-center gap-1.5 rounded bg-purple px-3.5 py-2 text-xs font-semibold text-surface hover:bg-purple-70">
           {creating ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
           {creating ? "Cancel" : "New Publication"}
         </button>
@@ -68,7 +68,7 @@ export function PublicationsDirectory({
 
       {/* Create from an eligible internal opportunity */}
       {creating && (
-        <div className="mb-5 rounded-lg border border-gold/30 bg-surface-card">
+        <div className="mb-5 rounded-lg border border-line bg-surface-card">
           <div className="border-b border-line px-5 py-3.5">
             <div className="eyebrow mb-1">Create publication</div>
             <p className="text-xs text-ink-muted">
@@ -94,7 +94,7 @@ export function PublicationsDirectory({
                   </div>
                   <button disabled={pending}
                     onClick={() => start(() => preparePublicationAction(o.opportunityId))}
-                    className="flex shrink-0 items-center gap-1.5 rounded bg-gold px-3 py-1.5 text-2xs font-semibold text-navy hover:bg-gold-soft disabled:opacity-60">
+                    className="flex shrink-0 items-center gap-1.5 rounded bg-purple px-3 py-1.5 text-2xs font-semibold text-ink hover:bg-surface-sunken disabled:opacity-60">
                     {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                     Prepare for Investors
                   </button>
@@ -139,7 +139,7 @@ export function PublicationsDirectory({
                 <tr key={p.publicationId} className="group hover:bg-surface-sunken/60">
                   <td className="px-5 py-3">
                     <Link href={`/admin/publications/${p.publicationId}`}
-                      className="font-medium text-ink group-hover:text-gold-deep">
+                      className="font-medium text-ink group-hover:text-ink-muted">
                       {p.title}
                     </Link>
                     {p.opportunityName && p.opportunityName !== p.title && (

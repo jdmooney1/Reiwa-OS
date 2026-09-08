@@ -32,7 +32,7 @@ export function DocumentList({
 }) {
   if (documents.length === 0) {
     return (
-      <p className="rounded border border-dashed border-line px-5 py-8 text-center text-sm text-ink-muted">
+      <p className="border-t border-line py-6 text-sm text-ink-muted">
         No documents have been released with this opportunity yet.
       </p>
     );
@@ -40,7 +40,7 @@ export function DocumentList({
 
   return (
     <>
-      <ul className="divide-y divide-line rounded border border-line">
+      <ul className="divide-y divide-line border-y border-line">
         {documents.map((d) => (
           <li key={d.documentId} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5">
             <FileText className="h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} aria-hidden="true" />
@@ -52,13 +52,13 @@ export function DocumentList({
               </div>
             </div>
             {d.accessLevel === "diligence" && (
-              <Badge tone="gold">{DOC_LEVEL_LABEL.diligence}</Badge>
+              <Badge tone="muted">{DOC_LEVEL_LABEL.diligence}</Badge>
             )}
             <a
               href={`/portal/documents/${d.documentId}`}
               // The link leaves for a signed storage URL; keep it out of the referer.
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-gold/40 hover:text-ink focus-visible:border-gold"
+              className="inline-flex items-center gap-1.5 border-b border-purple pb-0.5 text-2xs font-medium text-purple transition-colors hover:border-purple-70 hover:text-purple-70"
             >
               <Download className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
               <span>Download</span>

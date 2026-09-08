@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 const TEXT: Record<Tone, string> = {
   positive: "text-positive", negative: "text-negative", caution: "text-caution",
-  gold: "text-gold-deep", neutral: "text-ink-muted", muted: "text-ink-faint",
+  accent: "text-ink-muted", neutral: "text-ink-muted", muted: "text-ink-faint",
 };
 
 /**

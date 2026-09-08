@@ -34,10 +34,10 @@ export function PipelineTable({ deals }: { deals: DealSummary[] }) {
             {deals.map((deal) => (
               <tr
                 key={deal.deal_id}
-                className="border-b border-line last:border-0 hover:bg-gold/[0.04]"
+                className="border-b border-line last:border-0 hover:bg-purple/[0.04]"
               >
                 <td className="px-3 py-2.5">
-                  <Link href={`/deals/${deal.deal_id}`} className="font-medium text-ink hover:text-gold-deep">
+                  <Link href={`/deals/${deal.deal_id}`} className="font-medium text-ink hover:text-ink-muted">
                     {deal.asset_name}
                   </Link>
                   <div className="text-2xs text-ink-faint">{deal.submarket}</div>
@@ -55,7 +55,7 @@ export function PipelineTable({ deals }: { deals: DealSummary[] }) {
                       className={cn(
                         "font-medium",
                         scoreTone(deal.overall_score) === "positive" && "text-positive",
-                        scoreTone(deal.overall_score) === "gold" && "text-gold-deep",
+                        scoreTone(deal.overall_score) === "accent" && "text-ink-muted",
                         scoreTone(deal.overall_score) === "caution" && "text-caution",
                         scoreTone(deal.overall_score) === "negative" && "text-negative",
                       )}

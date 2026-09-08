@@ -56,7 +56,7 @@ export function OverviewTab({
               <ol className="space-y-3">
                 {narrative.businessPlan.map((step, i) => (
                   <li key={i} className="flex gap-3">
-                    <span className="tabular mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gold/40 text-2xs font-semibold text-gold-deep">
+                    <span className="tabular mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-line text-2xs font-semibold text-ink-muted">
                       {i + 1}
                     </span>
                     <span className="text-sm leading-relaxed text-ink">{step}</span>
@@ -106,7 +106,7 @@ function Prose({
   accent?: boolean;
 }) {
   return (
-    <Card className={accent ? "border-gold/30 bg-gold/[0.03]" : undefined}>
+    <Card className={accent ? "border-line bg-purple/[0.03]" : undefined}>
       <CardHeader eyebrow={eyebrow} title={title} />
       <CardBody>
         {body ? (

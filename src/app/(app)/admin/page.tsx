@@ -39,8 +39,8 @@ export default async function AdminHomePage() {
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
           {stats.map((s) => (
             <Link key={s.label} href={s.href}
-              className="group rounded-lg border border-line bg-surface-card px-4 py-3.5 transition-colors hover:border-gold/40">
-              <div className="tabular font-serif text-2xl text-ink">{s.value}</div>
+              className="group rounded-lg border border-line bg-surface-card px-4 py-3.5 transition-colors hover:border-line">
+              <div className="tabular text-2xl text-ink">{s.value}</div>
               <div className="eyebrow mt-1 group-hover:text-ink-muted">{s.label}</div>
             </Link>
           ))}
@@ -53,7 +53,7 @@ export default async function AdminHomePage() {
             eyebrow={`Recorded investor activity · last ${signals.windowDays} days`}
             title="Commercial signals"
             action={
-              <Link href="/admin/activity" className="text-2xs font-medium text-ink-muted hover:text-gold-deep">
+              <Link href="/admin/activity" className="text-2xs font-medium text-ink-muted hover:text-ink-muted">
                 Full activity record →
               </Link>
             }
@@ -64,7 +64,7 @@ export default async function AdminHomePage() {
               {signals.openRequests === 0 ? (
                 <p className="text-xs text-ink-faint">Nothing awaiting a response.</p>
               ) : (
-                <Link href="/admin/activity" className="font-serif text-2xl text-ink hover:text-gold-deep">
+                <Link href="/admin/activity" className="text-2xl text-ink hover:text-ink-muted">
                   {signals.openRequests}
                 </Link>
               )}
@@ -77,7 +77,7 @@ export default async function AdminHomePage() {
                 <ul className="space-y-1">
                   {signals.activeOrganisations.slice(0, 5).map((o) => (
                     <li key={o.investorOrgId} className="flex items-baseline justify-between gap-3">
-                      <Link href={`/admin/investors/${o.investorOrgId}`} className="truncate text-xs text-ink hover:text-gold-deep">{o.name}</Link>
+                      <Link href={`/admin/investors/${o.investorOrgId}`} className="truncate text-xs text-ink hover:text-ink-muted">{o.name}</Link>
                       <span className="shrink-0 text-2xs text-ink-faint">{timeAgo(o.lastActivityAt)}</span>
                     </li>
                   ))}
@@ -92,7 +92,7 @@ export default async function AdminHomePage() {
                 <ul className="space-y-1">
                   {signals.activePublications.slice(0, 5).map((p) => (
                     <li key={p.publicationId} className="flex items-baseline justify-between gap-3">
-                      <Link href={`/admin/publications/${p.publicationId}`} className="truncate text-xs text-ink hover:text-gold-deep">{p.title}</Link>
+                      <Link href={`/admin/publications/${p.publicationId}`} className="truncate text-xs text-ink hover:text-ink-muted">{p.title}</Link>
                       <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{p.events}</span>
                     </li>
                   ))}
@@ -122,7 +122,7 @@ export default async function AdminHomePage() {
                             Version {v.versionNumber} · submitted {formatDate(v.submittedAt)}
                           </div>
                         </div>
-                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-faint group-hover:text-gold-deep" />
+                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-faint group-hover:text-ink-muted" />
                       </Link>
                     </li>
                   ))}
@@ -149,7 +149,7 @@ export default async function AdminHomePage() {
                             Published {formatDate(p.lastPublishedAt)} · no investor can see it
                           </div>
                         </div>
-                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-faint group-hover:text-gold-deep" />
+                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-faint group-hover:text-ink-muted" />
                       </Link>
                     </li>
                   ))}
@@ -171,7 +171,7 @@ export default async function AdminHomePage() {
                       <Link href={`/admin/investors/${o.investorOrgId}`}
                         className="group flex items-center justify-between gap-3 px-5 py-3 hover:bg-surface-sunken/60">
                         <div className="truncate text-sm text-ink">{o.name}</div>
-                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-faint group-hover:text-gold-deep" />
+                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-faint group-hover:text-ink-muted" />
                       </Link>
                     </li>
                   ))}

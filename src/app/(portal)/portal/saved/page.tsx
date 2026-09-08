@@ -34,14 +34,14 @@ export default async function PortalSavedPage() {
           action={
             <Link
               href="/portal"
-              className="rounded bg-navy px-5 py-2.5 text-xs font-semibold text-surface hover:bg-navy-50"
+              className="rounded bg-purple px-5 py-2.5 text-xs font-medium text-surface transition-colors hover:bg-purple-70"
             >
               Browse opportunities
             </Link>
           }
         />
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div>
           {saved.map((o) => (
             <OpportunityCard key={o.publicationId} opportunity={o} saved />
           ))}

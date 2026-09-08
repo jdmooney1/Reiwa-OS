@@ -103,9 +103,9 @@ export function PortfolioDashboard({
                   const tone = s.irr_delta_ppt == null ? "muted" : s.irr_delta_ppt >= 0 ? "positive" : "negative";
                   const perfLabel = s.irr_delta_ppt == null ? "—" : s.irr_delta_ppt >= 0.3 ? "Ahead" : s.irr_delta_ppt <= -0.3 ? "Behind" : "On track";
                   return (
-                    <tr key={f.asset.asset_id} className="hover:bg-gold/[0.04]">
+                    <tr key={f.asset.asset_id} className="hover:bg-purple/[0.04]">
                       <td className="px-3 py-2.5">
-                        <Link href={`/assets/${f.asset.asset_id}`} className="font-medium text-ink hover:text-gold-deep">
+                        <Link href={`/assets/${f.asset.asset_id}`} className="font-medium text-ink hover:text-ink-muted">
                           {f.asset.name}
                         </Link>
                         <div className="mt-0.5">
@@ -182,7 +182,7 @@ function ExposureCard({ title, rows, total }: { title: string; rows: { label: st
                 <span className="tabular text-ink-muted">{formatMoneyCompact(r.value, "GBP")} · {pct.toFixed(0)}%</span>
               </div>
               <div className="mt-1 h-1.5 rounded-full bg-surface-sunken">
-                <div className="h-full rounded-full bg-gold" style={{ width: `${pct}%` }} />
+                <div className="h-full rounded-full bg-purple" style={{ width: `${pct}%` }} />
               </div>
             </div>
           );

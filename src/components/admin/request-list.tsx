@@ -60,7 +60,7 @@ export function RequestList({
                   <>
                     <Link
                       href={`/admin/investors/${r.investorOrgId}`}
-                      className="text-ink-muted hover:text-gold-deep"
+                      className="text-ink-muted hover:text-ink-muted"
                     >
                       {r.investorOrgName}
                     </Link>
@@ -73,7 +73,7 @@ export function RequestList({
                     <span className="px-1.5 text-line">·</span>
                     <Link
                       href={`/admin/publications/${r.publicationId}`}
-                      className="text-ink-muted hover:text-gold-deep"
+                      className="text-ink-muted hover:text-ink-muted"
                     >
                       {r.publicationTitle}
                     </Link>
@@ -97,7 +97,7 @@ export function RequestList({
                   onClick={() => start(async () => {
                     await setRequestStatusAction(r.requestId, n.status);
                   })}
-                  className="rounded border border-line px-2.5 py-1 text-2xs font-medium text-ink-muted transition-colors hover:border-gold/40 hover:text-ink disabled:opacity-50"
+                  className="rounded border border-line px-2.5 py-1 text-2xs font-medium text-ink-muted transition-colors hover:border-line hover:text-ink disabled:opacity-50"
                 >
                   {n.label}
                 </button>

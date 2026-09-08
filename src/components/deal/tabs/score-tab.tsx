@@ -206,14 +206,14 @@ export function ScoreTab({ deal, score }: { deal: Deal; score: InvestmentScore |
       </Card>
 
       {/* Auto-generated summary placeholder */}
-      <Card className="border-gold/30 bg-gold/[0.03]">
+      <Card className="border-line bg-purple/[0.03]">
         <CardHeader
           eyebrow="Investment Committee"
           title="Auto-Generated Summary"
           action={
             <button
               disabled
-              className="flex items-center gap-1.5 rounded border border-gold/40 px-2.5 py-1 text-2xs font-medium text-gold-deep opacity-70"
+              className="flex items-center gap-1.5 rounded border border-line px-2.5 py-1 text-2xs font-medium text-ink-muted opacity-70"
             >
               <Sparkles className="h-3 w-3" /> Regenerate
             </button>
@@ -238,8 +238,8 @@ export function ScoreTab({ deal, score }: { deal: Deal; score: InvestmentScore |
 }
 
 const STROKE: Record<string, string> = {
-  positive: "#3E7C5A", gold: "#C2A14E", caution: "#B98427", negative: "#A6483D",
-  neutral: "#C2A14E", muted: "#8A97A1",
+  positive: "#3F5D4A", accent: "#5F4A68", caution: "#8A6A2F", negative: "#8C3F38",
+  neutral: "#5F4A68", muted: "#8A97A1",
 };
 
 function ScoreStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -250,7 +250,7 @@ function ScoreStepper({ value, onChange }: { value: number; onChange: (v: number
         className={cn(
           "tabular w-6 text-center text-sm font-semibold",
           tone === "positive" && "text-positive",
-          tone === "gold" && "text-gold-deep",
+          tone === "accent" && "text-ink-muted",
           tone === "caution" && "text-caution",
           tone === "negative" && "text-negative",
         )}

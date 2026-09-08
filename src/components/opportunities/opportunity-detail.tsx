@@ -47,10 +47,10 @@ export function OpportunityDetail({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5">
-              <h1 className="font-serif text-2xl text-ink">{opp.name}</h1>
+              <h1 className="text-2xl text-ink">{opp.name}</h1>
               <Badge tone="neutral">{STAGE_LABEL[opp.stage]}</Badge>
               {converted
-                ? <Badge tone="gold" dot>Converted</Badge>
+                ? <Badge tone="accent" dot>Converted</Badge>
                 : isActive ? <Badge tone="positive" dot>Active</Badge> : <Badge tone="negative" dot>{opp.status}</Badge>}
             </div>
             <div className="mt-1 text-sm text-ink-muted">
@@ -62,20 +62,20 @@ export function OpportunityDetail({
             {portalAdmin && (
               publicationId ? (
                 <Link href={`/admin/publications/${publicationId}`}
-                  className="flex items-center gap-1.5 rounded border border-gold/40 bg-gold/10 px-3.5 py-2 text-xs font-semibold text-gold-deep hover:bg-gold/20">
+                  className="flex items-center gap-1.5 rounded border border-line bg-surface-sunken px-3.5 py-2 text-xs font-semibold text-ink-muted hover:bg-surface-sunken">
                   <Landmark className="h-3.5 w-3.5" /> View Investor Publication
                 </Link>
               ) : (
                 <button onClick={() => start(() => preparePublicationAction(id))} disabled={pending}
                   title="Creates a draft investor publication from the approved field whitelist"
-                  className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-semibold text-ink-muted hover:border-gold/40 hover:text-ink disabled:opacity-60">
+                  className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-semibold text-ink-muted hover:border-line hover:text-ink disabled:opacity-60">
                   {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Landmark className="h-3.5 w-3.5" />}
                   Prepare for Investors
                 </button>
               )
             )}
             {converted && opp.assetId && (
-              <Link href={`/assets/${opp.assetId}`} className="flex items-center gap-1.5 rounded bg-gold px-3.5 py-2 text-xs font-semibold text-navy hover:bg-gold-soft">
+              <Link href={`/assets/${opp.assetId}`} className="flex items-center gap-1.5 rounded bg-purple px-3.5 py-2 text-xs font-semibold text-ink hover:bg-surface-sunken">
                 View Asset <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             )}
@@ -100,9 +100,9 @@ export function OpportunityDetail({
                       onClick={() => start(() => setStageAction(id, s))}
                       className={cn(
                         "flex items-center gap-1 rounded border px-2.5 py-1.5 text-2xs font-medium transition-colors disabled:opacity-60",
-                        current ? "border-navy bg-navy text-surface"
-                          : done ? "border-gold/40 bg-gold/10 text-gold-deep"
-                          : "border-line bg-surface-card text-ink-muted hover:border-gold/40",
+                        current ? "border-line-strong bg-purple text-surface"
+                          : done ? "border-line bg-surface-sunken text-ink-muted"
+                          : "border-line bg-surface-card text-ink-muted hover:border-line",
                       )}
                     >
                       {done && <Check className="h-3 w-3" />} {STAGE_LABEL[s]}
@@ -116,7 +116,7 @@ export function OpportunityDetail({
                 <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4">
                   {!converted && (opp.stage === "approved" || opp.stage === "acquired") && isActive && (
                     <button onClick={() => start(() => convertToAssetAction(id))} disabled={pending}
-                      className="flex items-center gap-1.5 rounded bg-gold px-3.5 py-2 text-xs font-semibold text-navy hover:bg-gold-soft disabled:opacity-60">
+                      className="flex items-center gap-1.5 rounded bg-purple px-3.5 py-2 text-xs font-semibold text-ink hover:bg-surface-sunken disabled:opacity-60">
                       {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
                       Convert to Asset
                     </button>
@@ -164,10 +164,10 @@ export function OpportunityDetail({
                   <label className="block">
                     <span className="eyebrow">Thesis / summary</span>
                     <textarea name="summary" rows={3} defaultValue={opp.summary ?? ""}
-                      className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+                      className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
                   </label>
                   <div className="flex justify-end">
-                    <button type="submit" className="rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50">Save changes</button>
+                    <button type="submit" className="rounded bg-purple px-4 py-2 text-xs font-semibold text-surface hover:bg-purple-70">Save changes</button>
                   </div>
                 </form>
               </CardBody>
@@ -220,7 +220,7 @@ function Edit({ label, name, type = "text", defaultValue, step }: {
     <label className="block">
       <span className="eyebrow">{label}</span>
       <input name={name} type={type} step={step} defaultValue={defaultValue}
-        className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+        className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
     </label>
   );
 }

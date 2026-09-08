@@ -41,12 +41,12 @@ export function InvestorOrgDirectory({ orgs }: { orgs: InvestorOrgSummary[] }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search organisations…"
-            className="h-9 w-72 rounded border border-line bg-surface-card pl-8 pr-3 text-sm text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30"
+            className="h-9 w-72 rounded border border-line bg-surface-card pl-8 pr-3 text-sm text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30"
           />
         </div>
         <button
           onClick={() => setCreating((v) => !v)}
-          className="flex items-center gap-1.5 rounded bg-navy px-3.5 py-2 text-xs font-semibold text-surface hover:bg-navy-50"
+          className="flex items-center gap-1.5 rounded bg-purple px-3.5 py-2 text-xs font-semibold text-surface hover:bg-purple-70"
         >
           {creating ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
           {creating ? "Cancel" : "New Investor Organisation"}
@@ -55,18 +55,18 @@ export function InvestorOrgDirectory({ orgs }: { orgs: InvestorOrgSummary[] }) {
 
       {/* Create panel */}
       {creating && (
-        <div className="mb-5 rounded-lg border border-gold/30 bg-surface-card p-5">
+        <div className="mb-5 rounded-lg border border-line bg-surface-card p-5">
           <div className="eyebrow mb-3">New investor organisation</div>
           <form action={createInvestorOrgAction} className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <label className="block md:col-span-1">
               <span className="eyebrow">Name</span>
               <input name="name" required
-                className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+                className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
             </label>
             <label className="block">
               <span className="eyebrow">Status</span>
               <select name="status" defaultValue="active"
-                className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-gold focus:outline-none">
+                className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-line-strong focus:outline-none">
                 <option value="active">Active</option>
                 <option value="suspended">Suspended</option>
                 <option value="closed">Closed</option>
@@ -75,11 +75,11 @@ export function InvestorOrgDirectory({ orgs }: { orgs: InvestorOrgSummary[] }) {
             <label className="block">
               <span className="eyebrow">Notes (internal)</span>
               <input name="notes"
-                className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+                className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
             </label>
             <div className="md:col-span-3 flex justify-end">
               <button type="submit"
-                className="rounded bg-gold px-4 py-2 text-xs font-semibold text-navy hover:bg-gold-soft">
+                className="rounded bg-purple px-4 py-2 text-xs font-semibold text-ink hover:bg-surface-sunken">
                 Create Organisation
               </button>
             </div>
@@ -117,7 +117,7 @@ export function InvestorOrgDirectory({ orgs }: { orgs: InvestorOrgSummary[] }) {
                 <tr key={o.investorOrgId} className="group hover:bg-surface-sunken/60">
                   <td className="px-5 py-3">
                     <Link href={`/admin/investors/${o.investorOrgId}`}
-                      className="font-medium text-ink group-hover:text-gold-deep">
+                      className="font-medium text-ink group-hover:text-ink-muted">
                       {o.name}
                     </Link>
                     {o.linkedInternalOrganizationName && (

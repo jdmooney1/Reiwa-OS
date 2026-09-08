@@ -14,7 +14,7 @@ function Section({
   return (
     <section className="mt-10">
       <div className="mb-4 flex items-baseline justify-between gap-4 border-b border-line pb-2">
-        <h2 className="font-serif text-lg text-ink">{title}</h2>
+        <h2 className="text-lg text-ink">{title}</h2>
         {note && <span className="text-2xs uppercase tracking-label text-ink-faint">{note}</span>}
       </div>
       {children}
@@ -116,7 +116,7 @@ export function OrgActivitySection({
                 <li key={o.publicationId} className="flex items-baseline justify-between gap-4 px-4 py-2.5">
                   <Link
                     href={`/admin/publications/${o.publicationId}`}
-                    className="text-sm text-ink hover:text-gold-deep"
+                    className="text-sm text-ink hover:text-ink-muted"
                   >
                     {o.title}
                   </Link>
@@ -139,7 +139,7 @@ export function OrgActivitySection({
           {summary.recent.length >= 40 && (
             <p className="mt-2 text-2xs text-ink-faint">
               Showing the 40 most recent events.{" "}
-              <Link href={`/admin/activity?org=${investorOrgId}`} className="hover:text-gold-deep">
+              <Link href={`/admin/activity?org=${investorOrgId}`} className="hover:text-ink-muted">
                 See the full record →
               </Link>
             </p>
@@ -193,7 +193,7 @@ export function PublicationActivitySection({
                   <tr key={o.investorOrgId} className="border-b border-line last:border-b-0">
                     <td className="px-3 py-2.5">
                       <Link href={`/admin/investors/${o.investorOrgId}`}
-                        className="text-ink hover:text-gold-deep">
+                        className="text-ink hover:text-ink-muted">
                         {o.name}
                       </Link>
                     </td>
@@ -220,7 +220,7 @@ export function PublicationActivitySection({
           {activity.recent.length >= 30 && (
             <p className="mt-2 text-2xs text-ink-faint">
               Showing the 30 most recent events.{" "}
-              <Link href={`/admin/activity?publication=${publicationId}`} className="hover:text-gold-deep">
+              <Link href={`/admin/activity?publication=${publicationId}`} className="hover:text-ink-muted">
                 See the full record →
               </Link>
             </p>

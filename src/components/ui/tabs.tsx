@@ -53,7 +53,7 @@ export function TabsTrigger({
     >
       {children}
       {active && (
-        <span className="absolute inset-x-2 -bottom-px h-0.5 bg-gold" />
+        <span className="absolute inset-x-2 -bottom-px h-0.5 bg-purple" />
       )}
     </button>
   );

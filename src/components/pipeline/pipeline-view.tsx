@@ -104,7 +104,7 @@ export function PipelineView({ deals }: { deals: DealSummary[] }) {
                 className={cn(
                   "flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-colors",
                   view === key
-                    ? "bg-navy text-surface"
+                    ? "bg-purple text-surface"
                     : "text-ink-muted hover:text-ink",
                 )}
               >
@@ -127,7 +127,7 @@ export function PipelineView({ deals }: { deals: DealSummary[] }) {
               value={filters.search}
               onChange={(e) => set("search")(e.target.value)}
               placeholder="Search assets, brokers…"
-              className="h-8 w-full rounded border border-line bg-surface-card pl-8 pr-2.5 text-xs text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30"
+              className="h-8 w-full rounded border border-line bg-surface-card pl-8 pr-2.5 text-xs text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30"
             />
           </div>
         </div>

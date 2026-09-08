@@ -14,7 +14,7 @@ export function ComingSoon({
       <PageHeader eyebrow={eyebrow} title={title} description={description} />
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center">
-          <div className="font-serif text-lg text-ink-muted">Coming soon</div>
+          <div className="text-lg text-ink-muted">Coming soon</div>
           <div className="mt-1 text-xs text-ink-faint">
             This module is on the Reiwa OS roadmap.
           </div>

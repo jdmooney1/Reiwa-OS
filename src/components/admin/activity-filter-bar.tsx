@@ -6,7 +6,7 @@ import type { ActivityFilterOptions } from "@/lib/data/admin-activity";
 import { EVENT_LABEL } from "@/lib/activity-labels";
 
 const FIELD =
-  "rounded border border-line bg-surface-card px-2.5 py-1.5 text-xs text-ink focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/30";
+  "rounded border border-line bg-surface-card px-2.5 py-1.5 text-xs text-ink focus:border-line focus:outline-none focus:ring-1 focus:ring-purple/30";
 
 /**
  * The filters, held entirely in the URL so the page stays a server render and

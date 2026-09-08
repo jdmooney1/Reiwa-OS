@@ -10,8 +10,8 @@ import {
 
 const BTN =
   "inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-2xs font-medium transition-colors disabled:opacity-50";
-const IDLE = "border-line text-ink-muted hover:border-gold/40 hover:text-ink";
-const ON = "border-gold/45 bg-gold/10 text-gold-deep";
+const IDLE = "border-line text-ink-muted hover:border-line hover:text-ink";
+const ON = "border-line bg-surface-sunken text-ink-muted";
 
 /**
  * Save / unsave. The server action re-resolves the investor session and the

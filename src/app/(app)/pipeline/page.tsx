@@ -20,7 +20,7 @@ export default async function PipelinePage() {
         description="Opportunities across the lifecycle — persisted to the live database."
         actions={
           canWrite ? (
-            <Link href="/opportunities/new" className="flex items-center gap-1.5 rounded bg-navy px-3.5 py-2 text-xs font-medium text-surface transition-colors hover:bg-navy-50">
+            <Link href="/opportunities/new" className="flex items-center gap-1.5 rounded bg-purple px-3.5 py-2 text-xs font-medium text-surface transition-colors hover:bg-purple-70">
               <Plus className="h-3.5 w-3.5" /> New Opportunity
             </Link>
           ) : null

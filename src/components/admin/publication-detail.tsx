@@ -59,27 +59,27 @@ export function PublicationDetail({
   return (
     <div className="min-h-full">
       {/* ---- Header: this is the INVESTOR side of the boundary ---- */}
-      <div className="border-b border-line-dark bg-navy px-8 py-5 text-surface">
+      <div className="border-b border-line bg-surface-card px-8 py-6 text-ink">
         <Link href="/admin/publications"
-          className="mb-2 inline-flex items-center gap-1 text-2xs text-surface/60 hover:text-surface">
+          className="mb-2 inline-flex items-center gap-1 text-2xs text-ink-faint hover:text-ink">
           <ChevronLeft className="h-3 w-3" /> Publications
         </Link>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="eyebrow-light mb-1">Investor Publication</div>
+            <div className="eyebrow mb-1">Investor Publication</div>
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="font-serif text-2xl">{display?.title ?? "Untitled publication"}</h1>
-              <Badge dark tone={WORKFLOW_TONE[state]} dot>{WORKFLOW_LABEL[state]}</Badge>
+              <h1 className="text-2xl">{display?.title ?? "Untitled publication"}</h1>
+              <Badge tone={WORKFLOW_TONE[state]} dot>{WORKFLOW_LABEL[state]}</Badge>
               {active && (
-                <span className="text-2xs text-surface/60">
+                <span className="text-2xs text-ink-faint">
                   Live: v{active.versionNumber}{working ? ` · Editing: v${working.versionNumber}` : ""}
                 </span>
               )}
               {!active && working && (
-                <span className="text-2xs text-surface/60">Working on v{working.versionNumber} — nothing live yet</span>
+                <span className="text-2xs text-ink-faint">Working on v{working.versionNumber} — nothing live yet</span>
               )}
             </div>
-            <p className="mt-1.5 max-w-2xl text-xs text-surface/60">
+            <p className="mt-1.5 max-w-2xl text-xs text-ink-faint">
               An independent snapshot prepared for investors. It never mirrors the internal
               opportunity — content moves only when a new version is drafted, reviewed and published.
             </p>
@@ -87,7 +87,7 @@ export function PublicationDetail({
 
           {/* Workflow actions */}
           <div className="flex flex-wrap items-center gap-2">
-            {pending && <Loader2 className="h-4 w-4 animate-spin text-surface/60" />}
+            {pending && <Loader2 className="h-4 w-4 animate-spin text-ink-faint" />}
             {working?.status === "draft" && (
               <HeaderBtn primary disabled={pending}
                 onClick={() => start(() => submitForReviewAction(working.versionId, id))}>
@@ -256,12 +256,12 @@ function DraftEditor({ version, publicationId }: { version: PublicationVersion; 
           <label className="block">
             <span className="eyebrow">Overview</span>
             <textarea name="overview" rows={5} defaultValue={version.overview ?? ""}
-              className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+              className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
           </label>
           <label className="block">
             <span className="eyebrow">Highlights — one per line</span>
             <textarea name="highlights" rows={3} defaultValue={version.highlights.join("\n")}
-              className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+              className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
           </label>
         </CardBody>
       </Card>
@@ -302,7 +302,7 @@ function DraftEditor({ version, publicationId }: { version: PublicationVersion; 
           Investors never see drafts — this version goes live only when it is reviewed and published.
         </span>
         <button type="submit"
-          className="rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
+          className="rounded bg-purple px-4 py-2 text-xs font-semibold text-ink hover:bg-purple-70">
           Save Draft
         </button>
       </div>
@@ -320,7 +320,7 @@ function VersionContent({ version: v }: { version: PublicationVersion }) {
         <CardHeader eyebrow={`Version ${v.versionNumber} — investor view`} title={v.title}
           action={<Badge tone={VERSION_STATUS_TONE[v.status]} dot>{VERSION_STATUS_LABEL[v.status]}</Badge>} />
         <CardBody className="space-y-4">
-          {v.headline && <p className="font-serif text-lg text-ink">{v.headline}</p>}
+          {v.headline && <p className="text-lg text-ink">{v.headline}</p>}
           <div className="text-sm text-ink-muted">
             {[v.city ?? v.market,
               v.assetType ? (ASSET_TYPE_LABEL[v.assetType as AssetType] ?? v.assetType) : null,
@@ -332,7 +332,7 @@ function VersionContent({ version: v }: { version: PublicationVersion }) {
             <ul className="space-y-1.5">
               {v.highlights.map((h, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-ink/90">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" /> {h}
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-purple" /> {h}
                 </li>
               ))}
             </ul>
@@ -383,7 +383,7 @@ function SourceTab({
             <SourceRow k="Internal opportunity"
               v={
                 <Link href={`/opportunities/${source.opportunityId}`}
-                  className="text-sm font-medium text-gold-deep hover:underline">
+                  className="text-sm font-medium text-ink-muted hover:underline">
                   {source.opportunityName ?? "View opportunity"}
                 </Link>
               } />
@@ -420,7 +420,7 @@ function SourceTab({
           ) : (
             <button disabled={pending}
               onClick={() => start(() => startDraftFromSourceAction(publicationId))}
-              className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-medium text-ink-muted hover:border-gold/40 hover:text-ink disabled:opacity-60">
+              className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-medium text-ink-muted hover:border-line hover:text-ink disabled:opacity-60">
               {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Start New Draft From Current Internal Data
             </button>
@@ -454,7 +454,7 @@ function DocumentsCard({
       <CardHeader eyebrow="Documents" title={title}
         action={editable ? (
           <button onClick={() => setAdding((v) => !v)}
-            className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-gold/40 hover:text-ink">
+            className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-line hover:text-ink">
             {adding ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {adding ? "Cancel" : "Add document"}
           </button>
         ) : <Lock className="h-3.5 w-3.5 text-ink-faint" />} />
@@ -468,16 +468,16 @@ function DocumentsCard({
             <label className="block md:col-span-2">
               <span className="eyebrow">Title</span>
               <input name="title" required
-                className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+                className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-line-strong focus:outline-none" />
             </label>
             <DocSelects />
             <label className="block md:col-span-3">
               <span className="eyebrow">File</span>
               <input name="file" type="file" required accept={UPLOAD_ACCEPT}
-                className="mt-1 block w-full rounded border border-line bg-surface-card px-2.5 py-1.5 text-xs text-ink file:mr-3 file:rounded file:border-0 file:bg-navy file:px-2.5 file:py-1 file:text-2xs file:font-semibold file:text-surface focus:border-gold focus:outline-none" />
+                className="mt-1 block w-full rounded border border-line bg-surface-card px-2.5 py-1.5 text-xs text-ink file:mr-3 file:rounded file:border-0 file:bg-purple file:px-2.5 file:py-1 file:text-2xs file:font-semibold file:text-ink focus:border-line-strong focus:outline-none" />
             </label>
             <div className="flex items-end justify-end">
-              <button type="submit" className="rounded bg-navy px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-navy-50">
+              <button type="submit" className="rounded bg-purple px-3.5 py-2 text-2xs font-semibold text-ink hover:bg-purple-70">
                 Upload Document
               </button>
             </div>
@@ -508,13 +508,13 @@ function DocumentsCard({
                     <label className="block md:col-span-2">
                       <span className="eyebrow">Title</span>
                       <input name="title" required defaultValue={d.title}
-                        className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+                        className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-line-strong focus:outline-none" />
                     </label>
                     <DocSelects category={d.category} accessLevel={d.accessLevel} />
                     <div className="flex items-end justify-end gap-2 md:col-span-4">
                       <button type="button" onClick={() => setEditingId(null)}
                         className="text-2xs text-ink-faint hover:text-ink">Cancel</button>
-                      <button type="submit" className="rounded bg-navy px-3 py-1.5 text-2xs font-semibold text-surface">Save</button>
+                      <button type="submit" className="rounded bg-purple px-3 py-1.5 text-2xs font-semibold text-ink">Save</button>
                     </div>
                   </form>
                 ) : (
@@ -537,7 +537,7 @@ function DocumentsCard({
                     {editable && (
                       <div className="flex shrink-0 items-center gap-1">
                         <button onClick={() => setEditingId(d.documentId)}
-                          className="rounded border border-line p-1.5 text-ink-muted hover:border-gold/40 hover:text-ink">
+                          className="rounded border border-line p-1.5 text-ink-muted hover:border-line hover:text-ink">
                           <Pencil className="h-3 w-3" />
                         </button>
                         <button disabled={pending}
@@ -565,7 +565,7 @@ function DocSelects({ category, accessLevel }: { category?: string; accessLevel?
       <label className="block">
         <span className="eyebrow">Category</span>
         <select name="category" defaultValue={category ?? "other"}
-          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-gold focus:outline-none">
+          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-line-strong focus:outline-none">
           {Object.entries(DOC_CATEGORY_LABEL).map(([value, label]) => (
             <option key={value} value={value}>{label}</option>
           ))}
@@ -574,7 +574,7 @@ function DocSelects({ category, accessLevel }: { category?: string; accessLevel?
       <label className="block">
         <span className="eyebrow">Access tier</span>
         <select name="accessLevel" defaultValue={accessLevel ?? "standard"}
-          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-gold focus:outline-none">
+          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-line-strong focus:outline-none">
           <option value="standard">Standard</option>
           <option value="diligence">Diligence</option>
           <option value="internal">Internal (never investor-visible)</option>
@@ -614,7 +614,7 @@ function AccessTab({
         <CardHeader eyebrow="Entitlements" title="Investor Organisations"
           action={grantable.length > 0 ? (
             <button onClick={() => setGranting((v) => !v)}
-              className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-gold/40 hover:text-ink">
+              className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-line hover:text-ink">
               {granting ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {granting ? "Cancel" : "Grant access"}
             </button>
           ) : undefined} />
@@ -627,7 +627,7 @@ function AccessTab({
               <label className="block md:col-span-2">
                 <span className="eyebrow">Investor organisation</span>
                 <select name="investorOrgId" required defaultValue=""
-                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-gold focus:outline-none">
+                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-line-strong focus:outline-none">
                   <option value="" disabled>Choose an organisation…</option>
                   {grantable.map((o) => (
                     <option key={o.investorOrgId} value={o.investorOrgId}>{o.name}</option>
@@ -637,7 +637,7 @@ function AccessTab({
               <label className="block">
                 <span className="eyebrow">Placement</span>
                 <select name="placement" defaultValue="secondary"
-                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-gold focus:outline-none">
+                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-line-strong focus:outline-none">
                   <option value="secondary">Also Available</option>
                   <option value="featured">Featured (replaces current)</option>
                 </select>
@@ -645,17 +645,17 @@ function AccessTab({
               <label className="block">
                 <span className="eyebrow">Document access</span>
                 <select name="documentAccessLevel" defaultValue="standard"
-                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-gold focus:outline-none">
+                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-line-strong focus:outline-none">
                   <option value="standard">Standard</option>
                   <option value="diligence">Diligence</option>
                 </select>
               </label>
               <label className="flex items-center gap-2 text-xs text-ink md:col-span-2">
-                <input type="checkbox" name="isVisible" defaultChecked className="accent-gold" />
+                <input type="checkbox" name="isVisible" defaultChecked className="accent-purple" />
                 Visible immediately
               </label>
               <div className="flex items-end justify-end md:col-span-2">
-                <button type="submit" className="rounded bg-navy px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-navy-50">
+                <button type="submit" className="rounded bg-purple px-3.5 py-2 text-2xs font-semibold text-ink hover:bg-purple-70">
                   Grant Access
                 </button>
               </div>
@@ -672,16 +672,16 @@ function AccessTab({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link href={`/admin/investors/${e.investorOrgId}`}
-                        className="text-sm font-medium text-ink hover:text-gold-deep">
+                        className="text-sm font-medium text-ink hover:text-ink-muted">
                         {e.investorOrgName}
                       </Link>
                       <Badge tone={INVESTOR_ORG_STATUS_TONE[e.investorOrgStatus]}>
                         {INVESTOR_ORG_STATUS_LABEL[e.investorOrgStatus]}
                       </Badge>
                       {e.isVisible
-                        ? <Badge tone={e.placement === "featured" ? "gold" : "neutral"} dot>{PLACEMENT_LABEL[e.placement]}</Badge>
+                        ? <Badge tone={e.placement === "featured" ? "accent" : "neutral"} dot>{PLACEMENT_LABEL[e.placement]}</Badge>
                         : <Badge tone="muted" dot>Hidden</Badge>}
-                      <Badge tone={e.documentAccessLevel === "diligence" ? "gold" : "neutral"}>
+                      <Badge tone={e.documentAccessLevel === "diligence" ? "accent" : "neutral"}>
                         {e.documentAccessLevel === "diligence" ? "Diligence docs" : "Standard docs"}
                       </Badge>
                     </div>
@@ -763,9 +763,9 @@ function VersionsTab({
                 const d = driftMap.get(v.versionId);
                 const isLive = publication.activeVersionId === v.versionId;
                 return (
-                  <tr key={v.versionId} className={cn(isLive && "bg-gold/5")}>
+                  <tr key={v.versionId} className={cn(isLive && "bg-surface-sunken")}>
                     <td className="tabular px-5 py-3 font-medium text-ink">
-                      v{v.versionNumber}{isLive && <span className="ml-1.5 text-2xs font-semibold text-gold-deep">LIVE</span>}
+                      v{v.versionNumber}{isLive && <span className="ml-1.5 text-2xs font-semibold text-ink-muted">LIVE</span>}
                     </td>
                     <td className="px-5 py-3">
                       <Badge tone={VERSION_STATUS_TONE[v.status]} dot>{VERSION_STATUS_LABEL[v.status]}</Badge>
@@ -829,8 +829,8 @@ function HeaderBtn({
     <button type="button" onClick={onClick} disabled={disabled}
       className={cn(
         "flex items-center gap-1.5 rounded px-3.5 py-2 text-xs font-semibold transition-colors disabled:opacity-60",
-        primary && "bg-gold text-navy hover:bg-gold-soft",
-        !primary && !danger && "border border-white/20 text-surface/80 hover:bg-white/5 hover:text-surface",
+        primary && "bg-purple text-ink hover:bg-surface-sunken",
+        !primary && !danger && "border border-line text-ink-muted hover:bg-surface-sunken hover:text-ink",
         danger && "border border-negative/40 text-rose-200 hover:bg-negative/20",
       )}>
       {children}
@@ -849,7 +849,7 @@ function Field({
       <span className="eyebrow">{label}</span>
       <input name={name} type={type} step={step} required={required}
         defaultValue={defaultValue} placeholder={placeholder}
-        className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+        className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
     </label>
   );
 }
@@ -893,7 +893,7 @@ function MiniBtn({
     <button type="button" onClick={onClick} disabled={disabled} title={title}
       className={cn(
         "rounded border border-line px-2 py-1 text-2xs font-medium text-ink-muted transition-colors disabled:opacity-50",
-        tone === "negative" ? "hover:border-negative/40 hover:text-negative" : "hover:border-gold/40 hover:text-ink",
+        tone === "negative" ? "hover:border-negative/40 hover:text-negative" : "hover:border-line hover:text-ink",
       )}>
       {children}
     </button>

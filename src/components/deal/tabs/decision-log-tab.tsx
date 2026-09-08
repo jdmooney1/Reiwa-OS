@@ -39,7 +39,7 @@ export function DecisionLogTab({ decisions }: { decisions: DecisionLogEntry[] })
             <li key={d.decision_id} className="relative flex gap-4 px-6 py-5">
               {/* Timeline rail */}
               <div className="flex flex-col items-center">
-                <span className="mt-1 h-2.5 w-2.5 rounded-full border-2 border-gold bg-surface-card" />
+                <span className="mt-1 h-2.5 w-2.5 rounded-full border-2 border-line-strong bg-surface-card" />
                 {i < sorted.length - 1 && <span className="mt-1 w-px flex-1 bg-line" />}
               </div>
               <div className="flex-1 pb-1">
@@ -47,7 +47,7 @@ export function DecisionLogTab({ decisions }: { decisions: DecisionLogEntry[] })
                   <span className="tabular text-2xs font-medium text-ink-faint">
                     {formatDate(d.decision_date)}
                   </span>
-                  <Badge tone="gold">{TYPE_LABEL[d.decision_type] ?? d.decision_type}</Badge>
+                  <Badge tone="accent">{TYPE_LABEL[d.decision_type] ?? d.decision_type}</Badge>
                   {d.author && <span className="text-2xs text-ink-faint">· {d.author}</span>}
                 </div>
                 <div className="mt-1.5 text-sm font-medium text-ink">{d.decision}</div>

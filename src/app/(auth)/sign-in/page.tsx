@@ -2,6 +2,7 @@
 
 import { useFormState, useFormStatus } from "react-dom";
 import { signInAction, type SignInState } from "@/app/actions/auth";
+import { ReiwaLockup } from "@/components/brand/reiwa-lockup";
 
 const DEMO = [
   { label: "Reiwa Admin (all orgs)", email: "admin@reiwa.com" },
@@ -21,29 +22,27 @@ export default function SignInPage() {
   const [state, action] = useFormState<SignInState, FormData>(signInAction, {});
   return (
     <div className="w-full max-w-sm">
-      <div className="mb-6 text-center">
-        <div className="font-serif text-xl tracking-wide text-surface">
-          REIWA<span className="text-gold"> OS</span>
-        </div>
-        <div className="eyebrow-light mt-1">Deal &amp; Asset Intelligence</div>
-      </div>
+      <ReiwaLockup size="entry" />
+      <div className="eyebrow mt-5">Deal &amp; Asset Intelligence</div>
 
-      <form action={action} className="space-y-3 rounded-lg border border-line-dark bg-navy-100 p-6">
+      <form action={action} className="mt-10 space-y-5">
         <Field label="Email" name="email" type="email" placeholder="you@reiwa-capital.com"
           defaultValue={SHOW_DEMO_ACCOUNTS ? "analyst@meiji.com" : undefined} />
         <Field label="Password" name="password" type="password" placeholder="••••••••"
           defaultValue={SHOW_DEMO_ACCOUNTS ? "reiwa2026" : undefined} />
-        {state.error && <p className="text-2xs text-rose-300">{state.error}</p>}
+        {state.error && (
+          <p className="border-l-2 border-negative py-1 pl-3 text-xs text-negative">{state.error}</p>
+        )}
         <SubmitButton />
       </form>
 
       {SHOW_DEMO_ACCOUNTS && (
-      <div className="mt-4 rounded-lg border border-line-dark/60 p-3">
-        <div className="eyebrow-light mb-1.5">Demo accounts · password reiwa2026</div>
-        <ul className="space-y-0.5">
+      <div className="mt-10 border-t border-line pt-4">
+        <div className="eyebrow mb-2">Demo accounts · password reiwa2026</div>
+        <ul className="space-y-1">
           {DEMO.map((d) => (
-            <li key={d.email} className="flex justify-between text-2xs text-surface/60">
-              <span>{d.label}</span><span className="tabular text-surface/60">{d.email}</span>
+            <li key={d.email} className="flex justify-between gap-4 text-2xs text-ink-faint">
+              <span>{d.label}</span><span className="tabular">{d.email}</span>
             </li>
           ))}
         </ul>
@@ -58,10 +57,10 @@ function Field({ label, name, type, placeholder, defaultValue }: {
 }) {
   return (
     <label className="block">
-      <span className="eyebrow-light">{label}</span>
+      <span className="eyebrow">{label}</span>
       <input
         name={name} type={type} placeholder={placeholder} defaultValue={defaultValue} required
-        className="mt-1 h-9 w-full rounded border border-line-dark bg-navy px-3 text-sm text-surface placeholder:text-surface/60 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30"
+        className="mt-1.5 h-11 w-full rounded border-0 border-b border-line bg-transparent px-0 text-sm text-ink placeholder:text-ink-faint focus:border-purple focus:outline-none focus:ring-0"
       />
     </label>
   );
@@ -72,7 +71,7 @@ function SubmitButton() {
   return (
     <button
       type="submit" disabled={pending}
-      className="mt-1 w-full rounded bg-gold px-3 py-2 text-xs font-semibold text-navy transition-colors hover:bg-gold-soft disabled:opacity-60"
+      className="w-full rounded bg-purple px-4 py-3 text-sm font-medium text-surface transition-colors hover:bg-purple-70 disabled:opacity-60"
     >
       {pending ? "Signing in…" : "Sign in"}
     </button>

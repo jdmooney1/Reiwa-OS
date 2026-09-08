@@ -14,7 +14,7 @@ export function DealCard({ deal }: { deal: DealSummary }) {
   return (
     <Link
       href={`/deals/${deal.deal_id}`}
-      className="block rounded-lg border border-line bg-surface-card p-3.5 transition-all hover:border-gold/40 hover:shadow-[0_1px_0_rgba(194,161,78,0.25)]"
+      className="block rounded-lg border border-line bg-surface-card p-3.5 transition-all hover:border-line hover:shadow-[0_1px_0_rgba(194,161,78,0.25)]"
     >
       {/* Title row */}
       <div className="flex items-start justify-between gap-2">
@@ -31,7 +31,7 @@ export function DealCard({ deal }: { deal: DealSummary }) {
             className={cn(
               "tabular flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded leading-none",
               scoreTone(deal.overall_score) === "positive" && "bg-positive/10 text-positive",
-              scoreTone(deal.overall_score) === "gold" && "bg-gold/10 text-gold-deep",
+              scoreTone(deal.overall_score) === "accent" && "bg-surface-sunken text-ink-muted",
               scoreTone(deal.overall_score) === "caution" && "bg-caution/10 text-caution",
               scoreTone(deal.overall_score) === "negative" && "bg-negative/10 text-negative",
             )}

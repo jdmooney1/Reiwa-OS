@@ -26,23 +26,26 @@ export function VerifyForm(props:
   const codeStage = invite || !!directEmail;
 
   return (
-    <div className="rounded-lg border border-line bg-surface-card px-7 py-7">
+    <div>
       {invite ? (
         <>
-          <div className="eyebrow mb-2">Invitation · {props.orgName}</div>
-          <h1 className="font-serif text-xl text-ink">Enter your access code</h1>
-          <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+          <div className="eyebrow">Invitation</div>
+          <div className="mt-1.5 text-sm text-ink-muted">{props.orgName}</div>
+          <h1 className="mt-5 text-2xl leading-tight tracking-[-0.02em] text-ink">
+            Enter your access code
+          </h1>
+          <p className="mt-3 max-w-measure text-sm leading-relaxed text-ink-muted">
             We have emailed a one-time code to <span className="font-medium text-ink">{props.maskedEmail}</span>.
             Enter it below to confirm your identity.
           </p>
         </>
       ) : (
         <>
-          <div className="eyebrow mb-2">Investor sign-in</div>
-          <h1 className="font-serif text-xl text-ink">
+          <div className="eyebrow">Investment Portal</div>
+          <h1 className="mt-5 text-2xl leading-tight tracking-[-0.02em] text-ink">
             {codeStage ? "Enter your access code" : "Sign in to the portal"}
           </h1>
-          <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+          <p className="mt-3 max-w-measure text-sm leading-relaxed text-ink-muted">
             {codeStage
               ? "If your address is authorised, a one-time code is on its way. Enter it below."
               : "Portal access is limited to authorised investor contacts. Enter your email and we will send a one-time access code."}
@@ -51,11 +54,11 @@ export function VerifyForm(props:
       )}
 
       {!codeStage && (
-        <form action={requestAction} className="mt-5 space-y-4">
+        <form action={requestAction} className="mt-8 space-y-5">
           <label className="block">
             <span className="eyebrow">Email address</span>
             <input name="email" type="email" required autoFocus
-              className="mt-1 h-10 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+              className="mt-1.5 h-11 w-full rounded border-0 border-b border-line bg-transparent px-0 text-sm text-ink focus:border-purple focus:outline-none focus:ring-0" />
           </label>
           {requestState.error && <FormError text={requestState.error} />}
           <SubmitButton label="Email me a secure access code" />
@@ -63,7 +66,7 @@ export function VerifyForm(props:
       )}
 
       {codeStage && (
-        <form action={verifyAction} className="mt-5 space-y-4">
+        <form action={verifyAction} className="mt-8 space-y-5">
           {/* No hidden invitation field: the token lives in an httpOnly cookie
               the server reads, so it is not in this markup to be read or replayed. */}
           {!invite && (
@@ -80,22 +83,22 @@ export function VerifyForm(props:
               required autoFocus spellCheck={false} autoCapitalize="off"
               aria-describedby="otp-code-hint"
               placeholder="Enter the code from your email"
-              className="mt-1 h-11 w-full rounded border border-line bg-surface px-3 text-center font-serif text-xl tracking-[0.4em] text-ink placeholder:tracking-normal placeholder:font-sans placeholder:text-sm focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
-            <span id="otp-code-hint" className="mt-1.5 block text-2xs text-ink-faint">
+              className="tabular mt-1.5 h-14 w-full rounded border-0 border-b border-line bg-transparent px-0 text-2xl tracking-[0.32em] text-ink placeholder:text-sm placeholder:tracking-normal placeholder:text-ink-faint focus:border-purple focus:outline-none focus:ring-0" />
+            <span id="otp-code-hint" className="mt-2.5 block text-2xs text-ink-faint">
               Enter the code exactly as it appears in the email.
             </span>
           </label>
           {verifyState.error && <FormError text={verifyState.error} />}
           <SubmitButton label="Verify and enter the portal" />
           {invite ? (
-            <p className="text-center text-2xs text-ink-faint">
+            <p className="text-2xs text-ink-faint">
               Code not arriving?{" "}
-              <a href="/access" className="text-gold-deep hover:underline">Request a new one</a>.
+              <a href="/access" className="text-ink-muted hover:underline">Request a new one</a>.
             </p>
           ) : (
-            <p className="text-center text-2xs text-ink-faint">
+            <p className="text-2xs text-ink-faint">
               Wrong address or no code?{" "}
-              <a href="/portal/verify" className="text-gold-deep hover:underline">Start again</a>.
+              <a href="/portal/verify" className="text-ink-muted hover:underline">Start again</a>.
             </p>
           )}
         </form>
@@ -108,7 +111,7 @@ function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
     <button type="submit" disabled={pending}
-      className="w-full rounded bg-gold px-4 py-2.5 text-sm font-semibold text-navy hover:bg-gold-soft disabled:opacity-60">
+      className="w-full rounded bg-purple px-4 py-3 text-sm font-medium text-surface transition-colors hover:bg-purple-70 disabled:opacity-60">
       {pending ? "One moment…" : label}
     </button>
   );
@@ -116,7 +119,7 @@ function SubmitButton({ label }: { label: string }) {
 
 function FormError({ text }: { text: string }) {
   return (
-    <p className="rounded border border-negative/30 bg-negative/5 px-3 py-2 text-xs text-negative">
+    <p className="border-l-2 border-negative py-1 pl-3 text-xs text-negative">
       {text}
     </p>
   );

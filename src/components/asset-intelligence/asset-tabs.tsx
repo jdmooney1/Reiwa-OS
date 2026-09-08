@@ -51,8 +51,8 @@ function PlannedTab({ phase, points }: { phase: string; points: string[] }) {
     <Card>
       <CardBody className="mx-auto max-w-2xl py-8">
         <div className="text-center">
-          <span className="text-2xs font-medium uppercase tracking-label text-gold-deep">{phase}</span>
-          <h3 className="mt-1 font-serif text-lg text-ink">Planned module</h3>
+          <span className="text-2xs font-medium uppercase tracking-label text-ink-muted">{phase}</span>
+          <h3 className="mt-1 text-lg text-ink">Planned module</h3>
           <p className="mt-1 text-xs text-ink-muted">
             The data model and demonstration records already exist for this module; the interface is delivered in {phase}.
           </p>
@@ -60,7 +60,7 @@ function PlannedTab({ phase, points }: { phase: string; points: string[] }) {
         <ul className="mx-auto mt-5 max-w-md space-y-2">
           {points.map((p, i) => (
             <li key={i} className="flex gap-2.5 text-sm text-ink/90">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-purple" />
               {p}
             </li>
           ))}
