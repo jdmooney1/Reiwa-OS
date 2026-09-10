@@ -8,8 +8,11 @@
 // touch is the Supabase Auth Admin API used to pre-provision the passwordless
 // investor account — SERVER-ONLY, and only after the admin gate.
 //
-// createInviteForContactAction returns the RAW invitation token exactly once,
-// for the admin's screen; only its hash is stored anywhere.
+// These actions are deliberately thin. Sending an invitation has real rules
+// attached to it — prerequisites, and undoing the mint when delivery fails —
+// and those live in src/lib/invitations/send.ts so they can be tested against
+// a real database without a request. What is decided HERE is only what needs a
+// request: who the admin is. The link's origin is configuration, not request.
 // ============================================================================
 import { revalidatePath } from "next/cache";
 import { requireAdminSession } from "@/lib/auth/admin";
@@ -19,6 +22,13 @@ import {
 } from "@/lib/data/investor-invites";
 import { provisionInvestorAuthUser } from "@/lib/supabase/investor-admin";
 import { AppError } from "@/lib/errors";
+import { investorPortalUrl } from "@/lib/email/portal-url";
+import { emailIsConfigured, notConfiguredError } from "@/lib/email/send";
+import {
+  assertSendable, deliverInvitation, type SentInvitation,
+} from "@/lib/invitations/send";
+
+export type { SentInvitation };
 
 function refreshInvestor(investorOrgId: string): void {
   revalidatePath("/admin/investors");
@@ -49,22 +59,18 @@ export interface CreatedInvite {
 }
 
 /**
- * Mint (or re-mint) the contact's invitation. Any previously active invitation
- * is revoked in the same transaction, so one link is live per contact. The raw
- * token in the result is shown once and never stored.
+ * Mint an invitation and return the RAW link for the admin's screen.
+ *
+ * Retained as the administrator fallback for the rare case where email cannot
+ * be used — a bouncing domain, or an investor who wants the link by another
+ * channel. sendInvitationAction is the ordinary path, and it never puts the
+ * token in the browser.
  */
 export async function createInviteForContactAction(
   investorContactId: string, investorOrgId: string,
 ): Promise<CreatedInvite> {
   const { db, auth } = await requireAdminSession();
-  const contact = await getInvestorContactForAdmin(db, investorContactId);
-  if (!contact) throw new AppError("Contact not found.");
-  if (!contact.authUserId) {
-    throw new AppError("Provision the contact's sign-in before creating an invitation.");
-  }
-  if (!contact.isActive) {
-    throw new AppError("Reactivate the contact before creating an invitation.");
-  }
+  await assertSendable(db, investorContactId);
 
   const invite = await createInvite(db, investorContactId, {}, auth.userId);
   refreshInvestor(investorOrgId);
@@ -73,6 +79,28 @@ export async function createInviteForContactAction(
     path: `/access/${invite.rawToken}`,
     expiresAt: invite.expiresAt,
   };
+}
+
+/**
+ * The primary action: mint an invitation and email it to the contact's own
+ * stored address. The token never reaches the browser — the result carries the
+ * address it went to and nothing else.
+ */
+export async function sendInvitationAction(
+  investorContactId: string, investorOrgId: string,
+): Promise<SentInvitation> {
+  const { db, auth } = await requireAdminSession();
+  // Fail before minting anything, where we can.
+  if (!emailIsConfigured()) throw notConfiguredError();
+  // The canonical configured address — never anything from the request.
+  const origin = investorPortalUrl();
+
+  try {
+    return await deliverInvitation(db, investorContactId, origin, auth.userId);
+  } finally {
+    // Whether it sent or was cancelled, the invitation state on screen changed.
+    refreshInvestor(investorOrgId);
+  }
 }
 
 export async function revokeInviteAction(inviteId: string, investorOrgId: string): Promise<void> {

@@ -15,8 +15,9 @@ import {
   saveEntitlementNoteAction, reorderSecondaryAction,
 } from "@/app/actions/admin-portal";
 import {
-  provisionContactAccessAction, createInviteForContactAction, revokeInviteAction,
-  type CreatedInvite,
+  provisionContactAccessAction, createInviteForContactAction, sendInvitationAction,
+  revokeInviteAction,
+  type CreatedInvite, type SentInvitation,
 } from "@/app/actions/admin-invites";
 import {
   INVESTOR_ORG_STATUS_LABEL, INVESTOR_ORG_STATUS_TONE, WORKFLOW_LABEL, WORKFLOW_TONE,
@@ -396,6 +397,7 @@ function ContactsCard({
   // Raw invitation links exist only here, in this admin's browser, until the
   // page is left — the server stores hashes alone.
   const [issued, setIssued] = useState<Record<string, CreatedInvite>>({});
+  const [sent, setSent] = useState<Record<string, SentInvitation>>({});
 
   const latestInviteFor = (contactId: string): InvestorInvite | undefined =>
     invites.find((i) => i.investorContactId === contactId); // newest first
@@ -480,6 +482,9 @@ function ContactsCard({
                       issued={issued[c.investorContactId]}
                       onIssued={(created) =>
                         setIssued((prev) => ({ ...prev, [c.investorContactId]: created }))}
+                      sent={sent[c.investorContactId]}
+                      onSent={(result) =>
+                        setSent((prev) => ({ ...prev, [c.investorContactId]: result }))}
                       pending={pending}
                       start={start}
                     />
@@ -500,16 +505,21 @@ function ContactsCard({
  * displayed exactly once, straight from the action's response.
  */
 function ContactAccess({
-  contact, org, invite, issued, onIssued, pending, start,
+  contact, org, invite, issued, onIssued, sent, onSent, pending, start,
 }: {
   contact: InvestorContact;
   org: Org;
   invite: InvestorInvite | undefined;
   issued: CreatedInvite | undefined;
   onIssued: (created: CreatedInvite) => void;
+  sent: SentInvitation | undefined;
+  onSent: (result: SentInvitation) => void;
   pending: boolean;
   start: (fn: () => Promise<void>) => void;
 }) {
+  const [error, setError] = useState<string | null>(null);
+  const [showFallback, setShowFallback] = useState(false);
+
   if (!contact.isActive) return null;
 
   if (!contact.authUserId) {
@@ -533,45 +543,104 @@ function ContactAccess({
     : <Badge tone="muted" dot>Invite revoked</Badge>
   );
 
+  const isResend = Boolean(invite);
+  const willInvalidate = invite?.state === "active";
+
+  const run = (fn: () => Promise<void>) => start(async () => {
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      // Server actions surface an AppError's message; anything else is already
+      // reduced to a neutral sentence before it reaches here.
+      setError(e instanceof Error ? e.message : "The invitation could not be sent.");
+    }
+  });
+
   return (
     <div className="mt-2 rounded border border-line bg-surface px-3 py-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          {stateBadge ?? <span className="text-2xs text-ink-faint">No invitation issued yet.</span>}
+          {stateBadge ?? <span className="text-2xs text-ink-faint">No invitation sent yet.</span>}
         </div>
         <div className="flex items-center gap-1">
           {invite?.state === "active" && (
             <SmallBtn tone="negative" disabled={pending}
               title="The link stops working immediately"
-              onClick={() => start(() => revokeInviteAction(invite.inviteId, org.investorOrgId))}>
+              onClick={() => run(() => revokeInviteAction(invite.inviteId, org.investorOrgId))}>
               Revoke
             </SmallBtn>
           )}
-          <SmallBtn disabled={pending}
-            title={invite?.state === "active"
-              ? "Revokes the current link and issues a new one"
-              : "Issues a new invitation link"}
-            onClick={() => start(async () => {
-              const created = await createInviteForContactAction(contact.investorContactId, org.investorOrgId);
-              onIssued(created);
+          {/* The primary action. Emails the contact's own stored address; the
+              invitation link is never rendered into this page. */}
+          <SmallBtn primary disabled={pending}
+            title={willInvalidate
+              ? `Emails a new invitation to ${contact.email}. The previous invitation stops working.`
+              : `Emails the invitation to ${contact.email}`}
+            onClick={() => run(async () => {
+              const result = await sendInvitationAction(contact.investorContactId, org.investorOrgId);
+              onSent(result);
             })}>
-            {invite ? "Regenerate invite" : "Create invite link"}
+            {isResend ? "Resend invitation" : "Send invitation"}
           </SmallBtn>
         </div>
       </div>
-      {issued && (
-        <div className="mt-2 rounded border border-line bg-surface-sunken px-3 py-2">
-          <div className="eyebrow mb-1">Invitation link — shown once, copy it now</div>
-          <input readOnly
-            value={typeof window !== "undefined" ? `${window.location.origin}${issued.path}` : issued.path}
-            onFocus={(e) => e.currentTarget.select()}
-            className="w-full rounded border border-line bg-surface-card px-2 py-1.5 font-mono text-2xs text-ink" />
-          <div className="mt-1 text-2xs text-ink-faint">
-            Valid until {formatDate(issued.expiresAt)}. Only the link identifies the invitation — the
-            server keeps a hash, so it cannot be recovered later.
-          </div>
-        </div>
+
+      <div className="mt-1.5 text-2xs text-ink-faint">
+        {willInvalidate
+          ? <>Sends to <span className="text-ink-muted">{contact.email}</span>. The current invitation is invalidated the moment a new one is sent.</>
+          : <>Sends to <span className="text-ink-muted">{contact.email}</span>.</>}
+      </div>
+
+      {error && (
+        <p role="alert" className="mt-2 border-l-2 border-negative py-1 pl-2.5 text-2xs text-negative">
+          {error}
+        </p>
       )}
+
+      {sent && !error && (
+        <p className="mt-2 border-l-2 border-positive py-1 pl-2.5 text-2xs text-ink-muted">
+          Invitation emailed to <span className="font-medium text-ink">{sent.sentTo}</span>, valid
+          until {formatDate(sent.expiresAt)}.
+          {sent.replacedPrevious && " The previous invitation is no longer valid."}
+        </p>
+      )}
+
+      {/* Administrator fallback, deliberately out of the way: for a bounced
+          domain or an investor who wants the link by another channel. */}
+      <div className="mt-2 border-t border-line pt-1.5">
+        {!showFallback && !issued ? (
+          <button type="button" onClick={() => setShowFallback(true)}
+            className="text-2xs text-ink-faint underline-offset-2 hover:text-ink-muted hover:underline">
+            Need a link instead?
+          </button>
+        ) : (
+          <>
+            <SmallBtn disabled={pending}
+              title="Issues a new invitation and shows the link once, without emailing it"
+              onClick={() => run(async () => {
+                const created = await createInviteForContactAction(
+                  contact.investorContactId, org.investorOrgId);
+                onIssued(created);
+              })}>
+              Copy invitation link
+            </SmallBtn>
+            {issued && (
+              <div className="mt-2 rounded border border-line bg-surface-sunken px-3 py-2">
+                <div className="eyebrow mb-1">Invitation link — shown once, copy it now</div>
+                <input readOnly
+                  value={typeof window !== "undefined" ? `${window.location.origin}${issued.path}` : issued.path}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="w-full rounded border border-line bg-surface-card px-2 py-1.5 font-mono text-2xs text-ink" />
+                <div className="mt-1 text-2xs text-ink-faint">
+                  Valid until {formatDate(issued.expiresAt)}. Only the link identifies the invitation — the
+                  server keeps a hash, so it cannot be recovered later.
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -600,19 +669,25 @@ function ContactFields({ contact }: { contact?: InvestorContact }) {
 
 // ---- Small controls ---------------------------------------------------------
 function SmallBtn({
-  children, onClick, disabled, tone, title,
+  children, onClick, disabled, tone, title, primary,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
   tone?: "negative";
   title?: string;
+  /** The one filled control in a row — the action an admin is here to take. */
+  primary?: boolean;
 }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled} title={title}
       className={cn(
-        "flex items-center gap-1 rounded border border-line px-2 py-1 text-2xs font-medium text-ink-muted transition-colors disabled:opacity-50",
-        tone === "negative" ? "hover:border-negative/40 hover:text-negative" : "hover:border-line hover:text-ink",
+        "flex items-center gap-1 rounded border px-2 py-1 text-2xs font-medium transition-colors disabled:opacity-50",
+        primary
+          ? "border-purple bg-purple text-surface hover:bg-purple-70"
+          : tone === "negative"
+            ? "border-line text-ink-muted hover:border-negative/40 hover:text-negative"
+            : "border-line text-ink-muted hover:border-line hover:text-ink",
       )}>
       {children}
     </button>

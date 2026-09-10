@@ -35,6 +35,13 @@ export const SERVER_ONLY_ENV: readonly string[] = [
   "SUPABASE_SECRET_KEY",
   "SUPABASE_DB_CA_CERT",
   "DATABASE_POOL_MAX",
+  // Outbound application email (investor invitations). Deliberately separate
+  // from the Supabase credentials: revoking a mail key must not require
+  // rotating database access.
+  "RESEND_API_KEY",
+  // The canonical portal origin used to compose invitation links. Server-only
+  // and send-required: never derived from a request header, never public.
+  "INVESTOR_PORTAL_URL",
 ];
 
 /** Any environment-shaped map: process.env, or one a test constructs. */

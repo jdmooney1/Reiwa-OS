@@ -115,6 +115,18 @@ export async function listInvitesForOrg(
   });
 }
 
+/** Every invitation ever issued to one contact, newest first. RLS-gated. */
+export async function listInvitesForContact(
+  session: Session, investorContactId: string,
+): Promise<InvestorInvite[]> {
+  return withSession(session, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from investor_invites where investor_contact_id = $1 order by created_at desc",
+      [investorContactId]);
+    return rows.map(mapInvite);
+  });
+}
+
 /** One contact, for the admin provisioning flow. RLS-gated: admin only. */
 export async function getInvestorContactForAdmin(
   session: Session, investorContactId: string,
