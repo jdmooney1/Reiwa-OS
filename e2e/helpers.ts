@@ -20,7 +20,7 @@ export const INVESTOR_EMAIL = "principal@kitano-fo.example";
  * real one; it is then typed into the real form and redeemed through the
  * ordinary verification path.
  */
-async function mintOtp(email: string): Promise<string> {
+export async function mintOtp(email: string): Promise<string> {
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email });
   const code = data?.properties?.email_otp;

@@ -376,8 +376,52 @@ describe("Identity separation", () => {
     expect(asInvestor.rows[0].n).toBe(0);
   });
 
-  it("masked email display never shows the full address", () => {
-    expect(maskEmail("k.arai@kitano-fo.example")).toBe("k•••@ki•••.example");
-    expect(maskEmail("a@b.co")).toBe("a•••@b•••.co");
+  /**
+   * The masked address is read by somebody about to go and look in their own
+   * inbox. It has to be recognisable to them and useless to anyone else, so
+   * both halves of that are asserted: enough local part to recognise, never
+   * the whole of it, and never a leak of how long it is.
+   */
+  describe("Masked email display", () => {
+    it("keeps the domain whole and reveals the first few local characters", () => {
+      expect(maskEmail("jd.mooney@hotmail.com")).toBe("jd.m•••••@hotmail.com");
+      expect(maskEmail("k.arai@kitano-fo.example")).toBe("k.ar•••••@kitano-fo.example");
+    });
+
+    it("keeps a subdomain and a multi-part TLD intact", () => {
+      expect(maskEmail("rebecca@mail.corp.co.uk")).toBe("rebe•••••@mail.corp.co.uk");
+    });
+
+    it("never reveals the entire local part, however short", () => {
+      // One character hidden at minimum, at every length.
+      expect(maskEmail("jd@hotmail.com")).toBe("j•••••@hotmail.com");
+      expect(maskEmail("jdm@hotmail.com")).toBe("jd•••••@hotmail.com");
+      expect(maskEmail("jd.m@hotmail.com")).toBe("jd.•••••@hotmail.com");
+      expect(maskEmail("a@b.co")).toBe("•••••@b.co");
+    });
+
+    it("reveals at most four characters no matter how long the address is", () => {
+      const masked = maskEmail("averyveryverylongaddress@example.com");
+      expect(masked).toBe("aver•••••@example.com");
+    });
+
+    it("discloses nothing about the hidden length", () => {
+      // Two addresses differing only in local length mask identically after
+      // the revealed prefix, so the mask cannot be counted back.
+      const short = maskEmail("jd.mooney@hotmail.com");
+      const long = maskEmail("jd.mooneyxxxxxxxxxxxx@hotmail.com");
+      expect(short).toBe(long);
+    });
+
+    it("says nothing at all for input that is not an address", () => {
+      for (const input of ["", "not-an-email", "@example.com", "trailing@", "  "]) {
+        expect({ input, masked: maskEmail(input) }).toEqual({ input, masked: "•••••" });
+      }
+    });
+
+    it("is deterministic", () => {
+      const once = maskEmail("jd.mooney@hotmail.com");
+      for (let i = 0; i < 5; i += 1) expect(maskEmail("jd.mooney@hotmail.com")).toBe(once);
+    });
   });
 });

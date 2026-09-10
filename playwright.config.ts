@@ -55,6 +55,11 @@ export default defineConfig({
   projects: (Object.keys(viewports) as (keyof typeof viewports)[]).map((name) => ({
     name,
     use: { ...devices["Desktop Chrome"], viewport: viewports[name] },
+    // The session spec launches its own persistent browser profile, so the
+    // project viewport does not apply to it. Running it once is the point:
+    // repeating it per viewport would prove nothing new and would race three
+    // browsers on one fixture contact.
+    ...(name === "desktop" ? {} : { testIgnore: /investor-session\.spec\.ts$/ }),
   })),
   webServer: {
     // A production build, not `next dev`: dev serves unminified bundles, an

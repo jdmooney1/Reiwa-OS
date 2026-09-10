@@ -105,13 +105,37 @@ export async function completeInvestorVerification(
   return { ok: true, identity, inviteAccepted };
 }
 
-/** "j.mooney@acme.example" → "j•••@ac•••.example" — safe on-screen display. */
+/** How many characters of the mask to show. Fixed, so it leaks no length. */
+const MASK = "•••••";
+
+/**
+ * "jd.mooney@hotmail.com" → "jd.m•••••@hotmail.com"
+ *
+ * This is shown to somebody who is about to go and look in their inbox, so it
+ * has one job: let the right person recognise their own address, and tell
+ * nobody else what it is.
+ *
+ * The domain is kept whole — subdomain and all. A domain is not the secret:
+ * "hotmail.com" identifies a mail provider, not a person, and hiding it was
+ * what made the old form (`j•••@ho•••.com`) read like a mistake rather than a
+ * privacy measure. What matters is the local part, and that is where the
+ * masking is.
+ *
+ * Enough of the local part is revealed to be recognisable — up to four
+ * characters — but never all of it, however short the address. The mask is a
+ * fixed width, so it does not disclose how many characters follow.
+ */
 export function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  if (!domain) return "•••";
-  const dot = domain.lastIndexOf(".");
-  const host = dot > 0 ? domain.slice(0, dot) : domain;
-  const tld = dot > 0 ? domain.slice(dot) : "";
-  const keep = (s: string, n: number) => (s.length <= n ? s : s.slice(0, n)) + "•••";
-  return `${keep(local, 1)}@${keep(host, 2)}${tld}`;
+  const at = (email ?? "").lastIndexOf("@");
+  // Not an address we can reason about; say nothing rather than guess.
+  if (at <= 0 || at === email.length - 1) return MASK;
+
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+
+  // Always leave at least one character hidden, so the full address is never
+  // reconstructable from the screen: a two-character local shows one, a
+  // one-character local shows none.
+  const revealed = Math.max(0, Math.min(4, local.length - 1));
+  return `${local.slice(0, revealed)}${MASK}@${domain}`;
 }

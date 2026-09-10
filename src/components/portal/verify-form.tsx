@@ -35,8 +35,9 @@ export function VerifyForm(props:
             Enter your access code
           </h1>
           <p className="mt-3 max-w-measure text-sm leading-relaxed text-ink-muted">
-            We have emailed a one-time code to <span className="font-medium text-ink">{props.maskedEmail}</span>.
-            Enter it below to confirm your identity.
+            We&rsquo;ve emailed your access code to{" "}
+            <span className="font-medium text-ink">{props.maskedEmail}</span>. Enter it below to
+            confirm your identity.
           </p>
         </>
       ) : (
