@@ -13,6 +13,7 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { str } from "@/lib/data/coerce";
+import { staffNamesOn, nameOf } from "@/lib/data/directory";
 import type { DueDiligenceItem, DdStatus } from "@/types/database";
 import {
   applyTemplate, defaultTemplateId, templateItemKey, type DdTemplate,
@@ -27,11 +28,11 @@ export interface DdItemRecord extends DueDiligenceItem {
   sourceDocumentId: string | null;
   ownerUserId: string | null;
   /**
-   * The owner's display name, joined for the workspace.
+   * The owner's display name, resolved through the staff directory.
    *
-   * Null is not the same as unowned: `profiles_self` (migration 0001) lets a
-   * non-admin read only their own profile row, so a workstream a colleague owns
-   * arrives named `null` with `ownerUserId` set. The screen distinguishes them.
+   * Since migration 0011 a colleague in the same organisation resolves normally.
+   * Null now means only that no name is recorded against that user, which is
+   * still not the same as unowned — the screen keeps the two apart.
    */
   ownerName: string | null;
   completedAt: string | null;
@@ -46,7 +47,9 @@ function mapItem(r: Record<string, any>): DdItemRecord {
     item_id: r.dd_item_id, opportunity_id: r.opportunity_id,
     section: r.section, item: r.item, question: str(r.question),
     jurisdiction: r.jurisdiction, priority: r.priority, status: r.status,
-    owner: null, ownerUserId: r.owner_user_id ?? null, ownerName: str(r.owner_name),
+    owner: null, ownerUserId: r.owner_user_id ?? null,
+    // Supplied by the caller from the staff directory, not by a column.
+    ownerName: null,
     due_date: str(r.due_date), risk_level: r.risk_level ?? null,
     notes: str(r.notes), linked_documents: r.source_document_id ? [r.source_document_id] : [],
     finding: str(r.finding), resolution: str(r.resolution),
@@ -59,14 +62,14 @@ function mapItem(r: Record<string, any>): DdItemRecord {
 
 export async function listDdItems(session: Session, opportunityId: string): Promise<DdItemRecord[]> {
   return withSession(session, async (tx: Queryable) => {
-    const { rows } = await tx.query(
-      `select d.*, coalesce(nullif(p.name, ''), p.email) as owner_name
-         from opportunity_dd_items d
-         left join profiles p on p.user_id = d.owner_user_id
-        where d.opportunity_id = $1
-        order by d.section, d.item`,
+    const { rows } = await tx.query<Record<string, any>>(
+      "select * from opportunity_dd_items where opportunity_id = $1 order by section, item",
       [opportunityId]);
-    return rows.map(mapItem);
+    const directory = await staffNamesOn(tx, rows.map((r) => r.owner_user_id));
+    return rows.map((r) => ({
+      ...mapItem(r),
+      ownerName: nameOf(directory, r.owner_user_id ?? null),
+    }));
   });
 }
 

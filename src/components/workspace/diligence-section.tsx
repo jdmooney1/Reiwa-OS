@@ -177,9 +177,9 @@ export function DiligenceSection({
  *
  * Returns null for an unowned line rather than the word "Unassigned": on a
  * 51-line framework most lines are unowned early on, and a column of
- * "Unassigned" is noise that hides the handful that are owned. Where an owner
- * exists but cannot be named — `profiles_self` stops a non-admin reading a
- * colleague's profile — the row says "Assigned" rather than claiming nobody.
+ * "Unassigned" is noise that hides the handful that are owned. A colleague's
+ * name now resolves through the staff directory (migration 0011); "Assigned"
+ * remains only for an owner with no name recorded against them.
  */
 function ownerLabel(item: DdItemRecord): string | null {
   if (item.ownerName) return item.ownerName;

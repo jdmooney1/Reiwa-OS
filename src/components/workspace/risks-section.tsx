@@ -219,12 +219,13 @@ function RiskTable({
 }
 
 /**
- * Who owns this risk, without claiming more than the reader can be told.
+ * Who owns this risk.
  *
- * Three states, not two. `profiles_self` lets a non-admin read only their own
- * profile row, so a risk owned by a colleague arrives with an owner id and no
- * name. Rendering that as "Unassigned" would be a lie with operational
- * consequences — somebody would pick it up twice, or not at all.
+ * A colleague's name now resolves through the staff directory (migration 0011),
+ * so the ordinary answer is a person. "Unassigned" means exactly what it says:
+ * no owner is set. The remaining case — an owner is set but no name is recorded
+ * against that user — is not "Unassigned", because rendering it that way would
+ * have somebody pick the risk up twice or not at all.
  */
 function ownerLabel(risk: OpportunityRisk): string {
   if (risk.ownerName) return risk.ownerName;

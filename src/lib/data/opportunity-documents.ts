@@ -13,6 +13,7 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { num, str } from "@/lib/data/coerce";
+import { staffNamesOn, nameOf } from "@/lib/data/directory";
 import type { DocCategory } from "@/types/database";
 
 export type DocumentAccessLevel = "standard" | "diligence" | "internal";
@@ -39,7 +40,7 @@ function mapDoc(r: Record<string, any>): OpportunityDocument {
     title: r.title, category: r.category, storagePath: r.storage_path,
     fileName: str(r.file_name), mimeType: str(r.mime_type), sizeBytes: num(r.size_bytes),
     accessLevel: r.access_level, uploadedBy: r.uploaded_by ?? null,
-    uploadedByName: str(r.uploaded_by_name), createdAt: r.created_at,
+    uploadedByName: null, createdAt: r.created_at,
   };
 }
 
@@ -47,13 +48,17 @@ export async function listDocuments(
   session: Session, opportunityId: string,
 ): Promise<OpportunityDocument[]> {
   return withSession(session, async (tx: Queryable) => {
-    const { rows } = await tx.query(
-      `select d.*, coalesce(p.name, p.email) as uploaded_by_name
-         from opportunity_documents d
-         left join profiles p on p.user_id = d.uploaded_by
-        where d.opportunity_id = $1 order by d.created_at desc`,
+    const { rows } = await tx.query<Record<string, any>>(
+      `select * from opportunity_documents
+        where opportunity_id = $1 order by created_at desc`,
       [opportunityId]);
-    return rows.map(mapDoc);
+    // Resolved through the directory (migration 0011): the `profiles` join this
+    // replaced named only the reader, so a colleague's upload showed no one.
+    const directory = await staffNamesOn(tx, rows.map((r) => r.uploaded_by));
+    return rows.map((r) => ({
+      ...mapDoc(r),
+      uploadedByName: nameOf(directory, r.uploaded_by ?? null),
+    }));
   });
 }
 

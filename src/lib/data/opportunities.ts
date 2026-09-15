@@ -4,6 +4,7 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { num, str } from "@/lib/data/coerce";
+import { staffNamesOn, nameOf } from "@/lib/data/directory";
 import type {
   Opportunity, OppStage, OppStatus, OppPriority, SourceType,
 } from "@/lib/data/opportunity-types";
@@ -26,7 +27,9 @@ function mapOpp(r: Record<string, any>): Opportunity {
     sourcedAt: str(r.sourced_at), referralNote: str(r.referral_note),
     brokerName: str(r.broker_name), vendorName: str(r.vendor_name),
     priority: r.priority as OppPriority,
-    ownerUserId: r.owner_user_id ?? null, ownerName: str(r.owner_name),
+    ownerUserId: r.owner_user_id ?? null,
+    // Supplied by the caller from the staff directory, not by a column.
+    ownerName: null,
     nextMilestone: str(r.next_milestone), nextMilestoneDate: str(r.next_milestone_date),
     lastMaterialUpdateAt: r.last_material_update_at ?? null,
     sizeSqft: num(r.size_sqft), sizeSqm: num(r.size_sqm), summary: str(r.summary),
@@ -36,25 +39,38 @@ function mapOpp(r: Record<string, any>): Opportunity {
   };
 }
 
+// No join to `profiles`: it resolved only the reader's own name and left every
+// colleague null (see migration 0011). Owners are resolved in one batch through
+// the directory, which is where that decision now lives.
 const SELECT = `
-  select o.*, p.address, p.city, p.country, a.asset_id,
-         coalesce(owner.name, owner.email) as owner_name
+  select o.*, p.address, p.city, p.country, a.asset_id
   from opportunities o
   left join properties p on p.property_id = o.property_id
-  left join assets a on a.opportunity_id = o.opportunity_id
-  left join profiles owner on owner.user_id = o.owner_user_id`;
+  left join assets a on a.opportunity_id = o.opportunity_id`;
+
+/** Attach owner display names to a set of rows in a single directory call. */
+async function withOwnerNames(
+  tx: Queryable, rows: Record<string, any>[],
+): Promise<Opportunity[]> {
+  const directory = await staffNamesOn(tx, rows.map((r) => r.owner_user_id));
+  return rows.map((r) => ({
+    ...mapOpp(r),
+    ownerName: nameOf(directory, r.owner_user_id ?? null),
+  }));
+}
 
 export async function listOpportunities(session: Session): Promise<Opportunity[]> {
   return withSession(session, async (tx: Queryable) => {
     const { rows } = await tx.query(`${SELECT} order by o.updated_at desc`);
-    return rows.map(mapOpp);
+    return withOwnerNames(tx, rows);
   });
 }
 
 export async function getOpportunity(session: Session, id: string): Promise<Opportunity | null> {
   return withSession(session, async (tx) => {
     const { rows } = await tx.query(`${SELECT} where o.opportunity_id = $1`, [id]);
-    return rows[0] ? mapOpp(rows[0]) : null;
+    if (!rows[0]) return null;
+    return (await withOwnerNames(tx, rows))[0];
   });
 }
 

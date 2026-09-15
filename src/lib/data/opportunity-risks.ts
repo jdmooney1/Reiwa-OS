@@ -14,6 +14,7 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { num, str } from "@/lib/data/coerce";
+import { staffNamesOn, nameOf } from "@/lib/data/directory";
 
 export type RiskSeverity = "low" | "medium" | "high" | "critical";
 export type OppRiskStatus = "open" | "mitigated" | "accepted" | "closed";
@@ -31,13 +32,12 @@ export interface OpportunityRisk {
   mitigation: string | null;
   ownerUserId: string | null;
   /**
-   * The owner's display name, joined for the register.
+   * The owner's display name, resolved through the staff directory.
    *
-   * Null does NOT mean unowned — `profiles_self` (migration 0001) lets a
-   * non-admin read only their own profile row, so a colleague's name resolves
-   * to null while `ownerUserId` is still set. The register must distinguish the
-   * two: an owned risk shown as unassigned is worse than one shown as owned by
-   * somebody the reader cannot name.
+   * Since migration 0011 a colleague in the same organisation resolves normally.
+   * Null now means only that no name is recorded against that user, so it still
+   * does not mean unowned — the register keeps the two apart rather than showing
+   * an owned risk as unassigned.
    */
   ownerName: string | null;
   status: OppRiskStatus;
@@ -54,7 +54,9 @@ function mapRisk(r: Record<string, any>): OpportunityRisk {
     title: r.title, category: r.category, description: str(r.description),
     severity: r.severity, probability: num(r.probability),
     financialImpact: num(r.financial_impact), mitigation: str(r.mitigation),
-    ownerUserId: r.owner_user_id ?? null, ownerName: str(r.owner_name), status: r.status,
+    ownerUserId: r.owner_user_id ?? null,
+    // Supplied by the caller from the staff directory, not by a column.
+    ownerName: null, status: r.status,
     sourceDdItemId: r.source_dd_item_id ?? null,
     migratedToAssetRiskId: r.migrated_to_asset_risk_id ?? null,
     createdBy: r.created_by ?? null, createdAt: r.created_at, updatedAt: r.updated_at,
@@ -75,14 +77,14 @@ export interface NewRisk {
 
 export async function listRisks(session: Session, opportunityId: string): Promise<OpportunityRisk[]> {
   return withSession(session, async (tx: Queryable) => {
-    const { rows } = await tx.query(
-      `select r.*, coalesce(nullif(p.name, ''), p.email) as owner_name
-         from opportunity_risks r
-         left join profiles p on p.user_id = r.owner_user_id
-        where r.opportunity_id = $1
-        order by r.created_at`,
+    const { rows } = await tx.query<Record<string, any>>(
+      "select * from opportunity_risks where opportunity_id = $1 order by created_at",
       [opportunityId]);
-    return rows.map(mapRisk);
+    const directory = await staffNamesOn(tx, rows.map((r) => r.owner_user_id));
+    return rows.map((r) => ({
+      ...mapRisk(r),
+      ownerName: nameOf(directory, r.owner_user_id ?? null),
+    }));
   });
 }
 

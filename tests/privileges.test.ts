@@ -32,6 +32,12 @@ const EXPECTED: Record<string, { authenticated: boolean; why: string }> = {
   investor_active_version_id:    { authenticated: true, why: "publication_versions policy" },
   investor_can_read_document:    { authenticated: true, why: "publication_documents policy" },
 
+  // ---- The internal staff directory (0011) ----------------------------------
+  // Granted to `authenticated` because both staff and investors arrive on that
+  // role and the function must therefore do its own gate: it returns nothing
+  // unless the caller holds a profiles row, which no portal investor does.
+  staff_names: { authenticated: true, why: "workspace name rendering; SECURITY DEFINER, gates on auth.uid()" },
+
   // ---- Called directly by the admin data layer, which runs as authenticated -
   opportunity_publication_source:      { authenticated: true, why: "publication prefill; SECURITY INVOKER, RLS-gated" },
   opportunity_publication_fingerprint: { authenticated: true, why: "drift detection; SECURITY INVOKER, RLS-gated" },
@@ -128,7 +134,9 @@ describe("EXECUTE privileges on schema app", () => {
       select p.proname, array_to_string(p.proconfig, ',') as config
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where p.prosecdef and n.nspname in ('app', 'public')`);
-    expect(definers.length).toBe(5);
+    // Five from the portal work, plus app.staff_names() from 0011.
+    expect(definers.length).toBe(6);
+    expect(definers.map((d) => d.proname)).toContain("staff_names");
     for (const fn of definers) {
       expect({ fn: fn.proname, config: fn.config })
         .toEqual({ fn: fn.proname, config: 'search_path=""' });
