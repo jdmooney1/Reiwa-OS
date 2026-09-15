@@ -452,9 +452,26 @@ async function insertDraftFromSource(
     values);
 
   // Provenance is recorded privately, never on the version row itself.
+  //
+  // Alongside the fingerprint, capture WHICH underwriting version and WHICH
+  // committee decision were live at the moment the draft was taken (Phase 1A).
+  // Without them, "what did the investor actually see approved?" is answerable
+  // only by comparing dates, and the answer changes as the internal record
+  // moves on. Both are sub-selects rather than parameters so that a publication
+  // never depends on the caller having looked them up, and both are nullable:
+  // an opportunity may be published before it has been to committee.
   await tx.query(
-    "insert into publication_version_sources(version_id, source_fingerprint) values ($1,$2)",
-    [rows[0].version_id, source.rows[0].fingerprint]);
+    `insert into publication_version_sources
+       (version_id, source_fingerprint, source_investment_case_id, source_ic_decision_id)
+     values ($1, $2,
+       (select case_id from investment_cases
+         where opportunity_id = $3 and status = 'approved'),
+       (select d.decision_id from ic_decisions d
+          join investment_cases c on c.case_id = d.investment_case_id
+         where d.opportunity_id = $3 and c.status = 'approved'
+           and d.outcome in ('approved', 'approved_with_conditions')
+         order by d.decision_date desc, d.created_at desc limit 1))`,
+    [rows[0].version_id, source.rows[0].fingerprint, opportunityId]);
 
   return { versionId: rows[0].version_id, versionNumber: Number(rows[0].version_number) };
 }

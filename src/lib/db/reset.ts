@@ -26,6 +26,11 @@ const TABLES = [
   "investor_publications",
   "investor_contacts",
   "investor_organizations",
+  // Opportunity foundation (Phase 1A)
+  "ic_decisions",
+  "opportunity_risks",
+  "opportunity_dd_items",
+  "opportunity_documents",
   // Internal Reiwa OS
   "valuations",
   "asset_decisions",

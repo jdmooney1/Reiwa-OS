@@ -47,6 +47,10 @@ const EXPECTED: Record<string, { authenticated: boolean; why: string }> = {
   block_underwriting_plan:    { authenticated: false, why: "trigger function" },
   guard_publication_version:  { authenticated: false, why: "trigger function" },
   guard_publication_document: { authenticated: false, why: "trigger function" },
+  touch_material_update:      { authenticated: false, why: "trigger function" },
+  stamp_dd_completion:        { authenticated: false, why: "trigger function" },
+  apply_ic_decision:          { authenticated: false, why: "trigger function" },
+  guard_ic_decision:          { authenticated: false, why: "trigger function" },
 };
 
 interface FunctionAcl {

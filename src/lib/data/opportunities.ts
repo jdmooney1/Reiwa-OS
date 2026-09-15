@@ -4,10 +4,14 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { num, str } from "@/lib/data/coerce";
-import type { Opportunity, OppStage, OppStatus } from "@/lib/data/opportunity-types";
+import type {
+  Opportunity, OppStage, OppStatus, OppPriority, SourceType,
+} from "@/lib/data/opportunity-types";
 
-export { OPP_STAGES } from "@/lib/data/opportunity-types";
-export type { Opportunity, OppStage, OppStatus } from "@/lib/data/opportunity-types";
+export { OPP_STAGES, SOURCE_TYPES } from "@/lib/data/opportunity-types";
+export type {
+  Opportunity, OppStage, OppStatus, OppPriority, SourceType,
+} from "@/lib/data/opportunity-types";
 
 function mapOpp(r: Record<string, any>): Opportunity {
   return {
@@ -17,7 +21,13 @@ function mapOpp(r: Record<string, any>): Opportunity {
     targetPrice: num(r.target_price), niy: num(r.niy), reversionaryYield: num(r.reversionary_yield),
     passingRent: num(r.passing_rent), erv: num(r.erv), capexBudget: num(r.capex_budget),
     targetIrr: num(r.target_irr), equityMultiple: num(r.equity_multiple), probability: num(r.probability),
-    source: str(r.source), brokerName: str(r.broker_name), vendorName: str(r.vendor_name),
+    source: str(r.source), sourceType: r.source_type as SourceType,
+    sourceContactName: str(r.source_contact_name), sourceContactEmail: str(r.source_contact_email),
+    sourcedAt: str(r.sourced_at), referralNote: str(r.referral_note),
+    brokerName: str(r.broker_name), vendorName: str(r.vendor_name),
+    priority: r.priority as OppPriority,
+    nextMilestone: str(r.next_milestone), nextMilestoneDate: str(r.next_milestone_date),
+    lastMaterialUpdateAt: r.last_material_update_at ?? null,
     sizeSqft: num(r.size_sqft), sizeSqm: num(r.size_sqm), summary: str(r.summary),
     address: str(r.address), city: str(r.city), country: str(r.country),
     createdAt: r.created_at, updatedAt: r.updated_at, archivedAt: r.archived_at ?? null,
@@ -95,6 +105,16 @@ const EDITABLE: Record<string, string> = {
   capexBudget: "capex_budget", targetIrr: "target_irr", equityMultiple: "equity_multiple",
   probability: "probability", source: "source", brokerName: "broker_name",
   vendorName: "vendor_name", summary: "summary", submarket: "submarket",
+  // Origination (Phase 1A). Deliberately a handful of columns rather than a
+  // counterparty directory: a source is a few facts about how the opportunity
+  // arrived, and a CRM built to hold them would be a product of its own.
+  sourceType: "source_type", sourceContactName: "source_contact_name",
+  sourceContactEmail: "source_contact_email", sourcedAt: "sourced_at",
+  referralNote: "referral_note",
+  // Workflow. `lastMaterialUpdateAt` is absent on purpose — a trigger sets it
+  // when stage or status moves, so it cannot be back-dated by an edit.
+  priority: "priority", nextMilestone: "next_milestone",
+  nextMilestoneDate: "next_milestone_date",
 };
 
 export async function updateOpportunity(
