@@ -455,6 +455,14 @@ async function insertDraftFromSource(
   //
   // Alongside the fingerprint, capture WHICH underwriting version and WHICH
   // committee decision were live at the moment the draft was taken (Phase 1A).
+  //
+  // The underwriting version is the AUTHORITATIVE one — approved if there is
+  // one, otherwise the current working version — which is the same rule that
+  // projects the opportunity's headline figures, and therefore the same numbers
+  // this draft was just prefilled from. Capturing only approved versions would
+  // leave a publication drafted ahead of committee with no provenance at all,
+  // which is exactly the case where somebody later asks where the figures came
+  // from.
   // Without them, "what did the investor actually see approved?" is answerable
   // only by comparing dates, and the answer changes as the internal record
   // moves on. Both are sub-selects rather than parameters so that a publication
@@ -465,7 +473,8 @@ async function insertDraftFromSource(
        (version_id, source_fingerprint, source_investment_case_id, source_ic_decision_id)
      values ($1, $2,
        (select case_id from investment_cases
-         where opportunity_id = $3 and status = 'approved'),
+         where opportunity_id = $3 and status in ('approved', 'current')
+         order by (status = 'approved') desc, version desc limit 1),
        (select d.decision_id from ic_decisions d
           join investment_cases c on c.case_id = d.investment_case_id
          where d.opportunity_id = $3 and c.status = 'approved'

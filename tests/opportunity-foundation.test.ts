@@ -7,18 +7,21 @@
 // ============================================================================
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminQuery, type Session } from "@/lib/db/client";
-import { createOpportunity } from "@/lib/data/opportunities";
+import { createOpportunity, updateOpportunity, getOpportunity } from "@/lib/data/opportunities";
 import {
   createVersion, updateVersion, currentVersion, approvedVersion,
   listVersions, getVersion, makeCurrent,
 } from "@/lib/data/underwriting";
 import {
-  applyDdTemplate, listDdItems, updateDdItem, addDdItem,
+  applyDdTemplate, listDdItems, updateDdItem, addDdItem, appliedTemplates,
 } from "@/lib/data/due-diligence";
 import {
   promoteFindingToRisk, listRisks, updateRisk, carryForwardRisks, createRisk,
 } from "@/lib/data/opportunity-risks";
-import { recordDecision, listDecisions, approvingDecision } from "@/lib/data/ic-decisions";
+import {
+  recordDecision, listDecisions, approvingDecision,
+  amendDecision, listAmendments, effectiveDecision,
+} from "@/lib/data/ic-decisions";
 import { recordDocument, listDocuments } from "@/lib/data/opportunity-documents";
 import { computeProgress, criticalOpenItems } from "@/lib/dd/progress";
 import { orgIdByName, orgUserSession, viewerSession, profileIdByEmail } from "./helpers";
@@ -41,11 +44,16 @@ beforeAll(async () => {
   session = orgUserSession([meiji], analyst);
 });
 
+/**
+ * An opportunity logged but not yet underwritten — no economics, so no
+ * investment case. That is the honest starting state, and it keeps version
+ * numbering in these tests meaningful: version 1 is whatever the test creates.
+ */
 async function newOpportunity(name: string): Promise<string> {
   return createOpportunity(session, {
     orgId: meiji, name, city: "London", country: "United Kingdom",
     market: "London", assetType: "office", strategy: "value_add",
-    currency: "GBP", targetPrice: 30000000,
+    currency: "GBP",
   });
 }
 
@@ -256,10 +264,10 @@ describe("Due diligence", () => {
     expect(progress.pct).toBe(0);
   });
 
-  it("refuses to apply a second framework over the first", async () => {
+  it("refuses to apply the same framework over itself", async () => {
     const opp = await newOpportunity("DD Double");
     await applyDdTemplate(session, opp);
-    await expect(applyDdTemplate(session, opp)).rejects.toThrow(/already has/i);
+    await expect(applyDdTemplate(session, opp)).rejects.toThrow(/already been applied/i);
   });
 
   it("stamps completion from the status rather than trusting the caller", async () => {
@@ -494,5 +502,180 @@ describe("Conversion readiness", () => {
     const open = criticalOpenItems(items.map((i) =>
       i.ddItemId === critical.ddItemId ? { ...i, status: "issue_identified" as const } : i));
     expect(open.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Review items (Phase 1A, second pass)
+// ---------------------------------------------------------------------------
+describe("One source of financial truth", () => {
+  it("projects the authoritative case onto the opportunity's headline columns", async () => {
+    const opp = await createOpportunity(session, {
+      orgId: meiji, name: "Truth Projection", market: "London",
+      assetType: "office", currency: "GBP", targetPrice: 42_500_000, targetIrr: 14.5,
+    });
+    // Origination economics opened version 1 rather than a second writable copy.
+    const v1 = await currentVersion(session, opp);
+    expect(v1!.version).toBe(1);
+    expect(v1!.acquisitionPrice).toBe(42_500_000);
+
+    const projected = await getOpportunity(session, opp);
+    expect(projected!.targetPrice).toBe(42_500_000);
+    expect(projected!.targetIrr).toBe(14.5);
+
+    // Re-underwriting moves the projection with it.
+    await createVersion(session, opp, {
+      acquisitionPrice: 38_000_000, targetIrr: 16, changeRationale: "Repriced.",
+    });
+    const after = await getOpportunity(session, opp);
+    expect(after!.targetPrice).toBe(38_000_000);
+    expect(after!.targetIrr).toBe(16);
+  });
+
+  it("refuses to write a financial field onto the opportunity", async () => {
+    const opp = await newOpportunity("Truth Refuse");
+    await expect(updateOpportunity(session, opp, { targetPrice: 1 }))
+      .rejects.toThrow(/belong to the investment case/i);
+    await expect(updateOpportunity(session, opp, { niy: 9, targetIrr: 9 }))
+      .rejects.toThrow(/belong to the investment case/i);
+    // Non-financial edits still work.
+    await updateOpportunity(session, opp, { priority: "high", nextMilestone: "IC papers" });
+    expect((await getOpportunity(session, opp))!.priority).toBe("high");
+  });
+});
+
+describe("Material-update semantics", () => {
+  it("moves for material events and stays put for ordinary edits", async () => {
+    const opp = await newOpportunity("Material");
+    const stamp = async () => (await getOpportunity(session, opp))!.lastMaterialUpdateAt;
+
+    await updateOpportunity(session, opp, { summary: "typo fix" });
+    expect(await stamp()).toBeNull();
+
+    const caseId = await createVersion(session, opp, { acquisitionPrice: 1_000_000 });
+    const afterCase = await stamp();
+    expect(afterCase).not.toBeNull();
+
+    await adminQuery("update opportunities set last_material_update_at = null where opportunity_id = $1", [opp]);
+    const ddId = await addDdItem(session, opp, { section: "SWOT", item: "Threats" });
+    await updateDdItem(session, ddId, { status: "in_progress" });
+    expect(await stamp()).toBeNull(); // progress is not news
+
+    await updateDdItem(session, ddId, { status: "issue_identified", finding: "Material." });
+    expect(await stamp()).not.toBeNull(); // an issue is
+
+    await adminQuery("update opportunities set last_material_update_at = null where opportunity_id = $1", [opp]);
+    await recordDecision(session, opp, { investmentCaseId: caseId, outcome: "deferred" });
+    expect(await stamp()).not.toBeNull();
+  });
+});
+
+describe("Supplemental due diligence frameworks", () => {
+  it("refuses the same framework twice but accepts a supplemental one", async () => {
+    const opp = await newOpportunity("DD Supplemental");
+    const first = await applyDdTemplate(session, opp, "london");
+    expect(first).toBeGreaterThan(20);
+
+    await expect(applyDdTemplate(session, opp, "london"))
+      .rejects.toThrow(/already been applied/i);
+
+    const second = await applyDdTemplate(session, opp, "amsterdam");
+    expect(second).toBeGreaterThan(0);
+    expect(await appliedTemplates(session, opp)).toEqual(["amsterdam", "london"]);
+
+    // Completion maths still reads plain rows, and every templated line is keyed.
+    const items = await listDdItems(session, opp);
+    expect(items).toHaveLength(first + second);
+    expect(items.every((i) => i.templateItemKey !== null)).toBe(true);
+    expect(computeProgress(items).total).toBe(first + second);
+
+    // The database is the backstop, not the data layer.
+    const sample = items[0];
+    await expect(adminQuery(
+      `insert into opportunity_dd_items(org_id, opportunity_id, section, item, template_item_key)
+       values ($1,$2,$3,$4,$5)`,
+      [meiji, opp, sample.section, sample.item, sample.templateItemKey],
+    )).rejects.toThrow(/opportunity_dd_items_template_item/);
+  });
+});
+
+describe("IC decision amendments", () => {
+  it("keeps the original readable and attributes every correction", async () => {
+    const opp = await newOpportunity("IC Amend");
+    const caseId = await createVersion(session, opp, { acquisitionPrice: 6_000_000 });
+    const decisionId = await recordDecision(session, opp, {
+      investmentCaseId: caseId, outcome: "approved_with_conditions",
+      conditions: "Subject to the rent deposit being assigned.",
+      rationale: "Basis supports the plan.",
+    });
+
+    // In-place rewriting is refused outright, at the database.
+    await expect(adminQuery(
+      "update ic_decisions set rationale = 'rewritten' where decision_id = $1", [decisionId],
+    )).rejects.toThrow(/cannot be altered/i);
+
+    const amendmentId = await amendDecision(session, decisionId, {
+      reason: "Condition mis-transcribed from the minutes.",
+      conditions: "Subject to the rent deposit AND the roof warranty being assigned.",
+    });
+
+    const eff = await effectiveDecision(session, decisionId);
+    // What the committee originally approved is still there...
+    expect(eff!.original.conditions).toBe("Subject to the rent deposit being assigned.");
+    expect(eff!.original.rationale).toBe("Basis supports the plan.");
+    // ...alongside what now stands, and who changed it and why.
+    expect(eff!.effectiveConditions).toContain("roof warranty");
+    expect(eff!.amendments).toHaveLength(1);
+    expect(eff!.amendments[0].amendmentId).toBe(amendmentId);
+    expect(eff!.amendments[0].reason).toContain("mis-transcribed");
+    expect(eff!.amendments[0].amendedBy).toBe(analyst);
+    expect(eff!.amendments[0].createdAt).toBeTruthy();
+    // An amendment that did not mention the rationale must not blank it.
+    expect(eff!.effectiveRationale).toBe("Basis supports the plan.");
+  });
+
+  it("requires a reason, requires a change, and is itself permanent", async () => {
+    const opp = await newOpportunity("IC Amend Guard");
+    const caseId = await createVersion(session, opp, {});
+    const decisionId = await recordDecision(session, opp, {
+      investmentCaseId: caseId, outcome: "rejected", rationale: "Price.",
+    });
+
+    await expect(amendDecision(session, decisionId, { reason: "   ", rationale: "x" }))
+      .rejects.toThrow(/why the decision record is being amended/i);
+    await expect(amendDecision(session, decisionId, { reason: "No fields given" }))
+      .rejects.toThrow(/must change something/i);
+
+    const id = await amendDecision(session, decisionId, { reason: "Clarify.", rationale: "Price too high." });
+    await expect(adminQuery(
+      "update ic_decision_amendments set reason = 'x' where amendment_id = $1", [id],
+    )).rejects.toThrow(/permanent record/i);
+    await expect(adminQuery(
+      "delete from ic_decision_amendments where amendment_id = $1", [id],
+    )).rejects.toThrow(/permanent record/i);
+
+    expect(await listAmendments(session, decisionId)).toHaveLength(1);
+  });
+});
+
+describe("Publication provenance is durable", () => {
+  it("refuses to destroy an underwriting version cited by a publication", async () => {
+    const opp = await newOpportunity("Prov Durable");
+    const caseId = await createVersion(session, opp, { acquisitionPrice: 12_000_000 });
+
+    const { createPublicationFromOpportunity } = await import("@/lib/data/investor-portal");
+    const admin: Session = { ...session, role: "reiwa_admin", orgIds: [] };
+    const adminUserId = await profileIdByEmail("admin@reiwa.com");
+    await createPublicationFromOpportunity(admin, opp, adminUserId);
+
+    // The draft cited this version; the audit link cannot now be erased.
+    await expect(adminQuery(
+      "delete from investment_cases where case_id = $1", [caseId],
+    )).rejects.toThrow(/publication_version_sources_source_investment_case_id_fkey|violates foreign key/i);
+
+    // And the opportunity cannot be deleted out from under it either.
+    await expect(adminQuery(
+      "delete from opportunities where opportunity_id = $1", [opp],
+    )).rejects.toThrow(/violates foreign key|permanent|immutable/i);
   });
 });

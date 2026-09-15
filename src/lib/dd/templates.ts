@@ -195,6 +195,19 @@ export function defaultTemplateId(market: Market | null): DdTemplate["id"] {
  * Instantiate a template onto an opportunity: each template line becomes a live
  * DD item — Not Started, unowned, with no linked documents yet.
  */
+/**
+ * Stable identity for a templated line, within one opportunity.
+ *
+ * Section and item, not the position in the list: a template that gains a
+ * question in the middle must not silently re-key every line below it, or a
+ * supplemental application would duplicate work already done.
+ */
+export function templateItemKey(
+  templateId: DdTemplate["id"], section: DdSection, item: string,
+): string {
+  return `${templateId}:${section}:${item}`;
+}
+
 export function applyTemplate(
   templateId: DdTemplate["id"],
   opportunityId: string,

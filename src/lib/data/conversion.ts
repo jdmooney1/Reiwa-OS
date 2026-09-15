@@ -34,7 +34,10 @@ export async function convertToAsset(
     const orgId = opp.org_id as string;
     const acqDate = opts.acquisitionDate ?? null;
 
-    // Approved investment case (immutable). Reuse one if already approved.
+    // The approved underwriting. Normally it already exists, because recording
+    // an IC decision is what approves one; conversion only falls back when an
+    // opportunity reached `approved` without going through committee in this
+    // system (a legacy row, or a seeded fixture).
     let caseId: string;
     const caseRes = await tx.query<{ case_id: string }>(
       "select case_id from investment_cases where opportunity_id = $1 and status = 'approved' order by version desc limit 1",
@@ -42,13 +45,58 @@ export async function convertToAsset(
     if (caseRes.rows[0]) {
       caseId = caseRes.rows[0].case_id;
     } else {
+      // Prefer the working version's own figures over the opportunity's
+      // projected headline columns: the case is the authoritative record, and
+      // it carries fields (costs, debt, occupancy, exit) the projection drops.
+      const working = await tx.query<Record<string, any>>(
+        `select * from investment_cases where opportunity_id = $1
+          order by (status = 'current') desc, version desc limit 1`, [opportunityId]);
+      const w = working.rows[0];
+
+      // Column and value are written as one pair so the two lists cannot drift
+      // out of step — which they did, silently, when they were two literals.
+      const carried: [string, unknown][] = [
+        ["acquisition_price", w?.acquisition_price ?? opp.target_price ?? null],
+        ["acquisition_costs", w?.acquisition_costs ?? null],
+        ["noi", w?.noi ?? null],
+        ["gross_rental_income", w?.gross_rental_income ?? opp.passing_rent ?? null],
+        ["erv", w?.erv ?? opp.erv ?? null],
+        ["capex", w?.capex ?? opp.capex_budget ?? null],
+        ["equity", w?.equity ?? null],
+        ["debt", w?.debt ?? null],
+        ["ltv_pct", w?.ltv_pct ?? null],
+        ["valuation", w?.valuation ?? w?.acquisition_price ?? opp.target_price ?? null],
+        ["exit_value", w?.exit_value ?? null],
+        ["entry_yield_pct", w?.entry_yield_pct ?? opp.niy ?? null],
+        ["exit_yield_pct", w?.exit_yield_pct ?? opp.reversionary_yield ?? null],
+        ["hold_period_years", w?.hold_period_years ?? null],
+        ["occupancy_pct", w?.occupancy_pct ?? null],
+        ["target_irr", w?.target_irr ?? opp.target_irr ?? null],
+        ["target_equity_multiple", w?.target_equity_multiple ?? opp.equity_multiple ?? null],
+        ["strategy", w?.strategy ?? opp.strategy ?? null],
+        ["thesis", w?.thesis ?? opp.summary ?? null],
+        ["business_plan_assumptions", w?.business_plan_assumptions ?? null],
+        ["created_by", opp.created_by ?? null],
+      ];
+      // Fixed leading parameters: $1 org, $2 opportunity, $3 acquisition date,
+      // $4 assumptions. Version is allocated in SQL — numbers are per
+      // opportunity and never reused, so this may not be version 1.
+      const lead = 4;
+      const params: unknown[] = [
+        orgId, opportunityId, acqDate,
+        w?.assumptions ? JSON.stringify(w.assumptions) : null,
+        ...carried.map(([, v]) => v),
+      ];
       const ins = await tx.query<{ case_id: string }>(
-        `insert into investment_cases(org_id, opportunity_id, version, status, approved_at,
-           acquisition_price, acquisition_date, noi, erv, capex, valuation, target_irr, target_equity_multiple, thesis)
-         values ($1,$2,1,'approved', now(), $3, coalesce($4::date, current_date), $5, $6, $7, $3, $8, $9, $10)
-         returning case_id`,
-        [orgId, opportunityId, opp.target_price ?? null, acqDate, opp.passing_rent ?? null, opp.erv ?? null,
-         opp.capex_budget ?? null, opp.target_irr ?? null, opp.equity_multiple ?? null, opp.summary ?? null]);
+        `insert into investment_cases
+           (org_id, opportunity_id, version, status, approved_at, acquisition_date,
+            assumptions, ${carried.map(([c]) => c).join(", ")})
+         values ($1, $2,
+           (select coalesce(max(version), 0) + 1 from investment_cases where opportunity_id = $2),
+           'approved', now(), coalesce($3::date, current_date),
+           coalesce($4::jsonb, '{}'::jsonb),
+           ${carried.map((_, i) => `$${lead + i + 1}`).join(", ")})
+         returning case_id`, params);
       caseId = ins.rows[0].case_id;
     }
 

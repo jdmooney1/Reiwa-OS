@@ -27,6 +27,7 @@ const TABLES = [
   "investor_contacts",
   "investor_organizations",
   // Opportunity foundation (Phase 1A)
+  "ic_decision_amendments",
   "ic_decisions",
   "opportunity_risks",
   "opportunity_dd_items",

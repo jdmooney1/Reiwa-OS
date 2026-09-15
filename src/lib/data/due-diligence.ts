@@ -14,7 +14,9 @@
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { str } from "@/lib/data/coerce";
 import type { DueDiligenceItem, DdStatus } from "@/types/database";
-import { applyTemplate, defaultTemplateId, type DdTemplate } from "@/lib/dd/templates";
+import {
+  applyTemplate, defaultTemplateId, templateItemKey, type DdTemplate,
+} from "@/lib/dd/templates";
 
 /** A persisted workstream: the framework line plus what diligence found. */
 export interface DdItemRecord extends DueDiligenceItem {
@@ -26,6 +28,8 @@ export interface DdItemRecord extends DueDiligenceItem {
   ownerUserId: string | null;
   completedAt: string | null;
   templateId: string | null;
+  /** Stable identity of a templated line; null for hand-added items. */
+  templateItemKey: string | null;
 }
 
 function mapItem(r: Record<string, any>): DdItemRecord {
@@ -39,6 +43,7 @@ function mapItem(r: Record<string, any>): DdItemRecord {
     notes: str(r.notes), linked_documents: r.source_document_id ? [r.source_document_id] : [],
     finding: str(r.finding), resolution: str(r.resolution),
     sourceDocumentId: r.source_document_id ?? null, templateId: str(r.template_id),
+    templateItemKey: str(r.template_item_key),
     completedAt: r.completed_at ?? null,
     created_at: r.created_at, updated_at: r.updated_at,
   };
@@ -55,10 +60,18 @@ export async function listDdItems(session: Session, opportunityId: string): Prom
 /**
  * Instantiate a standing framework onto an opportunity.
  *
- * Refuses if the opportunity already has workstreams. Applying a template twice
- * would silently double every line and quietly halve the completion percentage
- * — a diligence tracker that says 40% when the work is 80% done is worse than
- * one that refuses the second click.
+ * Applying the SAME framework twice is refused: it would double every line and
+ * halve the reported completion, and a tracker that says 40% when the work is
+ * 80% done is worse than one that refuses the second click.
+ *
+ * Applying a DIFFERENT framework is allowed and additive — a cross-border tax
+ * or ESG pack is a normal thing to bring in mid-diligence. Each instantiated
+ * line carries a stable `template_item_key`, unique per opportunity, so the two
+ * cases are distinguished by the data rather than by a blanket ban on a second
+ * application. `on conflict do nothing` makes a partially-overlapping
+ * supplemental framework land cleanly instead of failing whole.
+ *
+ * Returns how many lines were added.
  */
 export async function applyDdTemplate(
   session: Session,
@@ -70,24 +83,47 @@ export async function applyDdTemplate(
       "select org_id, market from opportunities where opportunity_id = $1", [opportunityId]);
     if (!opp.rows[0]) throw new Error("Opportunity not found or not permitted");
 
-    const existing = await tx.query<{ n: string }>(
-      "select count(*)::int as n from opportunity_dd_items where opportunity_id = $1", [opportunityId]);
-    if (Number(existing.rows[0].n) > 0) {
-      throw new Error("This opportunity already has a due diligence framework applied.");
-    }
-
     const chosen = templateId ?? defaultTemplateId((opp.rows[0].market ?? null) as never);
-    const items = applyTemplate(chosen, opportunityId);
 
-    for (const it of items) {
-      await tx.query(
-        `insert into opportunity_dd_items
-           (org_id, opportunity_id, section, item, question, jurisdiction, priority, status, risk_level, template_id, created_by)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [opp.rows[0].org_id, opportunityId, it.section, it.item, it.question, it.jurisdiction,
-         it.priority, it.status, it.risk_level, chosen, session.userId ?? null]);
+    const already = await tx.query<{ n: number }>(
+      "select count(*)::int as n from opportunity_dd_items where opportunity_id = $1 and template_id = $2",
+      [opportunityId, chosen]);
+    if (Number(already.rows[0].n) > 0) {
+      throw new Error(`The ${chosen} due diligence framework has already been applied to this opportunity.`);
     }
-    return items.length;
+
+    const items = applyTemplate(chosen, opportunityId);
+    let added = 0;
+    for (const it of items) {
+      const res = await tx.query<{ dd_item_id: string }>(
+        `insert into opportunity_dd_items
+           (org_id, opportunity_id, section, item, question, jurisdiction, priority, status,
+            risk_level, template_id, template_item_key, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         on conflict (opportunity_id, template_item_key) where template_item_key is not null
+           do nothing
+         returning dd_item_id`,
+        [opp.rows[0].org_id, opportunityId, it.section, it.item, it.question, it.jurisdiction,
+         it.priority, it.status, it.risk_level, chosen,
+         templateItemKey(chosen, it.section, it.item), session.userId ?? null]);
+      // No row returned means this exact line already exists from an earlier
+      // framework — the supplemental pack shares it rather than duplicating it.
+      if (res.rows.length > 0) added += 1;
+    }
+    return added;
+  });
+}
+
+/** Which standing frameworks have been instantiated on this opportunity. */
+export async function appliedTemplates(
+  session: Session, opportunityId: string,
+): Promise<string[]> {
+  return withSession(session, async (tx) => {
+    const { rows } = await tx.query<{ template_id: string }>(
+      `select distinct template_id from opportunity_dd_items
+        where opportunity_id = $1 and template_id is not null order by template_id`,
+      [opportunityId]);
+    return rows.map((r) => r.template_id);
   });
 }
 

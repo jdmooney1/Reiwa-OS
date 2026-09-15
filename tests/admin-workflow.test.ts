@@ -13,6 +13,7 @@ import { withSession, withInvestorSession, type Session } from "@/lib/db/client"
 import { createSupabaseAdminClient, ensureAuthUser } from "@/lib/supabase/admin";
 import { DEMO_PASSWORD } from "@/lib/db/seed";
 import { createOpportunity, updateOpportunity } from "@/lib/data/opportunities";
+import { createVersion } from "@/lib/data/underwriting";
 import {
   createInvestorOrganization, createInvestorContact, createPublicationFromOpportunity,
   updateDraftVersion, submitVersionForReview, returnVersionToDraft, publishVersion,
@@ -292,7 +293,13 @@ describe("Editing published content", () => {
 // ============================================================================
 describe("Source drift", () => {
   it("reports the change and leaves the publication untouched", async () => {
-    await updateOpportunity(staff, oppA, { targetPrice: 45000000, summary: "Repriced guide." });
+    // Repricing is an underwriting change, not an edit to the opportunity row:
+    // the price is projected onto it from the authoritative investment case
+    // (Phase 1A). The internal record still moves, which is what drift means.
+    await createVersion(staff, oppA, {
+      acquisitionPrice: 45000000, changeRationale: "Repriced guide.",
+    }, { createdBy: null }); // this suite's session is synthetic; authorship is not what it tests
+    await updateOpportunity(staff, oppA, { summary: "Repriced guide." });
 
     const drift = await publicationSourceDrift(adminSession, versionTwo);
     expect(drift.changed).toBe(true);

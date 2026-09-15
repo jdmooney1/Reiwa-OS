@@ -77,7 +77,19 @@ export interface NewOpportunity {
   ownerUserId?: string | null;
 }
 
-/** Create a property (neutral identity) + opportunity, atomically. */
+/**
+ * Create a property (neutral identity) + opportunity, atomically.
+ *
+ * Any headline economics supplied at origination open UNDERWRITING VERSION 1
+ * rather than being written onto the opportunity row. That is the whole point
+ * of Phase 1A: the first number anybody types about an investment is already a
+ * version of the underwriting, authored and dated, not a loose field that the
+ * real model later contradicts. The projection trigger fills the opportunity's
+ * (now derived) headline columns from it.
+ *
+ * An opportunity logged with no figures gets no case, which is correct — it has
+ * not been underwritten yet.
+ */
 export async function createOpportunity(session: Session, input: NewOpportunity): Promise<string> {
   return withSession(session, async (tx) => {
     const prop = await tx.query<{ property_id: string }>(
@@ -86,40 +98,86 @@ export async function createOpportunity(session: Session, input: NewOpportunity)
       [input.orgId, input.name, input.city ?? null, input.country ?? null, input.market ?? null, input.assetType ?? "other"]);
     const opp = await tx.query<{ opportunity_id: string }>(
       `insert into opportunities(org_id, property_id, name, market, submarket, asset_type, strategy, currency,
-         target_price, source, broker_name, vendor_name, niy, target_irr, capex_budget, probability, summary,
+         source, broker_name, vendor_name, probability, summary,
          owner_user_id, created_by, stage, status)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$18,'new','active')
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14,'new','active')
        returning opportunity_id`,
       [input.orgId, prop.rows[0].property_id, input.name, input.market ?? null, input.submarket ?? null,
-       input.assetType ?? "other", input.strategy ?? null, input.currency ?? "GBP", input.targetPrice ?? null,
-       input.source ?? null, input.brokerName ?? null, input.vendorName ?? null, input.niy ?? null,
-       input.targetIrr ?? null, input.capexBudget ?? null, input.probability ?? null, input.summary ?? null,
-       input.ownerUserId ?? null]);
-    return opp.rows[0].opportunity_id;
+       input.assetType ?? "other", input.strategy ?? null, input.currency ?? "GBP",
+       input.source ?? null, input.brokerName ?? null, input.vendorName ?? null,
+       input.probability ?? null, input.summary ?? null, input.ownerUserId ?? null]);
+    const opportunityId = opp.rows[0].opportunity_id;
+
+    const economics: [string, number | null | undefined][] = [
+      ["acquisition_price", input.targetPrice],
+      ["entry_yield_pct", input.niy],
+      ["capex", input.capexBudget],
+      ["target_irr", input.targetIrr],
+    ];
+    const given = economics.filter(([, v]) => v !== null && v !== undefined);
+    if (given.length > 0) {
+      const cols = given.map(([c]) => c);
+      const vals = given.map(([, v]) => v);
+      // $1 org_id, $2 opportunity_id, $3 created_by, $4 strategy; economics follow.
+      const start = 5;
+      await tx.query(
+        `insert into investment_cases(org_id, opportunity_id, version, status, created_by, strategy, ${cols.join(", ")})
+         values ($1,$2,1,'current',$3,$4,${cols.map((_, i) => `$${start + i}`).join(", ")})`,
+        // created_by mirrors the opportunity row's own, so the two records agree
+        // about who logged this and a caller needs to supply it in one place.
+        [input.orgId, opportunityId, input.ownerUserId ?? null, input.strategy ?? null, ...vals]);
+    }
+    return opportunityId;
   });
 }
 
+/**
+ * What may be written on the opportunity itself: identity, origination and
+ * workflow. No money.
+ *
+ * Purchase price, yields, IRR, equity multiple, rent, ERV and capex all live on
+ * the versioned investment case and are PROJECTED onto this row by a trigger
+ * (migration 0009). Leaving them writable here as well is how a pipeline card
+ * ends up showing a price the approved underwriting has never heard of, with no
+ * way to tell which one is real.
+ */
 const EDITABLE: Record<string, string> = {
-  name: "name", strategy: "strategy", targetPrice: "target_price", niy: "niy",
-  reversionaryYield: "reversionary_yield", passingRent: "passing_rent", erv: "erv",
-  capexBudget: "capex_budget", targetIrr: "target_irr", equityMultiple: "equity_multiple",
+  name: "name", market: "market", submarket: "submarket",
+  assetType: "asset_type", strategy: "strategy", currency: "currency",
   probability: "probability", source: "source", brokerName: "broker_name",
-  vendorName: "vendor_name", summary: "summary", submarket: "submarket",
+  vendorName: "vendor_name", summary: "summary",
   // Origination (Phase 1A). Deliberately a handful of columns rather than a
   // counterparty directory: a source is a few facts about how the opportunity
   // arrived, and a CRM built to hold them would be a product of its own.
   sourceType: "source_type", sourceContactName: "source_contact_name",
   sourceContactEmail: "source_contact_email", sourcedAt: "sourced_at",
   referralNote: "referral_note",
-  // Workflow. `lastMaterialUpdateAt` is absent on purpose — a trigger sets it
-  // when stage or status moves, so it cannot be back-dated by an edit.
+  // Workflow. `lastMaterialUpdateAt` is absent on purpose — triggers set it
+  // when something material happens, so it cannot be back-dated by an edit.
   priority: "priority", nextMilestone: "next_milestone",
   nextMilestoneDate: "next_milestone_date",
 };
 
+/** Financial fields that used to be writable here. Now owned by the case. */
+export const CASE_OWNED_FIELDS: Record<string, string> = {
+  targetPrice: "acquisitionPrice", niy: "entryYieldPct",
+  reversionaryYield: "exitYieldPct", passingRent: "grossRentalIncome",
+  erv: "erv", capexBudget: "capex", targetIrr: "targetIrr",
+  equityMultiple: "targetEquityMultiple",
+};
 export async function updateOpportunity(
   session: Session, id: string, patch: Record<string, unknown>,
 ): Promise<void> {
+  // Refused, not silently dropped: a caller that thinks it just changed the
+  // purchase price and got no error will not look again.
+  const owned = Object.keys(patch).filter((k) => k in CASE_OWNED_FIELDS);
+  if (owned.length > 0) {
+    throw new Error(
+      `${owned.join(", ")} belong to the investment case, not the opportunity. ` +
+      `Create or edit an underwriting version instead ` +
+      `(${owned.map((k) => CASE_OWNED_FIELDS[k]).join(", ")}).`,
+    );
+  }
   const sets: string[] = [];
   const params: unknown[] = [];
   for (const [k, col] of Object.entries(EDITABLE)) {

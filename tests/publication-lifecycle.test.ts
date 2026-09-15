@@ -14,6 +14,7 @@ import { adminQuery, withInvestorSession, withSession, type Session } from "@/li
 import { createSupabaseAdminClient, ensureAuthUser } from "@/lib/supabase/admin";
 import { DEMO_PASSWORD } from "@/lib/db/seed";
 import { createOpportunity, updateOpportunity } from "@/lib/data/opportunities";
+import { createVersion } from "@/lib/data/underwriting";
 import {
   addPublicationDocument, createInvestorContact, createInvestorOrganization,
   createPublicationFromOpportunity, getPublicationProvenance, getVersionProvenance,
@@ -325,9 +326,13 @@ describe("The publication is independent of the internal opportunity", () => {
     const driftBefore = await publicationSourceDrift(adminSession, versionOne);
     expect(driftBefore.changed).toBe(false);
 
+    // The price moves through the investment case, which projects onto the
+    // opportunity — there is no second writable copy of it any more.
+    await createVersion(staff, opportunityId, {
+      acquisitionPrice: 47500000, changeRationale: "Second inspection.",
+    }, { createdBy: null }); // this suite's session is synthetic; authorship is not what it tests
     await updateOpportunity(staff, opportunityId, {
       name: "14 Cavendish Row (renamed internally)",
-      targetPrice: 47500000,
       summary: "Internal view revised after the second inspection.",
     });
 

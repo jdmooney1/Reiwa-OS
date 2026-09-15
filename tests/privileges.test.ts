@@ -51,6 +51,9 @@ const EXPECTED: Record<string, { authenticated: boolean; why: string }> = {
   stamp_dd_completion:        { authenticated: false, why: "trigger function" },
   apply_ic_decision:          { authenticated: false, why: "trigger function" },
   guard_ic_decision:          { authenticated: false, why: "trigger function" },
+  guard_ic_amendment:         { authenticated: false, why: "trigger function" },
+  touch_opportunity_material: { authenticated: false, why: "trigger function" },
+  project_case_to_opportunity: { authenticated: false, why: "trigger function" },
 };
 
 interface FunctionAcl {

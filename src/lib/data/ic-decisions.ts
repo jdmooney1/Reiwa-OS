@@ -130,33 +130,117 @@ export async function recordDecision(
   });
 }
 
+/** An attributed correction to a decision. The original is never rewritten. */
+export interface IcDecisionAmendment {
+  amendmentId: string;
+  decisionId: string;
+  amendedConditions: string | null;
+  amendedRationale: string | null;
+  amendedFollowUp: string | null;
+  reason: string;
+  amendedBy: string | null;
+  createdAt: string;
+}
+
+function mapAmendment(r: Record<string, any>): IcDecisionAmendment {
+  return {
+    amendmentId: r.amendment_id, decisionId: r.decision_id,
+    amendedConditions: str(r.amended_conditions),
+    amendedRationale: str(r.amended_rationale),
+    amendedFollowUp: str(r.amended_follow_up),
+    reason: r.reason, amendedBy: r.amended_by ?? null, createdAt: r.created_at,
+  };
+}
+
 /**
- * Amend the written-up parts of a minute.
+ * Correct a minute, on the record.
  *
- * What was decided, on what underwriting, and when are not here — a trigger
- * refuses those, and deletion outright. A committee that changed its mind
- * records a new decision; it does not edit the old one.
+ * The decision row is immutable — a trigger refuses every update and every
+ * delete — so a correction is a new, attributed row saying what changed, who
+ * changed it, when and why. What the committee originally approved therefore
+ * stays readable forever, next to every subsequent amendment, instead of being
+ * quietly replaced by whoever last had write access.
+ *
+ * `reason` is required. An amendment with no stated reason is indistinguishable
+ * from the silent rewrite this design exists to prevent.
  */
 export async function amendDecision(
   session: Session,
   decisionId: string,
-  patch: { conditions?: string | null; rationale?: string | null;
-           followUp?: string | null; decisionMakers?: string[] },
-): Promise<void> {
-  const cols: Record<string, string> = {
-    conditions: "conditions", rationale: "rationale",
-    followUp: "follow_up", decisionMakers: "decision_makers",
-  };
-  const sets: string[] = [];
-  const params: unknown[] = [];
-  for (const [key, col] of Object.entries(cols)) {
-    if (key in patch) {
-      params.push((patch as Record<string, unknown>)[key]);
-      sets.push(`${col} = $${params.length}`);
-    }
+  input: {
+    reason: string;
+    conditions?: string | null;
+    rationale?: string | null;
+    followUp?: string | null;
+  },
+): Promise<string> {
+  if (!input.reason?.trim()) {
+    throw new Error("State why the decision record is being amended.");
   }
-  if (sets.length === 0) return;
-  params.push(decisionId);
-  await withSession(session, (tx) =>
-    tx.query(`update ic_decisions set ${sets.join(", ")} where decision_id = $${params.length}`, params));
+  if (input.conditions === undefined && input.rationale === undefined && input.followUp === undefined) {
+    throw new Error("An amendment must change something.");
+  }
+  return withSession(session, async (tx) => {
+    const d = await tx.query<{ org_id: string }>(
+      "select org_id from ic_decisions where decision_id = $1", [decisionId]);
+    if (!d.rows[0]) throw new Error("Decision not found or not permitted");
+    const res = await tx.query<{ amendment_id: string }>(
+      `insert into ic_decision_amendments
+         (org_id, decision_id, amended_conditions, amended_rationale, amended_follow_up, reason, amended_by)
+       values ($1,$2,$3,$4,$5,$6,$7) returning amendment_id`,
+      [d.rows[0].org_id, decisionId, input.conditions ?? null, input.rationale ?? null,
+       input.followUp ?? null, input.reason.trim(), session.userId ?? null]);
+    return res.rows[0].amendment_id;
+  });
+}
+
+export async function listAmendments(
+  session: Session, decisionId: string,
+): Promise<IcDecisionAmendment[]> {
+  return withSession(session, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from ic_decision_amendments where decision_id = $1 order by created_at", [decisionId]);
+    return rows.map(mapAmendment);
+  });
+}
+
+/** The original decision, its amendments, and what currently stands. */
+export interface EffectiveDecision {
+  original: IcDecision;
+  amendments: IcDecisionAmendment[];
+  /** Latest non-null amended value, else the original. */
+  effectiveConditions: string | null;
+  effectiveRationale: string | null;
+  effectiveFollowUp: string | null;
+}
+
+export async function effectiveDecision(
+  session: Session, decisionId: string,
+): Promise<EffectiveDecision | null> {
+  return withSession(session, async (tx) => {
+    const d = await tx.query("select * from ic_decisions where decision_id = $1", [decisionId]);
+    if (!d.rows[0]) return null;
+    const original = mapDecision(d.rows[0]);
+    const a = await tx.query(
+      "select * from ic_decision_amendments where decision_id = $1 order by created_at", [decisionId]);
+    const amendments = a.rows.map(mapAmendment);
+
+    // Latest non-null wins per field: an amendment that only restates the
+    // conditions must not blank a rationale it never mentioned.
+    const latest = (pick: (x: IcDecisionAmendment) => string | null, fallback: string | null) => {
+      for (let i = amendments.length - 1; i >= 0; i--) {
+        const v = pick(amendments[i]);
+        if (v !== null) return v;
+      }
+      return fallback;
+    };
+
+    return {
+      original,
+      amendments,
+      effectiveConditions: latest((x) => x.amendedConditions, original.conditions),
+      effectiveRationale: latest((x) => x.amendedRationale, original.rationale),
+      effectiveFollowUp: latest((x) => x.amendedFollowUp, original.followUp),
+    };
+  });
 }
