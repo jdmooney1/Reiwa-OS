@@ -28,6 +28,8 @@ export interface OpportunityFile {
   counts: {
     ddOpen: number;
     ddIssues: number;
+    /** Open workstreams whose due date has passed — a blocker, not a decoration. */
+    ddOverdue: number;
     ddTotal: number;
     risksOpen: number;
     decisions: number;
@@ -54,6 +56,10 @@ export async function getOpportunityFile(
              and status not in ('reviewed','resolved','not_applicable'))       as dd_open,
          (select count(*) from opportunity_dd_items
            where opportunity_id = $1 and status = 'issue_identified')          as dd_issues,
+         (select count(*) from opportunity_dd_items
+           where opportunity_id = $1
+             and due_date < current_date
+             and status not in ('reviewed','resolved','not_applicable'))       as dd_overdue,
          (select count(*) from opportunity_dd_items where opportunity_id = $1) as dd_total,
          (select count(*) from opportunity_risks
            where opportunity_id = $1 and status = 'open')                      as risks_open,
@@ -62,7 +68,8 @@ export async function getOpportunityFile(
       [opportunityId]);
     const r = rows[0];
     return {
-      ddOpen: Number(r.dd_open), ddIssues: Number(r.dd_issues), ddTotal: Number(r.dd_total),
+      ddOpen: Number(r.dd_open), ddIssues: Number(r.dd_issues),
+      ddOverdue: Number(r.dd_overdue), ddTotal: Number(r.dd_total),
       risksOpen: Number(r.risks_open), decisions: Number(r.decisions),
       documents: Number(r.documents),
     };

@@ -21,27 +21,41 @@ export function Sidebar({
   assets: { assetId: string; name: string }[];
 }) {
   const pathname = usePathname();
+  // The navigation spine of Reiwa OS: Opportunities, Investors, Assets, Firm.
+  //
+  // Named after the objects the firm actually works on rather than after the
+  // modules they were built in — "Investment" and "Asset Intelligence" were
+  // project names, and a person looking for a deal looks for the deal. Today is
+  // deliberately absent: there is no dashboard yet, and a heading with nothing
+  // behind it is worse than no heading.
   const sections = [
-    { heading: "Investment", items: [{ href: "/pipeline", label: "Pipeline", icon: LayoutGrid }] },
+    { heading: "Opportunities", items: [{ href: "/pipeline", label: "Pipeline", icon: LayoutGrid }] },
+    // Reiwa administrators only. The /admin layout and the database policies
+    // both enforce this; hiding the section is presentation, not the control.
+    ...(user.role === "reiwa_admin"
+      ? [{
+          heading: "Investors",
+          items: [
+            { href: "/admin", label: "Portal Overview", icon: Landmark },
+            { href: "/admin/investors", label: "Investor Organisations", icon: Users },
+            { href: "/admin/publications", label: "Publications", icon: FileText },
+          ],
+        }]
+      : []),
     {
-      heading: "Asset Intelligence",
+      heading: "Assets",
       items: [
         { href: "/portfolio", label: "Portfolio", icon: Boxes },
         ...assets.map((a) => ({ href: `/assets/${a.assetId}`, label: a.name, icon: Building2 })),
       ],
     },
-    // The Investment Portal admin surface — Reiwa administrators only. The
-    // /admin layout and the database policies both enforce this; hiding the
-    // section is presentation, not the control.
+    // Firm holds what belongs to the house rather than to one deal or one
+    // investor. Today that is the audit trail; it is the section the rest of the
+    // firm-level surfaces will join.
     ...(user.role === "reiwa_admin"
       ? [{
-          heading: "Investment Portal",
-          items: [
-            { href: "/admin", label: "Portal Overview", icon: Landmark },
-            { href: "/admin/investors", label: "Investors", icon: Users },
-            { href: "/admin/publications", label: "Publications", icon: FileText },
-            { href: "/admin/activity", label: "Activity", icon: Activity },
-          ],
+          heading: "Firm",
+          items: [{ href: "/admin/activity", label: "Activity", icon: Activity }],
         }]
       : []),
   ];

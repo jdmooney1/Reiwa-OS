@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { AlertTriangle, ArrowUpRight } from "lucide-react";
 import type { DdItemRecord } from "@/lib/data/due-diligence";
-import type { Progress } from "@/lib/dd/progress";
+import { isDdOverdue, type Progress } from "@/lib/dd/progress";
 import { DD_STATUS_ORDER } from "@/lib/domain";
 import { applyDdTemplateAction, updateDdItemAction, promoteFindingAction } from "@/app/actions/workspace";
 import { formatDate } from "@/lib/format";
@@ -81,12 +81,20 @@ export function DiligenceSection({
               <li key={it.ddItemId} className="flex flex-wrap items-start justify-between gap-3 py-2.5">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    {it.status === "issue_identified" && (
+                    {(it.status === "issue_identified" || isDdOverdue(it)) && (
                       <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-negative" strokeWidth={2} />
                     )}
                     <span className="text-sm text-ink">{it.item}</span>
                   </div>
-                  <div className="text-2xs text-ink-faint">{it.section}</div>
+                  <div className="text-2xs text-ink-faint">
+                    {it.section}
+                    {isDdOverdue(it) && (
+                      <span className="ml-2 font-medium text-negative">
+                        Overdue since {formatDate(it.due_date)}
+                      </span>
+                    )}
+                    {ownerLabel(it) && <span className="ml-2">{ownerLabel(it)}</span>}
+                  </div>
                   {it.finding && (
                     <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-muted">{it.finding}</p>
                   )}
@@ -117,6 +125,7 @@ export function DiligenceSection({
         <Provenance>
           {progress.cleared} of {progress.inScope} in-scope workstreams cleared
           {progress.issues > 0 ? ` · ${progress.issues} flagged` : ""}
+          {progress.overdue > 0 ? ` · ${progress.overdue} overdue` : ""}
           {progress.total !== progress.inScope
             ? ` · ${progress.total - progress.inScope} not applicable`
             : ""}
@@ -163,6 +172,20 @@ export function DiligenceSection({
   );
 }
 
+/**
+ * Who is carrying this workstream, or nothing at all.
+ *
+ * Returns null for an unowned line rather than the word "Unassigned": on a
+ * 51-line framework most lines are unowned early on, and a column of
+ * "Unassigned" is noise that hides the handful that are owned. Where an owner
+ * exists but cannot be named — `profiles_self` stops a non-admin reading a
+ * colleague's profile — the row says "Assigned" rather than claiming nobody.
+ */
+function ownerLabel(item: DdItemRecord): string | null {
+  if (item.ownerName) return item.ownerName;
+  return item.ownerUserId ? "Assigned" : null;
+}
+
 function DdRow({
   opportunityId, item, canWrite, promoted,
 }: {
@@ -194,8 +217,17 @@ function DdRow({
           )}
         </button>
         <div className="flex shrink-0 items-center gap-2">
-          {item.due_date && <span className="text-2xs text-ink-faint">{formatDate(item.due_date)}</span>}
-          {item.ownerUserId && <span className="text-2xs text-ink-faint">Owned</span>}
+          {item.due_date && (
+            <span className={cn(
+              "text-2xs",
+              isDdOverdue(item) ? "font-medium text-negative" : "text-ink-faint",
+            )}>
+              {isDdOverdue(item) ? "Overdue " : ""}{formatDate(item.due_date)}
+            </span>
+          )}
+          {ownerLabel(item) && (
+            <span className="text-2xs text-ink-faint">{ownerLabel(item)}</span>
+          )}
           <Badge tone={DD_STATUS_TONE[item.status]}>{DD_STATUS_LABEL[item.status]}</Badge>
         </div>
       </div>

@@ -154,6 +154,7 @@ function RiskTable({
             <Th>Category</Th>
             <Th>Severity</Th>
             <Th>Status</Th>
+            <Th>Owner</Th>
             <Th align="right">Impact</Th>
             <Th>Raised</Th>
             {canWrite && <Th />}
@@ -176,6 +177,7 @@ function RiskTable({
               <Td className="text-xs text-ink-muted">{r.category}</Td>
               <Td><Badge tone={SEVERITY_TONE[r.severity]}>{SEVERITY_LABEL[r.severity]}</Badge></Td>
               <Td><Badge tone={RISK_STATUS_TONE[r.status]}>{RISK_STATUS_LABEL[r.status]}</Badge></Td>
+              <Td className="text-xs text-ink-muted">{ownerLabel(r)}</Td>
               <Td align="right">{r.financialImpact != null ? formatMoneyCompact(r.financialImpact, currency) : "—"}</Td>
               <Td className="text-2xs text-ink-faint">
                 {formatDate(r.createdAt)}
@@ -214,4 +216,17 @@ function RiskTable({
       </table>
     </TableWrap>
   );
+}
+
+/**
+ * Who owns this risk, without claiming more than the reader can be told.
+ *
+ * Three states, not two. `profiles_self` lets a non-admin read only their own
+ * profile row, so a risk owned by a colleague arrives with an owner id and no
+ * name. Rendering that as "Unassigned" would be a lie with operational
+ * consequences — somebody would pick it up twice, or not at all.
+ */
+function ownerLabel(risk: OpportunityRisk): string {
+  if (risk.ownerName) return risk.ownerName;
+  return risk.ownerUserId ? "Assigned" : "Unassigned";
 }

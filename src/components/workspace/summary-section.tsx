@@ -114,6 +114,11 @@ export function SummarySection({
             { k: "Open issues", v: file.counts.ddIssues > 0
                 ? <span className="font-medium text-negative">{file.counts.ddIssues}</span>
                 : "None" },
+            { k: "Overdue", v: file.counts.ddOverdue > 0
+                ? <span className="font-medium text-negative">
+                    {file.counts.ddOverdue} workstream{file.counts.ddOverdue === 1 ? "" : "s"}
+                  </span>
+                : "None" },
             { k: "Committee", v: file.counts.decisions === 0
                 ? "Not yet decided"
                 : `${file.counts.decisions} decision${file.counts.decisions === 1 ? "" : "s"} recorded` },
@@ -193,6 +198,10 @@ function metricsFor(uw: UnderwritingVersion, cur: Currency) {
     out.push({ label: "Equity multiple", value: formatMultiple(uw.targetEquityMultiple) });
   }
   money("Exit value", uw.exitValue);
+  // Exit yield sits beside exit value deliberately: the pair is how an exit is
+  // argued, and a stabilised value quoted without the yield it was struck at is
+  // the half of the sentence that cannot be checked.
+  pct("Exit yield", uw.exitYieldPct);
   if (uw.holdPeriodYears != null) {
     out.push({ label: "Hold", value: `${uw.holdPeriodYears} yrs` });
   }

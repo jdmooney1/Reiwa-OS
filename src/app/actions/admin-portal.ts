@@ -28,7 +28,7 @@ import {
   getPublicationForOpportunity, reorderSecondaryEntitlements,
 } from "@/lib/data/admin-portal";
 import {
-  checkUpload, newObjectPath, putDocumentObject, deleteDocumentObject,
+  checkUpload, newObjectPath, putDocumentObject, deleteDocumentObject, safeFileName,
 } from "@/lib/documents/storage";
 import { AppError, reportError } from "@/lib/errors";
 
@@ -381,17 +381,6 @@ export async function addDocumentAction(
 
   refreshPublication(publicationId);
   return { ok: true };
-}
-
-/**
- * The original file name, kept for display and for the download's Content-
- * Disposition only. It never influences where the object is stored, so path
- * separators and traversal segments are simply removed rather than escaped.
- */
-function safeFileName(name: string): string | null {
-  const base = (name ?? "").split(/[\\/]/).pop() ?? "";
-  const cleaned = base.replace(/[^\w.\- ]+/g, "_").replace(/^\.+/, "").trim();
-  return cleaned ? cleaned.slice(0, 160) : null;
 }
 
 export async function updateDocumentAction(

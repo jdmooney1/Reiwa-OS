@@ -28,7 +28,7 @@ import {
 
 export {
   DOCUMENT_BUCKET, SIGNED_URL_TTL_SECONDS, MAX_DOCUMENT_BYTES, ALLOWED_DOCUMENT_TYPES,
-  checkUpload, type UploadCheck,
+  checkUpload, safeFileName, type UploadCheck,
 } from "@/lib/documents/constraints";
 
 /**
@@ -43,6 +43,20 @@ export {
 export function newObjectPath(versionId: string, mimeType: string): string {
   const extension = ALLOWED_DOCUMENT_TYPES[mimeType] ?? "";
   return `publications/${versionId}/${randomUUID()}${extension}`;
+}
+
+/**
+ * The same, for an internal opportunity document.
+ *
+ * A separate prefix so the two kinds of object are legible apart in the bucket,
+ * and nothing more: the prefix confers no access, exactly as `publications/`
+ * confers none. Both are private, both are reachable only by a signed URL minted
+ * after the database has agreed, and the path here is as server-generated and as
+ * unguessable as the publication one.
+ */
+export function newOpportunityObjectPath(opportunityId: string, mimeType: string): string {
+  const extension = ALLOWED_DOCUMENT_TYPES[mimeType] ?? "";
+  return `opportunities/${opportunityId}/${randomUUID()}${extension}`;
 }
 
 /**

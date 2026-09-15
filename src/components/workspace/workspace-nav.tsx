@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 interface Counts {
   ddOpen: number;
   ddIssues: number;
+  ddOverdue: number;
   ddTotal: number;
   risksOpen: number;
   decisions: number;
@@ -41,7 +42,9 @@ export function WorkspaceNav({
       href: `${base}/diligence`,
       label: "Due diligence",
       badge: counts.ddTotal > 0 ? counts.ddOpen : undefined,
-      tone: counts.ddIssues > 0 ? "issue" : undefined,
+      // A passed date turns the badge red for the same reason a flagged finding
+      // does: both mean somebody is waiting, and neither should need a click.
+      tone: counts.ddIssues > 0 || counts.ddOverdue > 0 ? "issue" : undefined,
     },
     {
       href: `${base}/risks`,

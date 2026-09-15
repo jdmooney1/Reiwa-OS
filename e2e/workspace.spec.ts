@@ -6,7 +6,7 @@
 // does not support.
 // ============================================================================
 import { test, expect, type Page } from "@playwright/test";
-import { signInAsStaff } from "./helpers";
+import { signInAsStaff, signInAsInvestor } from "./helpers";
 
 /**
  * The seeded pipeline always has opportunities; open the first one.
@@ -102,6 +102,25 @@ test.describe("Opportunity workspace", () => {
     await expect(page.locator("main")).toContainText(/investor/i);
   });
 
+  test("documents are uploaded, never addressed by storage path", async ({ page }) => {
+    await signInAsStaff(page);
+    const base = await openFirstOpportunity(page);
+    await page.goto(`${base}/documents`);
+
+    // The control takes a file. The earlier version of this screen asked for a
+    // storage path, which is the one thing the store never accepts from a
+    // browser — and produced rows that could not be opened.
+    await expect(page.locator('input[type="file"][name="file"]')).toBeAttached();
+    await expect(page.locator('input[name="storagePath"]')).toHaveCount(0);
+
+    // Any document link addresses the delivery route by id.
+    const links = page.locator(`a[href^="${base}/documents/"]`);
+    for (let i = 0; i < await links.count(); i++) {
+      const href = await links.nth(i).getAttribute("href");
+      expect(href).toMatch(/\/documents\/[0-9a-f-]{36}$/);
+    }
+  });
+
   test("no section renders an empty panel without saying what is absent", async ({ page }) => {
     await signInAsStaff(page);
     const base = await openFirstOpportunity(page);
@@ -109,6 +128,56 @@ test.describe("Opportunity workspace", () => {
       await page.goto(`${base}${s}`);
       const text = (await page.locator("main").innerText()).trim();
       expect(text.length).toBeGreaterThan(40);
+    }
+  });
+});
+
+test.describe("Internal boundary", () => {
+  test("an investor cannot reach the opportunity workspace", async ({ page }) => {
+    await signInAsInvestor(page);
+
+    // A portal contact has no profile row, so no internal session exists to be
+    // had — the route sends them to sign-in rather than rendering a file. The
+    // database would refuse them in any case: `app.has_org()` is false for
+    // every organisation, so the opportunity is not there to read.
+    for (const path of ["/pipeline", "/portfolio"]) {
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/sign-in|\/portal/);
+      await expect(page.locator("body")).not.toContainText(/opportunity sections/i);
+    }
+  });
+
+  test("an investor is refused an internal document by id", async ({ page }) => {
+    await signInAsInvestor(page);
+    // A well-formed id they were never entitled to. The refusal is a 404 with
+    // no body, identical to one that does not exist.
+    const response = await page.request.get(
+      "/opportunities/00000000-0000-0000-0000-000000000001/documents/00000000-0000-0000-0000-000000000002",
+      { maxRedirects: 0 });
+    expect(response.status()).toBe(404);
+  });
+});
+
+test.describe("Navigation spine", () => {
+  test("names the objects the firm works on", async ({ page }, testInfo) => {
+    await signInAsStaff(page);
+    await page.goto("/pipeline");
+    const nav = page.locator("aside");
+
+    // Every destination is reachable at every width. Below lg the rail collapses
+    // to icons and each label survives as the link's accessible name.
+    for (const label of ["Pipeline", "Investor Organisations", "Portfolio", "Activity"]) {
+      await expect(nav.getByRole("link", { name: label })).toBeAttached();
+    }
+
+    // The headings are a desktop affordance: the collapsed rail omits them
+    // rather than cropping them, the same rule the lockup follows.
+    if (testInfo.project.name === "desktop") {
+      for (const heading of ["Opportunities", "Investors", "Assets", "Firm"]) {
+        await expect(nav).toContainText(heading);
+      }
+      // Today is deliberately absent until there is a dashboard behind it.
+      await expect(nav).not.toContainText("Today");
     }
   });
 });

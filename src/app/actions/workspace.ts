@@ -18,6 +18,9 @@ import { applyDdTemplate, updateDdItem, addDdItem, type DdItemPatch } from "@/li
 import { createRisk, promoteFindingToRisk, updateRisk, type RiskPatch } from "@/lib/data/opportunity-risks";
 import { recordDecision, amendDecision, type IcOutcome } from "@/lib/data/ic-decisions";
 import { recordDocument } from "@/lib/data/opportunity-documents";
+import {
+  checkUpload, newOpportunityObjectPath, putDocumentObject, deleteDocumentObject, safeFileName,
+} from "@/lib/documents/storage";
 import type { DdStatus, Recommendation } from "@/types/database";
 
 const num = (v: FormDataEntryValue | null): number | null => {
@@ -187,19 +190,51 @@ export async function amendDecisionAction(
 }
 
 // ---- Documents ------------------------------------------------------------
-export async function recordDocumentAction(
+/**
+ * Upload an internal document through the existing secure path.
+ *
+ * This deliberately takes a FILE and never a storage path. The earlier version
+ * of this screen asked the user to type one, which was the one thing
+ * documents/storage.ts states it never accepts: a browser-supplied path lets a
+ * row point at an object the uploader never had, and the rows it produced could
+ * not be opened at all, because the bucket is private and nothing had put a file
+ * there. Every rule that governs a publication document governs this one — the
+ * same allow-listed MIME types, the same size ceiling, both checked against what
+ * the server sees, and a random server-generated path.
+ */
+export async function uploadDocumentAction(
   opportunityId: string, formData: FormData,
 ): Promise<void> {
   const session = await requireDbSession();
+
   const title = text(formData.get("title"));
-  const storagePath = text(formData.get("storagePath"));
-  if (!title || !storagePath) throw new AppError("A document needs a title and a stored file.");
-  await recordDocument(session, opportunityId, {
-    title, storagePath,
-    category: String(formData.get("category") || "Other"),
-    fileName: text(formData.get("fileName")),
-    mimeType: text(formData.get("mimeType")),
-    sizeBytes: num(formData.get("sizeBytes")),
-  });
+  if (!title) throw new AppError("A document needs a title.");
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    throw new AppError("Choose a file to upload.");
+  }
+
+  const check = checkUpload(file.type, file.size);
+  if (!check.ok) throw new AppError(check.reason);
+
+  const storagePath = newOpportunityObjectPath(opportunityId, check.mimeType);
+  await putDocumentObject(storagePath, await file.arrayBuffer(), check.mimeType);
+
+  try {
+    await recordDocument(session, opportunityId, {
+      title, storagePath,
+      category: String(formData.get("category") || "Other"),
+      fileName: safeFileName(file.name),
+      mimeType: check.mimeType,
+      sizeBytes: check.sizeBytes,
+    });
+  } catch (e) {
+    // The row did not land, so the object must not survive it: an object with no
+    // row is unreachable and unaccounted for. Same rule as the portal's upload.
+    await deleteDocumentObject(storagePath);
+    throw e;
+  }
+
   refresh(opportunityId);
 }

@@ -30,6 +30,16 @@ export interface OpportunityRisk {
   financialImpact: number | null;
   mitigation: string | null;
   ownerUserId: string | null;
+  /**
+   * The owner's display name, joined for the register.
+   *
+   * Null does NOT mean unowned — `profiles_self` (migration 0001) lets a
+   * non-admin read only their own profile row, so a colleague's name resolves
+   * to null while `ownerUserId` is still set. The register must distinguish the
+   * two: an owned risk shown as unassigned is worse than one shown as owned by
+   * somebody the reader cannot name.
+   */
+  ownerName: string | null;
   status: OppRiskStatus;
   sourceDdItemId: string | null;
   migratedToAssetRiskId: string | null;
@@ -44,7 +54,7 @@ function mapRisk(r: Record<string, any>): OpportunityRisk {
     title: r.title, category: r.category, description: str(r.description),
     severity: r.severity, probability: num(r.probability),
     financialImpact: num(r.financial_impact), mitigation: str(r.mitigation),
-    ownerUserId: r.owner_user_id ?? null, status: r.status,
+    ownerUserId: r.owner_user_id ?? null, ownerName: str(r.owner_name), status: r.status,
     sourceDdItemId: r.source_dd_item_id ?? null,
     migratedToAssetRiskId: r.migrated_to_asset_risk_id ?? null,
     createdBy: r.created_by ?? null, createdAt: r.created_at, updatedAt: r.updated_at,
@@ -66,7 +76,12 @@ export interface NewRisk {
 export async function listRisks(session: Session, opportunityId: string): Promise<OpportunityRisk[]> {
   return withSession(session, async (tx: Queryable) => {
     const { rows } = await tx.query(
-      "select * from opportunity_risks where opportunity_id = $1 order by created_at", [opportunityId]);
+      `select r.*, coalesce(nullif(p.name, ''), p.email) as owner_name
+         from opportunity_risks r
+         left join profiles p on p.user_id = r.owner_user_id
+        where r.opportunity_id = $1
+        order by r.created_at`,
+      [opportunityId]);
     return rows.map(mapRisk);
   });
 }

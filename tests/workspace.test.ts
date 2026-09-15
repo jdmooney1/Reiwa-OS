@@ -12,6 +12,10 @@ import { getOpportunityFile, listPipeline } from "@/lib/data/opportunity-file";
 import { createVersion, listVersions, updateVersion } from "@/lib/data/underwriting";
 import { compareVersions } from "@/lib/underwriting/compare";
 import { applyDdTemplate, listDdItems, updateDdItem, appliedTemplates } from "@/lib/data/due-diligence";
+import { computeProgress, criticalOpenItems, isDdOverdue } from "@/lib/dd/progress";
+import { newOpportunityObjectPath } from "@/lib/documents/storage";
+import { issueInternalDocumentDownload } from "@/lib/documents/internal-delivery";
+import type { DueDiligenceItem } from "@/types/database";
 import { listRisks, promoteFindingToRisk } from "@/lib/data/opportunity-risks";
 import {
   recordDecision, listDecisions, amendDecision, listAmendments, effectiveDecision,
@@ -360,5 +364,156 @@ describe("Read-only staff", () => {
 
     await expect(createVersion(viewer, opp, { acquisitionPrice: 1 })).rejects.toThrow();
     await expect(recordDocument(viewer, opp, { title: "x", storagePath: "a/b" })).rejects.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A due date that has passed is the thing a diligence screen most easily hides:
+// it is stored, it is rendered, and nothing about it is louder than the row next
+// to it. These assert that "overdue" is computed beside completion rather than
+// left to whoever is reading the list.
+describe("Diligence dates", () => {
+  const line = (over: Partial<DueDiligenceItem>): DueDiligenceItem => ({
+    item_id: "x", opportunity_id: "o", section: "Legal", item: "Title",
+    question: null, jurisdiction: "uk", priority: "medium", status: "in_progress",
+    owner: null, due_date: null, risk_level: null, notes: null, linked_documents: [],
+    created_at: "2026-01-01", updated_at: "2026-01-01", ...over,
+  } as DueDiligenceItem);
+
+  it("counts an open workstream past its date, and a cleared one never", () => {
+    const asOf = "2026-06-15";
+    expect(isDdOverdue(line({ due_date: "2026-06-14" }), asOf)).toBe(true);
+    expect(isDdOverdue(line({ due_date: "2026-06-15" }), asOf)).toBe(false);
+    expect(isDdOverdue(line({ due_date: "2026-06-16" }), asOf)).toBe(false);
+    expect(isDdOverdue(line({ due_date: null }), asOf)).toBe(false);
+
+    // Cleared late is not late now. The question is what is outstanding.
+    expect(isDdOverdue(line({ due_date: "2026-01-01", status: "reviewed" }), asOf)).toBe(false);
+    expect(isDdOverdue(line({ due_date: "2026-01-01", status: "resolved" }), asOf)).toBe(false);
+    expect(isDdOverdue(line({ due_date: "2026-01-01", status: "not_applicable" }), asOf)).toBe(false);
+
+    const progress = computeProgress([
+      line({ due_date: "2026-01-01" }),
+      line({ due_date: "2026-01-01", status: "reviewed" }),
+      line({ due_date: "2026-12-01" }),
+    ], asOf);
+    expect(progress.overdue).toBe(1);
+  });
+
+  it("puts an overdue workstream in front of somebody rather than in a column", () => {
+    const asOf = "2026-06-15";
+    // Low priority and unflagged: without the date it would not be blocking at
+    // all, which is exactly the line that slips between two meetings.
+    const late = line({ item: "Searches", priority: "low", due_date: "2026-05-01" });
+    const routine = line({ item: "Fire risk assessment", priority: "low" });
+    const flagged = line({ item: "Boundary", priority: "low", status: "issue_identified" });
+
+    const blocking = criticalOpenItems([routine, late, flagged], asOf);
+    expect(blocking.map((i) => i.item)).toEqual(["Boundary", "Searches"]);
+  });
+
+  it("surfaces the overdue count on the file the header reads", async () => {
+    const opp = await newOpportunity("WS Overdue");
+    await applyDdTemplate(session, opp, "london");
+    const items = await listDdItems(session, opp);
+
+    await updateDdItem(session, items[0].ddItemId, { status: "in_progress", dueDate: "2020-01-01" });
+    // Past its date but already cleared — must not be counted.
+    await updateDdItem(session, items[1].ddItemId, { status: "reviewed", dueDate: "2020-01-01" });
+    // Still ahead of its date.
+    await updateDdItem(session, items[2].ddItemId, { status: "in_progress", dueDate: "2099-01-01" });
+
+    const file = await getOpportunityFile(session, opp);
+    expect(file!.counts.ddOverdue).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("Risk ownership", () => {
+  it("carries the owner through promotion and names them where the reader may know", async () => {
+    const opp = await newOpportunity("WS Risk Owner");
+    await applyDdTemplate(session, opp, "london");
+    const item = (await listDdItems(session, opp))[0];
+    await updateDdItem(session, item.ddItemId, {
+      status: "issue_identified", finding: "Service charge arrears unexplained.",
+      ownerUserId: analyst,
+    });
+
+    // The workstream's owner becomes the risk's owner: promotion moves the
+    // finding, and the person carrying it comes with it.
+    await promoteFindingToRisk(session, item.ddItemId);
+    const risk = (await listRisks(session, opp))[0];
+    expect(risk.ownerUserId).toBe(analyst);
+
+    // The analyst is reading their own record, so `profiles_self` resolves it.
+    // A colleague's name would arrive null with the id still set — which is why
+    // the register distinguishes "Assigned" from "Unassigned" rather than
+    // treating a null name as nobody.
+    expect(risk.ownerName).toBeTruthy();
+
+    const owned = await listDdItems(session, opp);
+    expect(owned.find((i) => i.ddItemId === item.ddItemId)!.ownerName).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The internal document path must be the publication path with a different
+// prefix — never a looser one. A browser supplies no object path, and the
+// database decides every read.
+describe("Internal document delivery", () => {
+  it("generates its own object path and never takes one from the caller", () => {
+    const a = newOpportunityObjectPath("opp-1", "application/pdf");
+    const b = newOpportunityObjectPath("opp-1", "application/pdf");
+    expect(a).toMatch(/^opportunities\/opp-1\/[0-9a-f-]{36}\.pdf$/);
+    expect(a).not.toBe(b);
+  });
+
+  it("refuses a document id that does not belong to the opportunity in the URL", async () => {
+    const opp = await newOpportunity("WS Doc A");
+    const other = await newOpportunity("WS Doc B");
+    const docId = await recordDocument(session, opp, {
+      title: "Rent roll", storagePath: "opportunities/x/y.pdf",
+    });
+
+    // Same organisation, a row this caller may genuinely read — but not the
+    // document this URL names.
+    expect(await issueInternalDocumentDownload(session, other, docId)).toBeNull();
+    // A malformed id is refused identically, without reaching storage.
+    expect(await issueInternalDocumentDownload(session, opp, "not-a-uuid")).toBeNull();
+  });
+
+  it("refuses a document belonging to another organisation", async () => {
+    const aoyamaOrg = await orgIdByName("Aoyama Holdings");
+    const aoyamaUser = await profileIdByEmail("user@aoyama.com");
+    const aoyama = orgUserSession([aoyamaOrg], aoyamaUser);
+
+    const theirs = await createOpportunity(aoyama, {
+      orgId: aoyamaOrg, name: "WS Doc Foreign", assetType: "office", currency: "JPY",
+    });
+    const docId = await recordDocument(aoyama, theirs, {
+      title: "Their valuation", storagePath: "opportunities/z/z.pdf",
+    });
+
+    // RLS decides, not a comparison written in the delivery module: the row is
+    // simply not there for a Meiji session to read.
+    expect(await issueInternalDocumentDownload(session, theirs, docId)).toBeNull();
+    expect(await listDocuments(session, theirs)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("Exit assumptions", () => {
+  it("carries the exit yield the cover sheet quotes beside exit value", async () => {
+    const opp = await newOpportunity("WS Exit");
+    await createVersion(session, opp, {
+      acquisitionPrice: 10_000_000, exitValue: 13_500_000,
+      entryYieldPct: 5.25, exitYieldPct: 4.75,
+    });
+
+    const file = await getOpportunityFile(session, opp);
+    // A stabilised value quoted without the yield it was struck at is the half
+    // of the sentence that cannot be checked.
+    expect(file!.authoritative!.exitValue).toBe(13_500_000);
+    expect(file!.authoritative!.exitYieldPct).toBe(4.75);
   });
 });

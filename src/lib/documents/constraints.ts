@@ -75,3 +75,18 @@ export function checkUpload(mimeType: string, sizeBytes: number): UploadCheck {
   }
   return { ok: true, mimeType: type, sizeBytes };
 }
+
+/**
+ * The original file name, kept for display and for the download's Content-
+ * Disposition only. It never influences where the object is stored, so path
+ * separators and traversal segments are simply removed rather than escaped.
+ *
+ * Shared by both upload paths — the publication one and the internal
+ * opportunity one — because a sanitiser that exists twice is a sanitiser that
+ * gets fixed once.
+ */
+export function safeFileName(name: string): string | null {
+  const base = (name ?? "").split(/[\\/]/).pop() ?? "";
+  const cleaned = base.replace(/[^\w.\- ]+/g, "_").replace(/^\.+/, "").trim();
+  return cleaned ? cleaned.slice(0, 160) : null;
+}
