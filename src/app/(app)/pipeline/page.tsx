@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireAuth, toDbSession } from "@/lib/auth/session";
-import { listOpportunities } from "@/lib/data/opportunities";
+import { listPipeline } from "@/lib/data/opportunity-file";
 import { PageHeader } from "@/components/layout/page-header";
 import { OpportunityPipeline } from "@/components/opportunities/opportunity-pipeline";
 
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PipelinePage() {
   const auth = await requireAuth();
-  const opportunities = await listOpportunities(toDbSession(auth));
+  const opportunities = await listPipeline(toDbSession(auth));
   const canWrite = auth.role !== "investor_viewer";
 
   return (

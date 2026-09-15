@@ -47,6 +47,9 @@ export interface Opportunity {
   brokerName: string | null;
   vendorName: string | null;
   priority: OppPriority;
+  ownerUserId: string | null;
+  /** The owner's display name, joined for the workspace. Null when unassigned. */
+  ownerName: string | null;
   nextMilestone: string | null;
   nextMilestoneDate: string | null;
   /** Moves only when stage or status changes — not on every edit. */

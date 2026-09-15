@@ -65,8 +65,11 @@ export interface UnderwritingVersion {
 
   acquisitionDate: string | null;
   createdBy: string | null;
+  /** Author's display name, joined for the workspace. */
+  createdByName: string | null;
   createdAt: string;
   approvedBy: string | null;
+  approvedByName: string | null;
   approvedAt: string | null;
   supersededAt: string | null;
 }

@@ -47,6 +47,7 @@ export interface IcDecision {
   followUp: string | null;
   decisionMakers: string[];
   recordedBy: string | null;
+  recordedByName: string | null;
   createdAt: string;
 }
 
@@ -57,7 +58,8 @@ function mapDecision(r: Record<string, any>): IcDecision {
     recommendation: (r.recommendation ?? null) as Recommendation | null,
     outcome: r.outcome, conditions: str(r.conditions), rationale: str(r.rationale),
     followUp: str(r.follow_up), decisionMakers: r.decision_makers ?? [],
-    recordedBy: r.recorded_by ?? null, createdAt: r.created_at,
+    recordedBy: r.recorded_by ?? null, recordedByName: str(r.recorded_by_name),
+    createdAt: r.created_at,
   };
 }
 
@@ -72,10 +74,20 @@ export interface NewIcDecision {
   decisionMakers?: string[];
 }
 
+const DECISION_SELECT = `
+  select d.*, coalesce(p.name, p.email) as recorded_by_name
+    from ic_decisions d
+    left join profiles p on p.user_id = d.recorded_by`;
+
+const AMENDMENT_SELECT = `
+  select a.*, coalesce(p.name, p.email) as amended_by_name
+    from ic_decision_amendments a
+    left join profiles p on p.user_id = a.amended_by`;
+
 export async function listDecisions(session: Session, opportunityId: string): Promise<IcDecision[]> {
   return withSession(session, async (tx: Queryable) => {
     const { rows } = await tx.query(
-      "select * from ic_decisions where opportunity_id = $1 order by decision_date desc, created_at desc",
+      `${DECISION_SELECT} where d.opportunity_id = $1 order by d.decision_date desc, d.created_at desc`,
       [opportunityId]);
     return rows.map(mapDecision);
   });
@@ -87,8 +99,10 @@ export async function approvingDecision(
 ): Promise<IcDecision | null> {
   return withSession(session, async (tx) => {
     const { rows } = await tx.query(
-      `select d.* from ic_decisions d
+      `select d.*, coalesce(p.name, p.email) as recorded_by_name
+         from ic_decisions d
          join investment_cases c on c.case_id = d.investment_case_id
+         left join profiles p on p.user_id = d.recorded_by
         where d.opportunity_id = $1
           and c.status = 'approved'
           and d.outcome in ('approved', 'approved_with_conditions')
@@ -139,6 +153,7 @@ export interface IcDecisionAmendment {
   amendedFollowUp: string | null;
   reason: string;
   amendedBy: string | null;
+  amendedByName: string | null;
   createdAt: string;
 }
 
@@ -148,7 +163,8 @@ function mapAmendment(r: Record<string, any>): IcDecisionAmendment {
     amendedConditions: str(r.amended_conditions),
     amendedRationale: str(r.amended_rationale),
     amendedFollowUp: str(r.amended_follow_up),
-    reason: r.reason, amendedBy: r.amended_by ?? null, createdAt: r.created_at,
+    reason: r.reason, amendedBy: r.amended_by ?? null,
+    amendedByName: str(r.amended_by_name), createdAt: r.created_at,
   };
 }
 
@@ -199,7 +215,7 @@ export async function listAmendments(
 ): Promise<IcDecisionAmendment[]> {
   return withSession(session, async (tx) => {
     const { rows } = await tx.query(
-      "select * from ic_decision_amendments where decision_id = $1 order by created_at", [decisionId]);
+      `${AMENDMENT_SELECT} where a.decision_id = $1 order by a.created_at`, [decisionId]);
     return rows.map(mapAmendment);
   });
 }
@@ -218,11 +234,11 @@ export async function effectiveDecision(
   session: Session, decisionId: string,
 ): Promise<EffectiveDecision | null> {
   return withSession(session, async (tx) => {
-    const d = await tx.query("select * from ic_decisions where decision_id = $1", [decisionId]);
+    const d = await tx.query(`${DECISION_SELECT} where d.decision_id = $1`, [decisionId]);
     if (!d.rows[0]) return null;
     const original = mapDecision(d.rows[0]);
     const a = await tx.query(
-      "select * from ic_decision_amendments where decision_id = $1 order by created_at", [decisionId]);
+      `${AMENDMENT_SELECT} where a.decision_id = $1 order by a.created_at`, [decisionId]);
     const amendments = a.rows.map(mapAmendment);
 
     // Latest non-null wins per field: an amendment that only restates the

@@ -41,8 +41,10 @@ function mapCase(r: Record<string, any>): UnderwritingVersion {
     targetEquityMultiple: num(r.target_equity_multiple),
     assumptions: (r.assumptions ?? {}) as Record<string, unknown>,
     acquisitionDate: str(r.acquisition_date),
-    createdBy: r.created_by ?? null, createdAt: r.created_at,
-    approvedBy: r.approved_by ?? null, approvedAt: r.approved_at ?? null,
+    createdBy: r.created_by ?? null, createdByName: str(r.created_by_name),
+    createdAt: r.created_at,
+    approvedBy: r.approved_by ?? null, approvedByName: str(r.approved_by_name),
+    approvedAt: r.approved_at ?? null,
     supersededAt: r.superseded_at ?? null,
   };
 }
@@ -100,17 +102,28 @@ function columnsFor(input: UnderwritingInput) {
   return { cols, vals };
 }
 
+// Author names are joined here rather than looked up per row by the UI: a
+// version list is read far more often than it is written, and an author whose
+// name needs a second query tends to end up rendered as a UUID.
+const CASE_SELECT = `
+  select c.*,
+         coalesce(a.name, a.email) as created_by_name,
+         coalesce(b.name, b.email) as approved_by_name
+    from investment_cases c
+    left join profiles a on a.user_id = c.created_by
+    left join profiles b on b.user_id = c.approved_by`;
+
 export async function listVersions(session: Session, opportunityId: string): Promise<UnderwritingVersion[]> {
   return withSession(session, async (tx: Queryable) => {
     const { rows } = await tx.query(
-      "select * from investment_cases where opportunity_id = $1 order by version desc", [opportunityId]);
+      `${CASE_SELECT} where c.opportunity_id = $1 order by c.version desc`, [opportunityId]);
     return rows.map(mapCase);
   });
 }
 
 export async function getVersion(session: Session, caseId: string): Promise<UnderwritingVersion | null> {
   return withSession(session, async (tx) => {
-    const { rows } = await tx.query("select * from investment_cases where case_id = $1", [caseId]);
+    const { rows } = await tx.query(`${CASE_SELECT} where c.case_id = $1`, [caseId]);
     return rows[0] ? mapCase(rows[0]) : null;
   });
 }
@@ -119,7 +132,7 @@ export async function getVersion(session: Session, caseId: string): Promise<Unde
 export async function currentVersion(session: Session, opportunityId: string): Promise<UnderwritingVersion | null> {
   return withSession(session, async (tx) => {
     const { rows } = await tx.query(
-      "select * from investment_cases where opportunity_id = $1 and status = 'current'", [opportunityId]);
+      `${CASE_SELECT} where c.opportunity_id = $1 and c.status = 'current'`, [opportunityId]);
     return rows[0] ? mapCase(rows[0]) : null;
   });
 }
@@ -128,7 +141,7 @@ export async function currentVersion(session: Session, opportunityId: string): P
 export async function approvedVersion(session: Session, opportunityId: string): Promise<UnderwritingVersion | null> {
   return withSession(session, async (tx) => {
     const { rows } = await tx.query(
-      "select * from investment_cases where opportunity_id = $1 and status = 'approved'", [opportunityId]);
+      `${CASE_SELECT} where c.opportunity_id = $1 and c.status = 'approved'`, [opportunityId]);
     return rows[0] ? mapCase(rows[0]) : null;
   });
 }

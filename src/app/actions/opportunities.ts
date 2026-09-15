@@ -40,19 +40,35 @@ export async function createOpportunityAction(formData: FormData): Promise<void>
   redirect(`/opportunities/${id}`);
 }
 
+/**
+ * Edit the opportunity's identity, origination and workflow.
+ *
+ * No financial fields. They were here until Phase 1A made the investment case
+ * the only writable source of them — at which point this action sent four keys
+ * that updateOpportunity refuses, and every save on this screen threw. The fix
+ * is not to filter them out quietly: it is that money is edited by creating an
+ * underwriting version, which is a different action on a different screen.
+ */
 export async function updateOpportunityAction(id: string, formData: FormData): Promise<void> {
   const session = await requireDbSession();
-  await updateOpportunity(session, id, {
-    name: String(formData.get("name") || "").trim(),
-    strategy: String(formData.get("strategy") || "").trim() || null,
-    targetPrice: numOrNull(formData.get("targetPrice")),
-    niy: numOrNull(formData.get("niy")),
-    targetIrr: numOrNull(formData.get("targetIrr")),
-    capexBudget: numOrNull(formData.get("capexBudget")),
-    probability: numOrNull(formData.get("probability")),
-    summary: String(formData.get("summary") || "").trim() || null,
-  });
-  revalidatePath(`/opportunities/${id}`);
+  const optional = (key: string) => {
+    const v = formData.get(key);
+    return v === null ? undefined : (String(v).trim() || null);
+  };
+  const patch: Record<string, unknown> = {};
+  for (const key of [
+    "name", "strategy", "summary", "market", "submarket", "source", "brokerName",
+    "vendorName", "sourceType", "sourceContactName", "sourceContactEmail",
+    "sourcedAt", "referralNote", "priority", "nextMilestone", "nextMilestoneDate",
+  ]) {
+    const v = optional(key);
+    if (v !== undefined) patch[key] = v;
+  }
+  if (formData.get("probability") !== null) {
+    patch.probability = numOrNull(formData.get("probability"));
+  }
+  await updateOpportunity(session, id, patch);
+  revalidatePath(`/opportunities/${id}`, "layout");
   revalidatePath("/pipeline");
 }
 

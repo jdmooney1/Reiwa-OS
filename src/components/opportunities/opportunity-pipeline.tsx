@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { LayoutGrid, Table2 } from "lucide-react";
-import type { Opportunity, OppStage, OppStatus } from "@/lib/data/opportunity-types";
+import type { OppStage, OppStatus } from "@/lib/data/opportunity-types";
+import type { PipelineRow } from "@/lib/data/opportunity-file";
 import { OPP_STAGES } from "@/lib/data/opportunity-types";
 import { ASSET_TYPE_LABEL, STRATEGY_LABEL } from "@/lib/domain";
 import { formatMoneyCompact, formatPct } from "@/lib/format";
@@ -22,7 +23,17 @@ const STATUS_TONE = {
   active: "positive", rejected: "negative", withdrawn: "muted", lost: "negative", converted: "accent",
 } as const;
 
-export function OpportunityPipeline({ opportunities }: { opportunities: Opportunity[] }) {
+/**
+ * Figures on a pipeline row come from that opportunity's own investment case,
+ * not from the projected headline columns. The projection keeps those columns
+ * correct, so this is a provenance choice rather than a correctness fix: a
+ * number on a card should come from the record that owns it, so that if the two
+ * ever diverge the card is wrong in an obvious way rather than a plausible one.
+ *
+ * A row whose case is only a working draft says so. "£42.5m" and "£42.5m, not
+ * yet through committee" are different statements to make in a pipeline review.
+ */
+export function OpportunityPipeline({ opportunities }: { opportunities: PipelineRow[] }) {
   const [view, setView] = useState<"board" | "table">("board");
   const active = useMemo(() => opportunities.filter((o) => o.status === "active" || o.status === "converted"), [opportunities]);
   const archived = useMemo(() => opportunities.filter((o) => o.status === "rejected" || o.status === "withdrawn" || o.status === "lost"), [opportunities]);
@@ -77,7 +88,7 @@ export function OpportunityPipeline({ opportunities }: { opportunities: Opportun
   );
 }
 
-function OppCard({ o }: { o: Opportunity }) {
+function OppCard({ o }: { o: PipelineRow }) {
   return (
     <Link href={`/opportunities/${o.opportunityId}`}>
       <Card className="p-3.5 transition-colors hover:border-line">
@@ -89,11 +100,16 @@ function OppCard({ o }: { o: Opportunity }) {
           <Badge tone={STATUS_TONE[o.status]} dot>{STATUS_LABEL[o.status]}</Badge>
         </div>
         <div className="tabular mt-3 grid grid-cols-3 gap-y-2 border-t border-line pt-3 text-xs">
-          <Fig label="Price" v={formatMoneyCompact(o.targetPrice, o.currency as "GBP")} />
-          <Fig label="NIY" v={formatPct(o.niy, 1)} />
-          <Fig label="Target IRR" v={formatPct(o.targetIrr, 1)} />
+          <Fig label="Price" v={formatMoneyCompact(o.caseAcquisitionPrice, o.currency as "GBP")} />
+          <Fig label="Entry yield" v={formatPct(o.caseEntryYieldPct, 1)} />
+          <Fig label="Target IRR" v={formatPct(o.caseTargetIrr, 1)} />
         </div>
-        {o.strategy && <div className="mt-2.5"><Badge tone="neutral">{STRATEGY_LABEL[o.strategy as Strategy] ?? o.strategy}</Badge></div>}
+        <div className="mt-2.5 flex items-center justify-between gap-2">
+          {o.strategy
+            ? <Badge tone="neutral">{STRATEGY_LABEL[o.strategy as Strategy] ?? o.strategy}</Badge>
+            : <span />}
+          <span className="text-2xs text-ink-faint">{basisNote(o)}</span>
+        </div>
       </Card>
     </Link>
   );
@@ -108,14 +124,14 @@ function Fig({ label, v }: { label: string; v: string }) {
   );
 }
 
-function OppTable({ rows, muted }: { rows: Opportunity[]; muted?: boolean }) {
+function OppTable({ rows, muted }: { rows: PipelineRow[]; muted?: boolean }) {
   return (
     <div className={cn("overflow-hidden rounded-lg border border-line", muted && "opacity-70")}>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-line bg-surface-sunken/50 text-left">
-            {["Opportunity", "Location", "Type", "Strategy", "Stage", "Price", "NIY", "IRR", "Status"].map((h, i) => (
-              <th key={h} className={cn("px-3 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint", i >= 5 && i <= 7 && "text-right")}>{h}</th>
+            {["Opportunity", "Location", "Type", "Strategy", "Stage", "Price", "Total cost", "Entry yield", "IRR", "Basis", "Status"].map((h, i) => (
+              <th key={h} className={cn("px-3 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint", i >= 5 && i <= 8 && "text-right")}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -127,15 +143,23 @@ function OppTable({ rows, muted }: { rows: Opportunity[]; muted?: boolean }) {
               <td className="px-3 py-2.5 text-ink-muted">{ASSET_TYPE_LABEL[o.assetType as AssetType] ?? o.assetType}</td>
               <td className="px-3 py-2.5 text-ink-muted">{o.strategy ? (STRATEGY_LABEL[o.strategy as Strategy] ?? o.strategy) : "—"}</td>
               <td className="px-3 py-2.5 text-ink-muted">{STAGE_LABEL[o.stage]}</td>
-              <td className="px-3 py-2.5 text-right font-medium text-ink">{formatMoneyCompact(o.targetPrice, o.currency as "GBP")}</td>
-              <td className="px-3 py-2.5 text-right text-ink-muted">{formatPct(o.niy, 1)}</td>
-              <td className="px-3 py-2.5 text-right text-ink-muted">{formatPct(o.targetIrr, 1)}</td>
+              <td className="px-3 py-2.5 text-right font-medium text-ink">{formatMoneyCompact(o.caseAcquisitionPrice, o.currency as "GBP")}</td>
+              <td className="px-3 py-2.5 text-right text-ink-muted">{formatMoneyCompact(o.caseTotalCost, o.currency as "GBP")}</td>
+              <td className="px-3 py-2.5 text-right text-ink-muted">{formatPct(o.caseEntryYieldPct, 1)}</td>
+              <td className="px-3 py-2.5 text-right text-ink-muted">{formatPct(o.caseTargetIrr, 1)}</td>
+              <td className="px-3 py-2.5 text-2xs text-ink-faint">{basisNote(o)}</td>
               <td className="px-3 py-2.5"><Badge tone={STATUS_TONE[o.status]} dot>{STATUS_LABEL[o.status]}</Badge></td>
             </tr>
           ))}
-          {rows.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-sm text-ink-faint">No opportunities.</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={11} className="px-3 py-8 text-center text-sm text-ink-faint">No opportunities.</td></tr>}
         </tbody>
       </table>
     </div>
   );
+}
+
+/** Says which underwriting a row's figures came from, in three words or fewer. */
+function basisNote(o: PipelineRow): string {
+  if (o.caseBasis === "none") return "Not underwritten";
+  return `v${o.caseVersion} ${o.caseBasis === "approved" ? "approved" : "working"}`;
 }

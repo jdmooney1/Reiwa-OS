@@ -26,6 +26,7 @@ function mapOpp(r: Record<string, any>): Opportunity {
     sourcedAt: str(r.sourced_at), referralNote: str(r.referral_note),
     brokerName: str(r.broker_name), vendorName: str(r.vendor_name),
     priority: r.priority as OppPriority,
+    ownerUserId: r.owner_user_id ?? null, ownerName: str(r.owner_name),
     nextMilestone: str(r.next_milestone), nextMilestoneDate: str(r.next_milestone_date),
     lastMaterialUpdateAt: r.last_material_update_at ?? null,
     sizeSqft: num(r.size_sqft), sizeSqm: num(r.size_sqm), summary: str(r.summary),
@@ -36,10 +37,12 @@ function mapOpp(r: Record<string, any>): Opportunity {
 }
 
 const SELECT = `
-  select o.*, p.address, p.city, p.country, a.asset_id
+  select o.*, p.address, p.city, p.country, a.asset_id,
+         coalesce(owner.name, owner.email) as owner_name
   from opportunities o
   left join properties p on p.property_id = o.property_id
-  left join assets a on a.opportunity_id = o.opportunity_id`;
+  left join assets a on a.opportunity_id = o.opportunity_id
+  left join profiles owner on owner.user_id = o.owner_user_id`;
 
 export async function listOpportunities(session: Session): Promise<Opportunity[]> {
   return withSession(session, async (tx: Queryable) => {

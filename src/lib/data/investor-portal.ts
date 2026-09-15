@@ -138,6 +138,14 @@ export interface VersionProvenance {
   versionId: string;
   sourceFingerprint: string;
   sourceCapturedAt: string;
+  /** The underwriting version this draft was taken from. Null if never underwritten. */
+  sourceInvestmentCaseId: string | null;
+  sourceCaseVersion: number | null;
+  sourceCaseStatus: string | null;
+  /** The committee decision live at capture. Null if it had not been to IC. */
+  sourceIcDecisionId: string | null;
+  sourceDecisionOutcome: string | null;
+  sourceDecisionDate: string | null;
 }
 
 // ---- Row mappers -----------------------------------------------------------
@@ -542,13 +550,32 @@ export async function getVersionProvenance(
   return withSession(session, async (tx) => {
     const { rows } = await tx.query<{
       version_id: string; source_fingerprint: string; source_captured_at: string;
-    }>(`select version_id, source_fingerprint, source_captured_at
-          from publication_version_sources where version_id = $1`, [versionId]);
-    return rows[0]
+      source_investment_case_id: string | null; source_ic_decision_id: string | null;
+      case_version: number | null; case_status: string | null;
+      decision_outcome: string | null; decision_date: string | null;
+    }>(`select vs.version_id, vs.source_fingerprint, vs.source_captured_at,
+               vs.source_investment_case_id, vs.source_ic_decision_id,
+               c.version as case_version, c.status as case_status,
+               d.outcome as decision_outcome, d.decision_date
+          from publication_version_sources vs
+          left join investment_cases c on c.case_id = vs.source_investment_case_id
+          left join ic_decisions d on d.decision_id = vs.source_ic_decision_id
+         where vs.version_id = $1`, [versionId]);
+    const r = rows[0];
+    return r
       ? {
-          versionId: rows[0].version_id,
-          sourceFingerprint: rows[0].source_fingerprint,
-          sourceCapturedAt: rows[0].source_captured_at,
+          versionId: r.version_id,
+          sourceFingerprint: r.source_fingerprint,
+          sourceCapturedAt: r.source_captured_at,
+          // Phase 1A provenance: which underwriting version and which committee
+          // decision were live when this draft was taken. Both nullable — an
+          // opportunity may be published before it has been underwritten.
+          sourceInvestmentCaseId: r.source_investment_case_id,
+          sourceCaseVersion: r.case_version != null ? Number(r.case_version) : null,
+          sourceCaseStatus: r.case_status,
+          sourceIcDecisionId: r.source_ic_decision_id,
+          sourceDecisionOutcome: r.decision_outcome,
+          sourceDecisionDate: r.decision_date,
         }
       : null;
   });

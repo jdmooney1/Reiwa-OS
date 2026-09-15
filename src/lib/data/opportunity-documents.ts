@@ -29,6 +29,7 @@ export interface OpportunityDocument {
   sizeBytes: number | null;
   accessLevel: DocumentAccessLevel;
   uploadedBy: string | null;
+  uploadedByName: string | null;
   createdAt: string;
 }
 
@@ -37,7 +38,8 @@ function mapDoc(r: Record<string, any>): OpportunityDocument {
     documentId: r.document_id, orgId: r.org_id, opportunityId: r.opportunity_id,
     title: r.title, category: r.category, storagePath: r.storage_path,
     fileName: str(r.file_name), mimeType: str(r.mime_type), sizeBytes: num(r.size_bytes),
-    accessLevel: r.access_level, uploadedBy: r.uploaded_by ?? null, createdAt: r.created_at,
+    accessLevel: r.access_level, uploadedBy: r.uploaded_by ?? null,
+    uploadedByName: str(r.uploaded_by_name), createdAt: r.created_at,
   };
 }
 
@@ -46,7 +48,10 @@ export async function listDocuments(
 ): Promise<OpportunityDocument[]> {
   return withSession(session, async (tx: Queryable) => {
     const { rows } = await tx.query(
-      "select * from opportunity_documents where opportunity_id = $1 order by created_at desc",
+      `select d.*, coalesce(p.name, p.email) as uploaded_by_name
+         from opportunity_documents d
+         left join profiles p on p.user_id = d.uploaded_by
+        where d.opportunity_id = $1 order by d.created_at desc`,
       [opportunityId]);
     return rows.map(mapDoc);
   });
