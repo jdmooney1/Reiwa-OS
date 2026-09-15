@@ -18,6 +18,7 @@
 // normal case, not the exception.
 // ============================================================================
 import { defineConfig, devices } from "@playwright/test";
+import { checkTestDatabaseEnv } from "./src/lib/db/test-database";
 
 const PORT = Number(process.env.UAT_PORT ?? 3100);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -29,6 +30,20 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
  * uses its own.
  */
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined;
+
+/**
+ * The browser drives the real application, which reads and writes real rows, so
+ * these specs need the dedicated test database for the same reason the
+ * integration suite does — a UAT run that signs in, uploads a document and
+ * mints one-time codes must not do any of that to a development or production
+ * project.
+ *
+ * The reset opt-in is deliberately NOT required: Playwright never resets. It
+ * expects a database the integration suite has already seeded. Demanding
+ * ALLOW_TEST_DATABASE_RESET here would train everybody to export the
+ * destructive flag permanently, which is the habit the gate exists to prevent.
+ */
+const testDatabaseUrl = checkTestDatabaseEnv(process.env, { purpose: "connect" });
 
 const viewports = {
   desktop: { width: 1440, height: 900 },
@@ -66,7 +81,14 @@ export default defineConfig({
     // error overlay and no route headers, none of which ship.
     command: `npx next start -p ${PORT}`,
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    // The server under test talks to the TEST database, not the one in
+    // .env.local. Next loads .env.local itself, so this override is what stops
+    // a UAT run writing to a development project.
+    env: { ...process.env, DATABASE_URL: testDatabaseUrl } as Record<string, string>,
+    // A server already running on this port was started by somebody else and
+    // may be pointed anywhere, so it is never reused: correctness of the target
+    // database outranks a few seconds of start-up.
+    reuseExistingServer: false,
     timeout: 120_000,
     stdout: "ignore",
     stderr: "pipe",

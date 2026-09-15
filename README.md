@@ -54,3 +54,27 @@ dashboard. Typography and spacing carry the weight; colour is used sparingly.
 - **Markets:** London, Amsterdam
 - **Currencies:** GBP, EUR
 - **Users:** Founder, Analyst (external advisers added in a later phase)
+
+## Running the checks
+
+Non-destructive, no database required:
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+npm run test:unit
+```
+
+The integration and end-to-end suites need a **separate, disposable** test
+database, and they refuse to run without one — `npm test` drops every
+application table on every run.
+
+```bash
+ALLOW_TEST_DATABASE_RESET=true npm test   # drops and reseeds TEST_DATABASE_URL
+npm run test:e2e                          # reads/writes only; never reset
+```
+
+Read [docs/19-test-database-safety.md](docs/19-test-database-safety.md) before
+the first run. Never point `TEST_DATABASE_URL` at `reiwa-dev`, staging or
+production.

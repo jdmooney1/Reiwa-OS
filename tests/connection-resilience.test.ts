@@ -30,6 +30,9 @@ import {
   getPool, adminQuery, withSessionOn, withInvestorSessionOn, closePool,
 } from "@/lib/db/client";
 import { dropSchema, resetDatabase } from "@/lib/db/reset";
+// Resetting deliberately, inside the suite that already runs against the
+// dedicated test database: the gate is re-run rather than bypassed.
+import { authorizeReset } from "./test-database-env";
 import { adminSession } from "./helpers";
 
 /** A pool that records every statement and can be told to fail on connect. */
@@ -225,7 +228,7 @@ describe("Schema teardown", () => {
 describe("Reset is repeatable against the real database", () => {
   it("resets twice in a row and leaves a working, seeded schema", async () => {
     for (let run = 0; run < 2; run += 1) {
-      const applied = await resetDatabase();
+      const applied = await resetDatabase(await authorizeReset());
       expect(applied.length).toBeGreaterThan(0);
       const orgs = await adminQuery<{ n: string }>(
         "select count(*)::text as n from organizations");

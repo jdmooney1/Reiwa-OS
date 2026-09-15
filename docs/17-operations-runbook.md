@@ -34,6 +34,19 @@ Optional:
 | `SUPABASE_DB_CA_CERT` | Override the shipped Supabase root CA (`supabase/prod-ca-2021.crt`). A PEM string or a path. TLS verification is always on and is never disabled. |
 | `DATABASE_POOL_MAX` | Local connection pool size (default 8). Raise only if the pooler's own limits allow it. |
 
+Tests only — never set in a deployment:
+
+| Variable | Purpose |
+| --- | --- |
+| `TEST_DATABASE_URL` | The **only** database the automated suites will touch, and they drop every table in it on every run. A separate, disposable project — never `reiwa-dev`, staging or production. There is no fallback to `DATABASE_URL`, and naming the same database in both is refused. |
+| `ALLOW_TEST_DATABASE_RESET` | Must be exactly `true` to authorise a destructive run. Typed per run, never exported and never put in `.env.local`. |
+
+> **Read [19-test-database-safety.md](19-test-database-safety.md) before running
+> the integration suite for the first time.** `npm test` drops and reseeds
+> `TEST_DATABASE_URL`, and refuses to run at all until a disposable test
+> database has been provisioned and marked with
+> `ALTER DATABASE postgres SET app.environment = 'test';`.
+
 **Checks before every deploy**
 
 - `.env.local` is git-ignored and is not in the repository. `npm test` asserts

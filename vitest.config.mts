@@ -12,8 +12,12 @@ export default defineConfig({
     testTimeout: 120000,
     hookTimeout: 180000,
     include: ["tests/**/*.test.ts"],
-    // e2e specs are Playwright's, not vitest's.
-    exclude: ["e2e/**", "node_modules/**"],
+    // e2e specs are Playwright's, not vitest's. tests/unit/** is excluded
+    // because those tests must run WITHOUT a database — they are the ones that
+    // prove the destructive-reset gate refuses, and a suite that reset a
+    // database in order to test the guard against resetting a database would be
+    // a poor joke. They have their own config: `npm run test:unit`.
+    exclude: ["e2e/**", "tests/unit/**", "node_modules/**"],
     globalSetup: ["tests/global-setup.ts"],
     setupFiles: ["tests/setup.ts"],
     // One shared database: files must not interleave.

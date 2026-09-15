@@ -3,7 +3,7 @@
 //   npm run db:reset -- --yes
 import { requireEnv } from "./env";
 import { closePool } from "@/lib/db/client";
-import { resetDatabase } from "@/lib/db/reset";
+import { resetDatabase, authorizeOperatorReset } from "@/lib/db/reset";
 
 async function main(): Promise<void> {
   requireEnv();
@@ -17,7 +17,11 @@ async function main(): Promise<void> {
     return;
   }
   console.log(`Resetting application schema on ${host} …`);
-  const applied = await resetDatabase();
+  // The operator's --yes IS the authorisation here. This path is unchanged in
+  // substance: it resets DATABASE_URL, deliberately, because a person asked it
+  // to at a terminal. The automated suites cannot reach it — they have no way
+  // to pass --yes, and they go through the test-database gate instead.
+  const applied = await resetDatabase(authorizeOperatorReset(true, host));
   console.log(`Re-applied ${applied.length} migration(s); demonstration data seeded.`);
 }
 

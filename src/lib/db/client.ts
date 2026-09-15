@@ -115,6 +115,38 @@ function createPool(): Pool {
   });
 }
 
+/**
+ * Read one per-database setting from an ARBITRARY connection string.
+ *
+ * The only function here that does not use the application pool, and
+ * deliberately so: it exists for the destructive-reset gate, which must ask the
+ * database it is about to destroy whether it is disposable. Asking the
+ * application's database about a different one would be worse than not asking.
+ *
+ * Read-only by construction — one `SELECT current_setting(...)` on a
+ * short-lived, single-connection pool that is always closed. `current_setting`
+ * with `missing_ok` returns null rather than raising when the setting has never
+ * been set, which is the answer the gate treats as "not a test database".
+ */
+export async function probeDatabaseSetting(
+  connectionString: string, setting: string,
+): Promise<string | null> {
+  const pool = new Pool({
+    connectionString,
+    ssl: sslConfig(connectionString),
+    application_name: "reiwa-os-reset-gate",
+    max: 1,
+    connectionTimeoutMillis: 15_000,
+  });
+  try {
+    const { rows } = await pool.query<{ value: string | null }>(
+      "select current_setting($1::text, true) as value", [setting]);
+    return rows[0]?.value ?? null;
+  } finally {
+    await pool.end();
+  }
+}
+
 // ---- Connection acquisition ------------------------------------------------
 /** Attempts to BORROW a connection. Nothing about a statement is retried. */
 const CONNECT_ATTEMPTS = 3;

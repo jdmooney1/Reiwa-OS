@@ -5,10 +5,89 @@
 // private `app` schema) and rebuilds them. Supabase Auth users are deliberately
 // left in place: seedIdentities() reuses them by email, so a reset does not churn
 // the Auth project.
+//
+// resetDatabase() cannot be called without an AUTHORISATION. That is not
+// ceremony: the previous signature was `resetDatabase()`, so any code that
+// could import this module could destroy whatever DATABASE_URL happened to
+// point at, and the test harness did exactly that. An authorisation can only be
+// minted by one of the two paths below, each of which has to establish its own
+// right to destroy the target first.
+//
+//   * authorizeTestDatabaseReset()  — the automated suites. Requires a test
+//     runtime, TEST_DATABASE_URL, an explicit opt-in, a database that is not
+//     the application's, and a database that says it is disposable.
+//     See ./test-database.ts.
+//   * authorizeOperatorReset()      — `npm run db:reset -- --yes`, a person
+//     deliberately resetting their own development database.
+//
+// The brand is a module-private symbol, so an authorisation cannot be written
+// as an object literal by a caller in a hurry.
 // ============================================================================
 import type { Pool } from "pg";
-import { getPool, runMigrations } from "@/lib/db/client";
+import { getPool, runMigrations, probeDatabaseSetting } from "@/lib/db/client";
 import { seedIfEmpty } from "@/lib/db/seed";
+import {
+  assertDisposableTestDatabase, ENVIRONMENT_MARKER_SETTING,
+  type EnvSource, type MarkerReader,
+} from "@/lib/db/test-database";
+
+const AUTHORISED = Symbol("reiwa.destructive-reset.authorised");
+
+/** Proof that something has established the right to destroy a database. */
+export interface ResetAuthorization {
+  readonly [AUTHORISED]: true;
+  /** Which path granted it — carried into the log line, never into a decision. */
+  readonly grantedBy: "test-database-gate" | "operator";
+  /** The database it was granted for, without its password. */
+  readonly target: string;
+}
+
+/**
+ * Read the disposability marker from the target database itself.
+ *
+ * A single `SELECT` on a short-lived connection to TEST_DATABASE_URL. It never
+ * borrows the application pool, which is bound to DATABASE_URL — asking the
+ * wrong database whether the right one is disposable would be worse than not
+ * asking at all.
+ */
+const readEnvironmentMarker: MarkerReader = (connectionString) =>
+  probeDatabaseSetting(connectionString, ENVIRONMENT_MARKER_SETTING);
+
+/**
+ * Authorise a reset of the dedicated test database, or throw.
+ *
+ * Every condition is checked before this returns, and the only statement it
+ * issues is the marker read.
+ */
+export async function authorizeTestDatabaseReset(
+  env: EnvSource = process.env,
+  readMarker: MarkerReader = readEnvironmentMarker,
+): Promise<ResetAuthorization> {
+  const url = await assertDisposableTestDatabase(env, readMarker);
+  return { [AUTHORISED]: true, grantedBy: "test-database-gate", target: url };
+}
+
+/**
+ * Authorise a reset a person has asked for at the command line.
+ *
+ * Unchanged in substance from what `npm run db:reset -- --yes` always did: the
+ * confirmation IS the authorisation. It is expressed as a token here so that
+ * the destructive function has exactly one door, not two.
+ */
+export function authorizeOperatorReset(confirmed: boolean, target: string): ResetAuthorization {
+  if (!confirmed) {
+    throw new Error("Refusing destructive reset: no operator confirmation was given.");
+  }
+  return { [AUTHORISED]: true, grantedBy: "operator", target };
+}
+
+function assertAuthorised(authorization: ResetAuthorization): void {
+  if (!authorization || authorization[AUTHORISED] !== true) {
+    throw new Error(
+      "Refusing destructive reset: no valid authorization was supplied. Mint one " +
+      "with authorizeTestDatabaseReset() or authorizeOperatorReset().");
+  }
+}
 
 /** Application tables in dependency order (children first). */
 const TABLES = [
@@ -72,6 +151,11 @@ const TABLES = [
  * an attempt to escape the pooler's limit — it bounds this deliberately heavy
  * DDL so a teardown that genuinely hangs fails with a clear error instead of
  * being cut off somewhere unpredictable.
+ *
+ * UNAUTHORISED PRIMITIVE. This takes no authorisation because it takes the pool
+ * it is told to, and the resilience tests drive it with a fake one. Production
+ * code reaches it only through resetDatabase(), which is where the gate is. Do
+ * not call it from anywhere else.
  */
 export async function dropSchema(pool: Pool = getPool()): Promise<void> {
   const client = await pool.connect();
@@ -93,8 +177,16 @@ export async function dropSchema(pool: Pool = getPool()): Promise<void> {
   }
 }
 
-/** Drop, migrate, seed. Returns the migrations that were applied. */
-export async function resetDatabase(pool: Pool = getPool()): Promise<string[]> {
+/**
+ * Drop, migrate, seed. Returns the migrations that were applied.
+ *
+ * The authorisation is checked before the first statement, so a caller without
+ * one fails having changed nothing.
+ */
+export async function resetDatabase(
+  authorization: ResetAuthorization, pool: Pool = getPool(),
+): Promise<string[]> {
+  assertAuthorised(authorization);
   await dropSchema(pool);
   const applied = await runMigrations(pool);
   await seedIfEmpty(pool);
