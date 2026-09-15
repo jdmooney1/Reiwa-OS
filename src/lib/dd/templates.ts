@@ -2,7 +2,7 @@
 // Reiwa Capital — Due Diligence frameworks (London & Amsterdam)
 // ----------------------------------------------------------------------------
 // A DD template is the firm's standing investment risk-control checklist. It is
-// instantiated onto a deal (see applyTemplate) where each line becomes a live,
+// instantiated onto an opportunity (see applyTemplate) where each line becomes a live,
 // owned, status-tracked workstream. Questions and jurisdiction differ by market;
 // the section spine is shared so every deal file reads consistently.
 // ============================================================================
@@ -192,17 +192,17 @@ export function defaultTemplateId(market: Market | null): DdTemplate["id"] {
 }
 
 /**
- * Instantiate a template onto a deal: each template line becomes a live DD item,
- * Not Started, unowned, with no linked documents yet.
+ * Instantiate a template onto an opportunity: each template line becomes a live
+ * DD item — Not Started, unowned, with no linked documents yet.
  */
 export function applyTemplate(
   templateId: DdTemplate["id"],
-  dealId: string,
+  opportunityId: string,
   now: string = new Date().toISOString(),
 ): DueDiligenceItem[] {
   return DD_TEMPLATES[templateId].items.map((t, i) => ({
-    item_id: `${templateId}-${dealId}-${i}`,
-    deal_id: dealId,
+    item_id: `${templateId}-${opportunityId}-${i}`,
+    opportunity_id: opportunityId,
     section: t.section,
     item: t.item,
     question: t.question,

@@ -4,6 +4,10 @@
 > lifecycle model below still stands; the runtime does not. PGlite and the custom
 > JWT/scrypt authentication described here were replaced by hosted Supabase
 > PostgreSQL and Supabase Auth.
+>
+> **Also updated by Phase 0 (canonical model).** The mock deal tables this phase
+> left in place have since been removed, so the lifecycle described here is now
+> the only model in the codebase rather than one of two.
 
 This phase converted Reiwa OS from a mock prototype into a **functioning persistent,
 authenticated, multi-tenant application** and validated the full lifecycle end to end.
@@ -70,7 +74,7 @@ Verification run: `tsc --noEmit` clean · `next lint` clean · `vitest` 12/12 ·
 6. Click **Convert to Asset** → redirected to the new asset (lifecycle_stage Operating).
 7. Confirm the **Overview** three-way shows the underwriting baseline (carried from the approved case).
 8. **Performance tab → Record Performance Period** (e.g. Q3 2026, NOI 1,600,000, occupancy 90, valuation 34,000,000). Variance vs underwriting recalculates.
-9. **Portfolio** → the new asset is aggregated into the totals (GBP, labelled demo FX).
+9. **Portfolio** → the new asset is aggregated into the totals (GBP, with the FX source and date stated on screen).
 10. **Sign out**, sign back in → all records remain. Data also survives a server restart (`npm run start`).
 
 Isolation check: sign in as `user@aoyama.com` → only Roppongi Tower is visible; none of Meiji's data appears.
@@ -80,7 +84,18 @@ Isolation check: sign in as `user@aoyama.com` → only Roppongi Tower is visible
 - Clerk and hosted Supabase are designed-but-not-connected; the auth boundary and
   migrations are structured for a drop-in swap (point `DATABASE_URL`/Supabase at the
   same SQL; move RLS helpers to read `auth.jwt()`).
-- Existing deal tables (`deals`, DD/score/memo/documents) remain mock and are not
-  org-scoped; `/deals/[id]` is a legacy analytics showcase, not wired to the DB.
-- FX uses labelled demo static rates (`fx_rates`) — replace with a live feed.
+- ~~Existing deal tables (`deals`, DD/score/memo/documents) remain mock and are not
+  org-scoped; `/deals/[id]` is a legacy analytics showcase, not wired to the DB.~~
+  **Resolved in Phase 0.** The mock deal model, the `/deals/*` routes and the typed
+  `Database` interface describing tables that were never created were all removed.
+  `opportunities` is the canonical pre-acquisition object and `assets` the canonical
+  post-acquisition one, joined by `investment_cases → transactions`. Publications are
+  investor-facing views onto opportunities, not a lifecycle stage. The DD, score,
+  memo-structure and document-taxonomy models were preserved in `src/lib` and now
+  await screens built against the real schema (see
+  [`03-mvp-screens.md`](03-mvp-screens.md) § F).
+- FX comes from the `fx_rates` table, and the source and date are shown on the
+  portfolio screen. Rates are static and still need a live feed — but as of Phase 0
+  there is no silent fallback: `portfolioAggregate` requires an explicit rate table
+  and throws on a missing currency rather than assuming one.
 - Portfolio bulk assembly is per-asset queries (fine at demo scale; batch later).

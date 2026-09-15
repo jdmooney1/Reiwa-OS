@@ -39,6 +39,6 @@ export interface PortfolioData {
 
 export async function getPortfolioData(session: Session): Promise<PortfolioData> {
   const [files, fx] = await Promise.all([listAssetFiles(session), getFxContext(session)]);
-  const aggregate = portfolioAggregate(files, "GBP", fx.rates);
+  const aggregate = portfolioAggregate(files, fx.rates, "GBP");
   return { files, aggregate, fx };
 }

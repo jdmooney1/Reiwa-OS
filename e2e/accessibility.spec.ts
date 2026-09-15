@@ -50,9 +50,9 @@ test.describe("Automated audit", () => {
     expect(violations.map((v) => `${v.id}: ${v.nodes.length} node(s)`)).toEqual([]);
   });
 
-  test("the deal pipeline has no violations", async ({ page }) => {
+  test("the opportunity pipeline has no violations", async ({ page }) => {
     await signInAsStaff(page);
-    await page.goto("/deals");
+    await page.goto("/pipeline");
     const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
     expect(violations.map((v) => `${v.id}: ${v.nodes.length} node(s)`)).toEqual([]);
   });
@@ -61,7 +61,7 @@ test.describe("Automated audit", () => {
 test.describe("Form fields have names", () => {
   test("every input on a staff screen has an accessible name", async ({ page }) => {
     await signInAsStaff(page);
-    for (const path of ["/admin/investors", "/deals", "/admin/publications"]) {
+    for (const path of ["/admin/investors", "/pipeline", "/admin/publications"]) {
       await page.goto(path);
       const unnamed = await page.evaluate(() => {
         const out: string[] = [];
@@ -147,7 +147,7 @@ test.describe("Keyboard", () => {
 test.describe("Semantics", () => {
   test("controls are buttons and links, not clickable divs", async ({ page }) => {
     await signInAsStaff(page);
-    for (const path of ["/admin/investors", "/admin/publications", "/deals"]) {
+    for (const path of ["/admin/investors", "/admin/publications", "/pipeline"]) {
       await page.goto(path);
       const impostors = await page.evaluate(() => {
         const out: string[] = [];

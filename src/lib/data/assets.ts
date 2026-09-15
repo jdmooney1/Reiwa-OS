@@ -23,7 +23,7 @@ const metrics = (r: Row): AssetMetrics => ({
 function mapAsset(r: any): Asset {
   return {
     asset_id: r.asset_id, org_id: r.org_id, portfolio_id: r.portfolio_id ?? null,
-    source_deal_id: r.opportunity_id ?? null, name: r.name, address: str(r.address),
+    source_opportunity_id: r.opportunity_id ?? null, name: r.name, address: str(r.address),
     city: str(r.city), country: str(r.country), market: (str(r.market) as any) ?? null,
     asset_type: (r.asset_type as any) ?? "other", strategy: (str(r.strategy) as any) ?? null,
     lifecycle_stage: r.lifecycle_stage, currency: r.currency, acquisition_date: str(r.acquisition_date),
@@ -67,7 +67,6 @@ async function assembleOne(tx: Queryable, assetRow: any): Promise<AssetFile> {
   }));
   return {
     asset: mapAsset(assetRow), plans, periods, valuations, risks, decisions,
-    leases: [], capex: [], developments: [], milestones: [], loans: [], advisers: [], actions: [], events: [],
   };
 }
 

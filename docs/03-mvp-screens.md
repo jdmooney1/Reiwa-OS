@@ -1,7 +1,16 @@
 # 03 · MVP Screen List
 
-> The screens that make up the Reiwa OS MVP, mapped to the ten core modules and the
-> routes in [`01-architecture.md`](01-architecture.md).
+> The screens that make up Reiwa OS, mapped to the routes in
+> [`01-architecture.md`](01-architecture.md).
+
+> **Status.** Originally a pre-build screen plan for a ten-module deal file at
+> `/deals/[dealId]/*`. That route tree was removed in Phase 0: it was served
+> entirely from a mock module and never read the database, so shipping it would
+> have meant showing figures no system of record could vouch for.
+>
+> Section B below is what exists. Section F preserves the screens that were
+> designed but never built — the design work is still good and several of the
+> models behind it survive in `src/lib` — but nothing in F is a feature today.
 
 ---
 
@@ -30,75 +39,54 @@ accent action per view. No charts junk — numbers first, sparing visualisation.
 
 ---
 
-## B. Module screens (MVP)
+## B. Module screens (built)
 
-### 1 · Deal Pipeline — `/pipeline` (default landing)
-The command centre. Two views toggled in the header:
-- **Board view** — columns by `deal_stage` (Sourced → … → Closed), draggable cards
-  showing reference, name, market chip, target price, score badge, owner avatar.
-- **Table view** — dense TanStack Table: reference, name, market, asset class, stage,
-  target price, score, IRR, owner, updated. Sortable, filterable.
+Every screen below reads from Postgres under RLS. There is no mock path.
 
-Filters: market (London / Amsterdam), asset class, stage, owner, status. Header shows
-portfolio summary tiles (active deals, total target value by currency, deals in DD,
-average score). Primary action: **New Deal**.
+### 1 · Opportunity Pipeline — `/pipeline` (default landing)
+The command centre, over `opportunities`. Board and table views:
+- **Board view** — columns by `stage` (New → Screening → Underwriting → IC →
+  Approved → Acquired), cards showing name, market chip, target price, status.
+- **Table view** — name, market, asset type, strategy, stage, status, target
+  price, NIY, target IRR.
 
-### 2 · Deal Detail — `/deals/[dealId]`
-Sticky **deal header** across all deal tabs: name + reference, address, market chip,
-stage selector, status, investment score badge, and 3–4 headline metrics (target price,
-NIY, levered IRR, LTV). Below it, the tab bar. The default tab is **Overview**:
-- Investment thesis / summary
-- Snapshot of key metrics, score, and DD/risk completion progress
-- Recent **activity timeline** (from `deal_activity`)
+Filters: market, asset type, strategy, stage, status. Primary action:
+**New Opportunity**.
 
-### 3 · Asset Snapshot — `/deals/[dealId]/asset`
-Structured property facts in a clean two-column read/edit layout: address & map pin,
-tenure, areas (GIA/NIA/sqm), units, occupancy, WALT, year built, EPC, condition notes.
-Inline edit with Zod-validated server action.
+### 2 · Opportunity Detail — `/opportunities/[id]`
+The pre-acquisition object. Header (name, market, asset type, strategy, stage
+badge), stage progression, headline underwriting figures, and the conversion
+action that creates the asset. Conversion writes
+`investment_cases → transactions → assets` in one transaction and is idempotent.
 
-### 4 · Financial Metrics — `/deals/[dealId]/financials`
-Split layout: **Inputs** panel (purchase price, costs, NOI, rents, equity, debt, rate,
-hold period, exit yield) on the left; **Derived metrics** tiles on the right (NIY, gross
-yield, LTV, DSCR, levered/unlevered IRR, equity multiple, cash-on-cash, price/sqm).
-Metrics recompute live via `src/lib/finance` and persist on save. Currency-aware
-formatting (GBP/EUR).
+### 3 · New Opportunity — `/opportunities/new`
+Create form (name, city, market, asset type, strategy, currency, target price,
+NIY, target IRR). Creates the `property` and the `opportunity`, lands on detail.
 
-### 5 · Due Diligence Tracker — `/deals/[dealId]/due-diligence`
-Checklist grouped by `dd_category` (Legal, Financial, Technical, Commercial, Tax, ESG).
-Each row: title, status chip (Not started / In progress / Complete / Flagged / N/A),
-assignee, due date. Category progress bars; "flagged" items surfaced at the top.
-Seed-from-template action when a deal enters DD.
+### 4 · Portfolio — `/portfolio`
+Post-acquisition roll-up across held assets: acquisition cost, current valuation,
+equity, debt, LTV, NOI, occupancy, forecast IRR against underwriting, and
+concentration by country and currency.
 
-### 6 · Risk Register — `/deals/[dealId]/risks`
-Two parts: a **5×5 risk matrix** (likelihood × impact) with dots per risk, and a
-**risk table** (category, title, likelihood, impact, severity band, status, owner,
-mitigation). Severity band colour-coded (low → critical) but restrained.
+FX is explicit. Rates come from `fx_rates` with their source and date shown on
+the screen, and `portfolioAggregate` throws rather than assume a missing rate —
+a portfolio figure is either traceable to a stated rate or it is not displayed.
 
-### 7 · Investment Score — `/deals/[dealId]/score`
-A **score gauge** (0–100) with recommendation (Pursue / Hold / Pass), pillar breakdown
-(Location, Asset Quality, Cashflow, Risk, Return, ESG) shown as labelled bars, an
-editable **weighting model**, and a rationale text block. Saving records the weights so
-the score is reproducible.
+### 5 · Asset File — `/assets/[assetId]`
+The post-acquisition canonical object. Sticky header (name, location, lifecycle
+stage, key metrics) above two tabs:
+- **Overview** — snapshot, three-way comparison (underwriting / approved /
+  current forecast), decisions required, highest-priority risks, and a provenance-
+  labelled brief distinguishing facts from calculations.
+- **Performance** — closed actuals periods against plan, with variance.
 
-### 8 · Document Vault — `/deals/[dealId]/documents`
-Files grouped by `doc_category` (Legal, Financial, Technical, Valuation, Marketing,
-Correspondence, Other). Drag-and-drop uploader to a private Supabase Storage bucket;
-list shows file name, category, size, version, uploader, date. Download via short-lived
-signed URLs. Versioning preserved.
+### 6 · Investor Portal administration — `/admin/*`
+`/admin` overview, `/admin/investors` (organisations, contacts, invitations),
+`/admin/publications` (investor-facing views of opportunities, with versions,
+documents and entitlements), `/admin/activity` (engagement audit trail).
 
-### 9 · Deal Contacts — `/deals/[dealId]/contacts`
-People attached to this deal via `deal_contacts`, grouped by relationship (selling
-agent, vendor, lawyer, lender, valuer…). Add existing contact or create new. Each card:
-name, company, role, type chip, email/phone.
-
-### 9b · Contacts Directory — `/contacts`
-Global searchable list of all `contacts` with type filter. Detail drawer shows linked
-deals. Feeds the per-deal contacts screen.
-
-### 10 · Investment Memo — `/deals/[dealId]/memo` *(later phase)*
-Assembles asset, financials, DD summary, risks, and score into a structured,
-print/PDF-ready investment memo for the committee. Included in nav as "Memo (coming
-soon)" in MVP; export engine built in a later phase.
+Publications are **views onto** opportunities, not lifecycle objects. Publishing
+never mutates the underlying opportunity.
 
 ---
 
@@ -106,8 +94,10 @@ soon)" in MVP; export engine built in a later phase.
 
 | # | Screen | Route | Notes |
 | --- | --- | --- | --- |
-| C1 | New Deal | `/deals/new` | Minimal create form (name, market, asset class, currency, source). Creates deal + empty asset/financials, lands on Overview. |
-| C2 | Settings | `/settings` | Profile (via Clerk), team members & roles (founder only), preferences. |
+| C1 | Sign in | `/sign-in` | Supabase Auth. Staff only. |
+| C2 | Investor access | `/access`, `/access/[token]` | Single-use, time-limited invitation link. Identifies context only — it does not authenticate. |
+| C3 | Investor verification | `/portal/verify` | OTP. `shouldCreateUser: false`. |
+| C4 | Investor portal | `/portal`, `/portal/opportunities/[id]`, `/portal/saved`, `/portal/compare` | Entitlement-scoped. Documents served only as short-lived signed URLs. |
 
 ---
 
@@ -115,16 +105,43 @@ soon)" in MVP; export engine built in a later phase.
 
 - **MarketChip**, **StageBadge**, **StatusBadge**, **ScoreBadge**, **SeverityBadge**
 - **Money** (currency-aware), **MetricTile**, **ProgressBar**
-- **PageHeader**, **DealHeader**, **TabNav**, **Sidebar**, **Topbar**
+- **PageHeader**, **AssetHeader**, **TabNav**, **Sidebar**, **Topbar**
 - **DataTable** (TanStack wrapper), **EmptyState**, **ConfirmDialog**
 - **FileUploader**, **ActivityTimeline**, **RiskMatrix**, **ScoreGauge**
 
 ---
 
-## E. Out of scope for MVP (noted, not built)
+## E. Out of scope (noted, not built)
 
-- Investment Memo PDF export engine (later phase)
-- External adviser access & per-deal permissions
-- Email/notification system
+- Investment Memo PDF export engine
+- External adviser access & per-opportunity permissions
 - Market data / valuation integrations
-- Portfolio-level analytics across multiple assets per deal
+
+---
+
+## F. Designed, never built
+
+These were specified as tabs of the removed `/deals/[dealId]` file. **None is a
+feature today.** They are kept because the design is sound and, where noted, the
+model behind it survives and is ready for a screen to be built against it.
+
+| Screen | Model preserved | Where |
+| --- | --- | --- |
+| Due Diligence Tracker | ✅ London / Amsterdam checklists, jurisdiction-branched; progress and blocking-item computation | `src/lib/dd/templates.ts`, `src/lib/dd/progress.ts` |
+| Investment Score | ✅ 11 weighted criteria summing to 100, recommendation bands; radar and dial components | `src/lib/scoring/model.ts`, `src/components/shared/` |
+| Investment Memo | ✅ 17-section IC spine, 4 output formats (IC / teaser / snapshot / Japanese) | `src/lib/memo/sections.ts` |
+| Document Vault | ✅ Category taxonomy mapped to DD sections | `src/lib/documents/catalog.ts` |
+| Risk Register | ⚠️ Partial — `asset_risks` exists post-acquisition; no pre-acquisition risk table |  |
+| Asset Snapshot, Financial Metrics | ❌ No schema | |
+| Deal Contacts, Contacts Directory | ❌ No schema. `/contacts` was an empty placeholder and was removed | |
+| Settings | ❌ Empty placeholder, removed | |
+
+Two things were **not** preserved, deliberately:
+
+- The **memo prose generator**, which composed paragraphs from a hardcoded
+  narrative attached to one mock deal. The section structure is real; the
+  generated text was not.
+- The **document AI ingest**, whose `generateExtraction()` returned canned
+  strings per category and presented them as "auto-extracted" findings. A
+  placeholder that produces confident, fabricated diligence output is worse than
+  an empty screen.

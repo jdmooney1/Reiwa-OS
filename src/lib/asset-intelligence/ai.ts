@@ -10,7 +10,7 @@
 import type { Tone } from "@/lib/domain";
 import type { AssetFile } from "@/lib/asset-intelligence/types";
 import {
-  METRICS, threeWay, variance, varianceTone, assetSnapshot, upcomingEvents,
+  METRICS, threeWay, variance, varianceTone, assetSnapshot,
   latestClosedPeriod, priorClosedPeriod, type MetricKey,
 } from "@/lib/asset-intelligence/metrics";
 import { formatMetric } from "@/lib/asset-intelligence/metrics";
@@ -40,12 +40,11 @@ export const PROVENANCE_TONE: Record<Provenance, Tone> = {
   commentary: "positive",
 };
 
-// The four structured questions the AI layer answers.
+// The structured questions the AI layer answers.
 export interface AssetBrief {
   whatChanged: IntelStatement[];
   whyItMatters: IntelStatement[];
   whatNeedsAttention: IntelStatement[];
-  whatsNext: IntelStatement[];
 }
 
 const MATERIAL_KEYS: MetricKey[] = ["noi", "occupancy_pct", "valuation", "irr_pct", "capex"];
@@ -127,18 +126,5 @@ export function buildAssetBrief(file: AssetFile): AssetBrief {
     whatNeedsAttention.push({ provenance: "fact", tone: "negative", text: `${r.severity === "critical" ? "Critical" : "High"} risk: ${r.title}.` });
   }
 
-  const events = upcomingEvents(file, 90);
-  const whatsNext: IntelStatement[] = events.slice(0, 4).map((e) => ({
-    provenance: "fact" as const,
-    text: `${new Date(e.event_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} — ${e.title}.`,
-  }));
-  if (events.length > 0) {
-    whatsNext.unshift({
-      provenance: "calculation",
-      text: `${events.length} material event${events.length === 1 ? "" : "s"} occur within the next 90 days.`,
-      tone: "caution",
-    });
-  }
-
-  return { whatChanged: materialChanges(file), whyItMatters, whatNeedsAttention, whatsNext };
+  return { whatChanged: materialChanges(file), whyItMatters, whatNeedsAttention };
 }

@@ -1,15 +1,27 @@
 # 01 · Application Architecture
 
-> Reiwa OS — proposed architecture, folder structure, navigation, auth and storage.
-> This is a design proposal. Nothing here has been implemented yet.
+> Reiwa OS — architecture, folder structure, navigation, auth and storage.
+
+> **Status.** Written as a pre-build proposal; revised in Phase 0 to describe what
+> was actually built. Two things in the original are superseded and are corrected
+> below: the deal-centric aggregate (the canonical objects are `opportunities` and
+> `assets`) and the `/deals/*` route tree (removed — it was never wired to the
+> database). One thing is superseded and NOT yet corrected throughout: auth is
+> Supabase Auth, not Clerk. Treat remaining Clerk references as historical.
 
 ---
 
 ## 1. Architectural principles
 
-1. **Deal-centric, not contact-centric.** The `deal` is the root aggregate. Every other
-   record (asset, financials, DD items, risks, score, documents) hangs off a deal.
-   Contacts are referenced *by* deals, never the other way around.
+1. **One object per lifecycle phase.** Before acquisition the root aggregate is the
+   `opportunity`; after acquisition it is the `asset`. They are joined by an explicit,
+   auditable conversion — `opportunities → investment_cases → transactions → assets` —
+   so the moment a deal becomes a holding is a recorded event rather than a status flag.
+   Nothing may model the same thing twice: a second "deal" aggregate alongside these
+   was removed in Phase 0 precisely because it drifted out of sync with the database.
+
+   `investor_publications` are **views onto** opportunities for an external audience.
+   They are not a lifecycle stage and never own deal state.
 2. **Server-first.** Use React Server Components and Server Actions for data access.
    The Supabase service role and Clerk session stay on the server; the browser never
    holds privileged keys.
@@ -34,7 +46,7 @@
 | Storage | Supabase Storage | Document Vault (private buckets) |
 | Validation | Zod | Form + server-action input validation |
 | Data fetching | Server Components + Server Actions | Reads on the server, mutations via actions |
-| Tables/forms | TanStack Table, React Hook Form | Pipeline grid, deal forms |
+| Tables/forms | TanStack Table, React Hook Form | Pipeline grid, opportunity forms |
 | Hosting | Vercel (proposed) | Edge/serverless deployment |
 
 ### Clerk ↔ Supabase integration
@@ -68,31 +80,24 @@ reiwa-os/
 │   │   │   └── sign-in/
 │   │   ├── (app)/                 # Authenticated application shell
 │   │   │   ├── layout.tsx         # Sidebar + topbar shell, auth guard
-│   │   │   ├── pipeline/          # 1. Deal Pipeline (default landing)
+│   │   │   ├── pipeline/          # Opportunity pipeline (default landing)
 │   │   │   │   └── page.tsx
-│   │   │   ├── deals/
-│   │   │   │   ├── new/           # Create deal flow
-│   │   │   │   └── [dealId]/      # 2. Deal Detail (tabbed)
-│   │   │   │       ├── layout.tsx # Deal header + tab nav
-│   │   │   │       ├── page.tsx           # Overview
-│   │   │   │       ├── asset/             # 3. Asset Snapshot
-│   │   │   │       ├── financials/        # 4. Financial Metrics
-│   │   │   │       ├── due-diligence/     # 5. Due Diligence Tracker
-│   │   │   │       ├── risks/             # 6. Risk Register
-│   │   │   │       ├── score/             # 7. Investment Score
-│   │   │   │       ├── documents/         # 8. Document Vault
-│   │   │   │       ├── contacts/          # 9. Deal Contacts
-│   │   │   │       └── memo/              # 10. Investment Memo (later)
-│   │   │   ├── contacts/          # Global contacts directory
-│   │   │   └── settings/          # Profile, team, preferences
-│   │   ├── api/
-│   │   │   └── webhooks/clerk/    # Clerk → profiles sync
+│   │   │   ├── opportunities/     # Pre-acquisition canonical object
+│   │   │   │   ├── new/           # Create opportunity
+│   │   │   │   └── [id]/          # Opportunity detail + stage transitions
+│   │   │   ├── portfolio/         # Post-acquisition roll-up
+│   │   │   ├── assets/
+│   │   │   │   └── [assetId]/     # Asset file (Overview · Performance)
+│   │   │   └── admin/             # Investor portal administration
+│   │   │       ├── investors/     # Investor organisations & contacts
+│   │   │       ├── publications/  # Investor-facing views of opportunities
+│   │   │       └── activity/      # Investor engagement audit trail
 │   │   ├── layout.tsx             # Root layout (ClerkProvider, fonts, theme)
 │   │   └── globals.css
 │   ├── components/
 │   │   ├── ui/                    # shadcn/ui primitives (generated)
 │   │   ├── layout/                # AppShell, Sidebar, Topbar, PageHeader
-│   │   ├── deals/                 # Pipeline grid, deal cards, stage badges
+│   │   ├── opportunities/         # Pipeline board/table, stage badges
 │   │   ├── financials/            # Metric tiles, sensitivity inputs
 │   │   ├── due-diligence/         # Checklist, status chips
 │   │   ├── risks/                 # Risk matrix, severity badges
@@ -133,35 +138,46 @@ reiwa-os/
 
 ## 4. Navigation model
 
-Two levels of navigation: a persistent **primary sidebar** (global) and a
-**deal-scoped tab bar** (within a deal).
+A persistent **primary sidebar**, grouped by lifecycle phase.
 
 ### Primary sidebar (global)
 
 ```
 REIWA OS
 ─────────────
-◢ Pipeline          → /pipeline        (default landing)
-◢ Deals             → /deals           (table/list of all deals)
-◢ Contacts          → /contacts
+INVESTMENT
+◢ Pipeline          → /pipeline          (default landing; opportunities)
 ─────────────
-◢ Settings          → /settings
-[ user menu — Clerk ]
+ASSET INTELLIGENCE
+◢ Portfolio         → /portfolio
+  ◦ <asset>         → /assets/[assetId]  (one row per held asset)
+─────────────
+INVESTMENT PORTAL   (admin only)
+◢ Portal Overview   → /admin
+◢ Investors         → /admin/investors
+◢ Publications      → /admin/publications
+◢ Activity          → /admin/activity
 ```
 
-Minimal, vertical, dark navy. Active item marked with the muted gold accent rule.
-Markets (London / Amsterdam) are a *filter* on Pipeline, not separate nav items.
+Minimal, vertical. Active item marked with the accent rule. Markets
+(London / Amsterdam) are a *filter* on Pipeline, not separate nav items.
 
-### Deal-scoped tabs (`/deals/[dealId]/…`)
+The sidebar is presentation, not the control: the Investment Portal section is
+hidden from non-admins, but the authorisation that matters is enforced in RLS
+and in each server action, never by omitting a link.
 
-A sticky deal header (name, address, market, stage, score, key metrics) sits above a
-horizontal tab bar:
+### Asset tabs (`/assets/[assetId]`)
+
+A sticky asset header (name, location, lifecycle stage, key metrics) sits above:
 
 ```
-Overview · Asset · Financials · Due Diligence · Risks · Score · Documents · Contacts · Memo
+Overview · Performance
 ```
 
-This maps 1:1 to the ten core modules and keeps the entire deal file one click away.
+Two tabs, because those are the two things the schema can answer. Eight further
+tabs were removed in Phase 0: they rendered a "planned module" card claiming a
+data model that has no table, column or row anywhere in the database. Each
+returns when the module behind it genuinely exists.
 
 ---
 
@@ -169,16 +185,16 @@ This maps 1:1 to the ten core modules and keeps the entire deal file one click a
 
 | Capability | Founder | Analyst |
 | --- | --- | --- |
-| View all deals | ✅ | ✅ |
-| Create / edit deals, assets, financials | ✅ | ✅ |
+| View all opportunities and assets | ✅ | ✅ |
+| Create / edit opportunities, assets, business plans | ✅ | ✅ |
 | Manage DD items, risks | ✅ | ✅ |
 | Edit score & weighting model | ✅ | ✅ |
 | Upload / delete documents | ✅ | ✅ |
-| Change deal stage to *Approved* / IC sign-off | ✅ | ❌ |
+| Move an opportunity to *Approved* / IC sign-off | ✅ | ❌ |
 | Manage team & settings | ✅ | ❌ |
 
 Enforced in two places: Clerk role checks in server actions, and Postgres RLS as the
-backstop. The `adviser` role (read-scoped, per-deal) is deferred to the external phase.
+backstop. The `adviser` role (read-scoped, per-opportunity) is deferred to a later phase.
 
 ---
 
@@ -206,7 +222,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 1. Scaffold Next.js + Tailwind + shadcn/ui, apply design tokens & theme.
 2. Wire Clerk auth + app shell + protected layout.
 3. Apply `supabase/schema.sql`, generate types, build query/action layer.
-4. **Pipeline** + **Create Deal** + **Deal Overview** (vertical slice).
+4. **Pipeline** + **Create Opportunity** + **Opportunity Detail** (vertical slice).
 5. Asset Snapshot → Financial Metrics (with calculators).
 6. Due Diligence → Risk Register → Investment Score.
 7. Document Vault (Supabase Storage).

@@ -18,7 +18,7 @@ import type { Pool } from "pg";
 import { adminQueryOn, getPool, type Queryable } from "@/lib/db/client";
 import { createSupabaseAdminClient, ensureAuthUser } from "@/lib/supabase/admin";
 import { publishVersionOn } from "@/lib/data/investor-portal";
-import { getAssetFiles } from "@/lib/asset-intelligence/mock";
+import { demoAssetFiles } from "@/lib/db/fixtures/demo-assets";
 import type { AssetFile, BusinessPlan } from "@/lib/asset-intelligence/types";
 
 export const DEMO_PASSWORD = "reiwa2026";
@@ -198,7 +198,7 @@ export async function seedIfEmpty(pool: Pool = getPool()): Promise<boolean> {
     }
 
     // ---- The two demo assets, persisted through the full lifecycle chain ----
-    const files = getAssetFiles();
+    const files = demoAssetFiles();
     for (const f of files) {
       const portfolioId = f.asset.city === "Amsterdam" ? pfNl.portfolio_id : pfUk.portfolio_id;
       await seedAssetChain(q, one, meiji.org_id, portfolioId, analystId, f, true);

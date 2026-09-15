@@ -61,7 +61,7 @@ describe("Opportunity → Asset conversion", () => {
     const uw = file!.plans.find((p) => p.plan_type === "underwriting");
     expect(uw).toBeTruthy();
     expect(uw!.irr_pct).toBe(13); // carried from approved case (target_irr)
-    expect(file!.asset.source_deal_id).toBe(id); // asset references its opportunity
+    expect(file!.asset.source_opportunity_id).toBe(id); // asset references its opportunity
 
     // Idempotent: a second conversion returns the same asset.
     const again = await convertToAsset(session, id);

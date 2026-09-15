@@ -1,11 +1,10 @@
-import { CalendarClock } from "lucide-react";
 import type { AssetFile } from "@/lib/asset-intelligence/types";
 import {
-  assetSnapshot, threeWay, variance, varianceTone, formatMetric, upcomingEvents,
+  assetSnapshot, threeWay, variance, varianceTone, formatMetric,
   METRICS, SEVERITY_TONE, SEVERITY_LABEL, type MetricKey,
 } from "@/lib/asset-intelligence/metrics";
 import { buildAssetBrief, PROVENANCE_LABEL, PROVENANCE_TONE, type IntelStatement } from "@/lib/asset-intelligence/ai";
-import { DECISION_STATUS_TONE, DECISION_STATUS_LABEL, EVENT_TYPE_LABEL } from "@/lib/asset-intelligence/labels";
+import { DECISION_STATUS_TONE, DECISION_STATUS_LABEL } from "@/lib/asset-intelligence/labels";
 import { formatMoneyCompact, formatPct, formatDate } from "@/lib/format";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +20,6 @@ export function AssetOverview({ file }: { file: AssetFile }) {
   const s = assetSnapshot(file);
   const cur = a.currency;
   const brief = buildAssetBrief(file);
-  const events = upcomingEvents(file, 120);
   const openRisks = [...file.risks].filter((r) => r.status === "open")
     .sort((x, y) => (y.financial_impact ?? 0) - (x.financial_impact ?? 0));
   const decisions = file.decisions.filter((d) => d.status === "required" || d.status === "open");
@@ -58,11 +56,10 @@ export function AssetOverview({ file }: { file: AssetFile }) {
       <Card className="border-line">
         <CardHeader eyebrow="Asset Intelligence" title="Executive Brief"
           action={<span className="text-2xs text-ink-faint">Generated from structured data</span>} />
-        <CardBody className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <CardBody className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           <BriefColumn heading="What changed" statements={brief.whatChanged} />
           <BriefColumn heading="Why it matters" statements={brief.whyItMatters} />
           <BriefColumn heading="Requires attention" statements={brief.whatNeedsAttention} />
-          <BriefColumn heading="What's next" statements={brief.whatsNext} />
         </CardBody>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-5 py-2.5">
           <span className="text-[10px] uppercase tracking-label text-ink-faint">Provenance</span>
@@ -112,8 +109,8 @@ export function AssetOverview({ file }: { file: AssetFile }) {
         </CardBody>
       </Card>
 
-      {/* Evidence: decisions · risks · events */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {/* Evidence: decisions · risks */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Decisions required */}
         <Card className={cn(decisions.length > 0 && "border-negative/30")}>
           <CardHeader eyebrow="Action" title="Decisions Required"
@@ -160,27 +157,6 @@ export function AssetOverview({ file }: { file: AssetFile }) {
           </CardBody>
         </Card>
 
-        {/* Upcoming events */}
-        <Card>
-          <CardHeader eyebrow="Timeline" title="Upcoming Events"
-            action={<span className="text-2xs text-ink-faint">next 120 days</span>} />
-          <CardBody className="p-0">
-            {events.length === 0 ? <Empty text="No events in the window." /> : (
-              <ul className="divide-y divide-line">
-                {events.map((e) => (
-                  <li key={e.event_id} className="flex items-start gap-3 px-5 py-2.5">
-                    <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={1.75} />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-medium text-ink">{e.title}</div>
-                      <div className="text-2xs text-ink-faint">{EVENT_TYPE_LABEL[e.type]}</div>
-                    </div>
-                    <span className="tabular shrink-0 text-2xs text-ink-muted">{formatDate(e.event_date)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
       </div>
     </div>
   );

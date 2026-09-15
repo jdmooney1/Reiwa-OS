@@ -18,10 +18,11 @@ export function PortfolioDashboard({
   files, rates, fxNote,
 }: {
   files: AssetFile[];
-  rates?: Record<string, number>;
+  /** Currency -> rate to GBP, from fx_rates. Required: see portfolioAggregate. */
+  rates: Record<string, number>;
   fxNote?: string;
 }) {
-  const agg = portfolioAggregate(files, "GBP", rates);
+  const agg = portfolioAggregate(files, rates, "GBP");
 
   return (
     <div className="space-y-6 px-8 py-6">
@@ -46,8 +47,6 @@ export function PortfolioDashboard({
           <Kpi label="Occupancy" value={formatPct(agg.occupancy, 1)} sub="val-weighted" />
           <Kpi label="Projected IRR" value={formatPct(agg.projectedIrr, 1)} sub="equity-weighted" />
           <Kpi label="Development" value={`${agg.developmentCount} ${agg.developmentCount === 1 ? "asset" : "assets"}`} />
-          <Kpi label="Upcoming Events" value={String(agg.upcomingEvents)} sub="next 120 days"
-            tone={agg.upcomingEvents > 0 ? "caution" : undefined} />
           <Kpi label="Decisions Required" value={String(agg.decisionsRequired)}
             tone={agg.decisionsRequired > 0 ? "negative" : "positive"} />
         </div>

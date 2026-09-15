@@ -5,7 +5,7 @@
 import type { Currency } from "@/types/database";
 import type {
   AssetFile, AssetMetrics, BusinessPlan, PerformancePeriod, PlanType,
-  Valuation, Loan, SeverityBand,
+  Valuation, SeverityBand,
 } from "@/lib/asset-intelligence/types";
 import { formatMoneyCompact, formatPct, formatMultiple } from "@/lib/format";
 import type { Tone } from "@/lib/domain";
@@ -67,9 +67,6 @@ export function latestValuation(file: AssetFile): Valuation | undefined {
   return [...file.valuations].sort((a, b) => +new Date(b.valuation_date) - +new Date(a.valuation_date))[0];
 }
 
-export function primaryLoan(file: AssetFile): Loan | undefined {
-  return file.loans[0];
-}
 
 // ---- Variance --------------------------------------------------------------
 export interface Variance {
@@ -145,8 +142,7 @@ export function assetSnapshot(file: AssetFile): AssetSnapshot {
   const period = latestClosedPeriod(file);
   const forecast = planOf(file, "current_forecast") ?? planOf(file, "approved");
   const uw = planOf(file, "underwriting");
-  const loan = primaryLoan(file);
-  const debt = loan?.current_balance ?? period?.debt ?? forecast?.debt ?? null;
+  const debt = period?.debt ?? forecast?.debt ?? null;
   const noi = period?.noi ?? forecast?.noi ?? null;
   const occupancy = period?.occupancy_pct ?? forecast?.occupancy_pct ?? null;
   const ltv = debt != null && val ? (debt / val) * 100 : null;
@@ -188,22 +184,41 @@ export interface PortfolioAggregate {
   byCountry: { label: string; value: number }[];
   byCurrency: { label: string; value: number }[];
   worstSeverity: SeverityBand | null;
-  upcomingEvents: number;
   developmentCount: number;
   decisionsRequired: number;
   reportingCurrency: Currency;
 }
 
-// Fallback demo rates for the Phase-1 mock page only. The live portfolio path
-// passes an EXPLICIT, labelled rate table (see src/lib/data/portfolio.ts).
-export const DEMO_FX_TO_GBP: Record<string, number> = { GBP: 1, EUR: 0.85, USD: 0.79, JPY: 0.0052 };
-
+/**
+ * Aggregate a set of assets into one portfolio position.
+ *
+ * `rates` is REQUIRED and has no fallback, by design. There used to be a
+ * DEMO_FX_TO_GBP table serving double duty as a default argument and as a
+ * per-currency `?? 1` backstop inside rateOf. Both were silent: a caller who
+ * forgot the argument got invented rates, and a caller who passed a rate table
+ * missing one currency got that currency converted at 1.0 — valuing a yen
+ * position as though it were sterling, roughly a 190x overstatement, on a
+ * screen whose entire job is to state what the portfolio is worth.
+ *
+ * A wrong number that renders is worse than a page that fails, because nobody
+ * can see it is wrong. So a missing rate throws, and the caller supplies the
+ * table from fx_rates with its source and date (see src/lib/data/portfolio.ts).
+ */
 export function portfolioAggregate(
   files: AssetFile[],
+  rates: Record<string, number>,
   reportingCurrency: Currency = "GBP",
-  rates: Record<string, number> = DEMO_FX_TO_GBP,
 ): PortfolioAggregate {
-  const rateOf = (c: string) => rates[c] ?? DEMO_FX_TO_GBP[c] ?? 1;
+  const rateOf = (c: string) => {
+    const r = rates[c];
+    if (r == null) {
+      throw new Error(
+        `No FX rate for ${c}. The portfolio cannot be valued without it — ` +
+        "load the rate into fx_rates rather than assuming one.",
+      );
+    }
+    return r;
+  };
   const base = rateOf(reportingCurrency);
   const snaps = files.map((f) => ({
     f,
@@ -260,24 +275,12 @@ export function portfolioAggregate(
     byCountry: group((x) => x.f.asset.country),
     byCurrency: group((x) => x.f.asset.currency),
     worstSeverity: worst,
-    upcomingEvents: files.reduce((a, f) => a + upcomingEvents(f).length, 0),
-    developmentCount: files.filter((f) => f.asset.lifecycle_stage === "development" || f.developments.length > 0).length,
+    developmentCount: files.filter((f) => f.asset.lifecycle_stage === "development").length,
     decisionsRequired: sum((x) => x.s.decisions_required),
     reportingCurrency,
   };
 }
 
-// ---- Events ----------------------------------------------------------------
-export function upcomingEvents(file: AssetFile, withinDays = 120, from = "2026-08-27"): typeof file.events {
-  const start = +new Date(from);
-  const end = start + withinDays * 86400000;
-  return [...file.events]
-    .filter((e) => {
-      const t = +new Date(e.event_date);
-      return t >= start && t <= end;
-    })
-    .sort((a, b) => +new Date(a.event_date) - +new Date(b.event_date));
-}
 
 export const SEVERITY_TONE: Record<SeverityBand, Tone> = {
   low: "positive", medium: "caution", high: "negative", critical: "negative",

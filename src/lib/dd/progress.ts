@@ -1,3 +1,15 @@
+// ============================================================================
+// Due diligence progress — completion, and what is actually blocking.
+// ----------------------------------------------------------------------------
+// Pure computation over a set of instantiated DD workstreams (see templates.ts).
+// It lived inside the old deal-file UI; it is firm logic rather than screen
+// logic, so it sits in lib and is reused by whatever renders a DD checklist.
+//
+// Two rules worth keeping explicit:
+//   * "Not applicable" is excluded from the denominator. Progress must measure
+//     the work in scope, not be flattered by lines that were never required.
+//   * A deal with nothing in scope is 100%, not 0% — there is nothing to clear.
+// ============================================================================
 import type { DueDiligenceItem, DdStatus } from "@/types/database";
 import { isDdCleared, isDdIssue, isDdOpen } from "@/lib/domain";
 
