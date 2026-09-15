@@ -1,11 +1,27 @@
-# 07 · AI Investment Memo Generator
+# 07 · Investment Memo
 
-A **structured memo generator**, not a chatbot. It composes investment-memo prose by
-reading the deal file — deal data, financial metrics, DD tracker, risk register,
-investment score and documents — and templating it into 17 sections. The AI calls are
-**placeholders** today: deterministic composers in `src/lib/memo/generate.ts` with the
-same signatures an LLM backend would use, so the editor and actions don't change when a
-model is wired in.
+A **structured memo**, not a chatbot: a document assembled from the opportunity's own
+record — the investment case, DD tracker, risks, score and documents — into 17 sections
+with four output formats.
+
+> **Status after Phase 0.**
+>
+> | | |
+> | --- | --- |
+> | **Exists today** | Nothing. There is no memo screen, no memo table, and no generator. |
+> | **Reusable domain logic** | `src/lib/memo/sections.ts` — the 17-section spine, stable section keys, labels, and the four output-format definitions. Pure, mock-free, kept intact. |
+> | **Phase 1 must build** | A `memos` table keyed on `opportunity_id`, the composition layer, and the editor. |
+>
+> **The generator was deleted, deliberately.** `src/lib/memo/generate.ts` composed
+> its prose from `DealNarrative` — a hand-written thesis, strategic rationale,
+> business plan and open questions attached to exactly one mock deal. Its output
+> read like analysis and was nothing of the kind: for any opportunity other than
+> 58 Queens Gate it had no content to work from at all.
+>
+> A memo is the document a committee commits capital on. A placeholder that emits
+> confident, well-formatted, fabricated reasoning is the single most dangerous
+> thing in this codebase, and it was removed rather than carried forward. The
+> section structure below is real and worth keeping; the prose was not.
 
 ## Sections (17)
 
@@ -15,43 +31,51 @@ Planning, Heritage, ESG · Japan Investor Rationale · Tax and Structuring Consi
 FX Sensitivity · Risk and Mitigation · Exit Strategy · Recommendation · Further DD
 Required.
 
-Each section is generated from real fields — e.g. *Key Metrics* from the deal +
-`deal_metrics`; *Risk and Mitigation* from the risk register (ranked by score) plus
-flagged DD issues; *Further DD Required* from open DD workstreams grouped by section;
-*FX Sensitivity* from the deal currency, FX risks and hedging workstreams.
-
-## Actions (`src/lib/memo/generate.ts`)
-
-| Action | Result |
-| --- | --- |
-| Generate first draft | Composes all 17 sections (+ Japanese summary) |
-| Regenerate section | Recomposes the active section |
-| Summarise risks | Fills *Risk and Mitigation* and navigates to it |
-| IC recommendation | Fills *Recommendation* from score + flagged risks/issues |
-| Japanese investor summary | Generates the 日本語 summary and switches to that format |
-| Broker question list | Side panel of questions from open commercial/vendor items + data gaps |
-| DD request list | Side panel of outstanding DD workstreams as requests |
+Section keys are stable (`MemoSectionKey`); labels and ordering live in
+`src/lib/memo/sections.ts`.
 
 ## Output formats
 
-- **Internal IC Memo** — all 17 sections.
-- **Investor Teaser** — Executive Summary, Key Metrics, Asset Overview, Location,
-  Thesis, Business Plan, Exit.
-- **One-Page Asset Snapshot** — Executive Summary, Key Metrics, Asset Overview.
-- **Japanese Language Summary** — a single 日本語 investor summary.
+| Format | Sections |
+| --- | --- |
+| **Internal IC Memo** | all 17 |
+| **Investor Teaser** | Executive Summary, Key Metrics, Asset Overview, Location and Market, Investment Thesis, Business Plan, Exit Strategy |
+| **One-Page Asset Snapshot** | Executive Summary, Key Metrics, Asset Overview |
+| **Japanese Language Summary** | a single 日本語 investor summary, handled specially |
 
-`assembleDocument()` joins the selected sections for copy/export.
+Defined as `OUTPUT_FORMATS` / `FORMAT_BY_KEY`.
 
-## Editor (Deal → Memo tab)
+## What Phase 1 must build
 
-Three panes: **left** section navigation (with drafted indicators), **centre** the
-content editor (editable textarea, per-section regenerate, word count) — replaced by a
-side-output view for broker/DD lists — and **right** the AI actions. The format
-selector and Copy / (disabled) PDF export sit in the toolbar.
+**Composition.** Each section should be composed from fields that exist:
 
-## Wiring a real model later
+| Section | Source |
+| --- | --- |
+| Key Metrics | `opportunities` + the approved `investment_case` |
+| Financial Analysis, Capex Plan | `investment_cases` |
+| Risk and Mitigation | the risk register, ranked, plus flagged DD issues |
+| Further DD Required | open DD workstreams grouped by section |
+| FX Sensitivity | opportunity currency, `fx_rates`, and hedging workstreams |
+| Recommendation | the Investment Score and its flagged categories |
 
-Replace the bodies of the exported functions in `generate.ts` with LLM calls (passing
-the same `DealFile` context). The functions are already async-wrapped in the UI
-(`withDelay`), so swapping in a network call requires no UI change. Keep the
-deterministic composers as the prompt context / fallback.
+Sections with no underlying data should be **empty and visibly so**, never filled
+with plausible prose. An author can tell the difference between a blank section and
+a wrong one; a reader of the finished memo cannot.
+
+**Persistence.** A `memos` table keyed on `opportunity_id`, with `content` as
+structured sections, `version` and `status` (`draft` | `final`). A finalised memo
+should be immutable for the same reason an approved investment case is: it is the
+document the decision was made on.
+
+**Authoring.** Section navigation, an editor per section, format selection and
+export. Human-edited text and composed text should be distinguishable in the record.
+
+## If an LLM is wired in later
+
+Keep the provenance discipline already used in Asset Intelligence
+([`09-asset-intelligence.md`](09-asset-intelligence.md)): every statement tagged
+**fact · calculation · forecast · assumption · commentary**, and model-authored text
+marked as commentary rather than presented as source data.
+
+Deterministic composition from real fields comes first and stands on its own. A model
+may improve the prose over that foundation; it may not be the foundation.

@@ -1,174 +1,204 @@
 # 02 · Data Model
 
-> Proposed domain model for Reiwa OS. The concrete DDL lives in
-> [`../supabase/schema.sql`](../supabase/schema.sql); this document explains the
-> reasoning and relationships.
+> The domain model of Reiwa OS. The concrete DDL lives in
+> [`../supabase/migrations/`](../supabase/migrations/); this document explains the
+> reasoning and the relationships.
+
+> **Status.** Rewritten in Phase 0. This document previously described a
+> `deals`-rooted aggregate with `deal_financials`, `dd_items`, `risks`,
+> `investment_scores`, `documents`, `contacts`, `deal_contacts`, `deal_activity`
+> and `memos`. **None of those tables was ever created.** They existed only as
+> TypeScript shapes fed by `src/lib/mock-data.ts`, which is why a whole screen
+> could look persistent while writing nothing. The model below is the one in the
+> migrations.
 
 ---
 
 ## 1. Aggregate overview
 
-The **deal** is the root aggregate. Each deal owns one asset snapshot, one financial
-profile, and many child records. Contacts and profiles are shared reference data.
+There is **one object per lifecycle phase**, and an explicit, immutable record of
+the moment one becomes the other.
 
 ```
-profiles (Clerk users)
-   │
-   │ created_by / owner
-   ▼
-deals ──────────────────────────────────────────────┐
-   │ 1:1     assets            (Asset Snapshot)       │
-   │ 1:1     deal_financials   (Financial Metrics)    │
-   │ 1:many  dd_items          (Due Diligence)        │
-   │ 1:many  risks             (Risk Register)        │
-   │ 1:1     investment_scores (Investment Score)     │
-   │ 1:many  documents         (Document Vault)       │
-   │ many:many contacts via deal_contacts             │
-   │ 1:many  deal_activity     (Audit log)            │
-   │ 1:many  memos             (Investment Memo)      │
-   └──────────────────────────────────────────────────┘
+organizations ── organization_members ── profiles (Supabase Auth users)
+      │
+      ├── portfolios
+      └── properties            the persistent physical identity
+              │
+              ▼
+        opportunities           PRE-ACQUISITION canonical object
+              │                 (pipeline: stage + status)
+              ▼
+        investment_cases        underwriting snapshot; IMMUTABLE once approved
+              │
+              ▼
+        transactions            the acquisition; IMMUTABLE always
+              │
+              ▼
+           assets               POST-ACQUISITION canonical object
+              │
+              ├── business_plans        underwriting / approved / current_forecast
+              ├── performance_periods   actuals, append-only once closed
+              ├── valuations
+              ├── asset_risks
+              └── asset_decisions
+```
+
+Investor-facing publication is a **separate, read-only projection**, not a
+lifecycle stage:
+
+```
+opportunities ◀── publication_sources (admin-only mapping)
+                        │
+                  investor_publications ── publication_versions
+                                                  ├── publication_documents
+                                                  └── publication_entitlements → investor_organizations
 ```
 
 Design choices:
 
-- **Asset & financials are 1:1 tables, not columns on `deals`.** Keeps the `deals`
-  row lean for pipeline queries and lets each module evolve independently. (A deal can
-  later hold multiple assets — a portfolio — by relaxing the unique constraint.)
-- **Numeric money stored as `numeric(18,2)`**, never floats. Currency held per deal.
-- **Enums in Postgres** for stage, market, asset type, DD status, risk severity — they
-  power the pipeline board and keep values consistent. Mirrored in `src/lib/constants`.
-- **Soft delete** via `archived_at` on `deals` rather than hard deletes, to preserve
-  audit history.
+- **A property is not an opportunity.** `properties` holds the physical identity,
+  which persists; an opportunity is one pipeline attempt at it. The same building
+  can come round twice without duplicating its facts or losing the first attempt.
+- **The approved case and the transaction are immutable**, enforced by
+  `BEFORE UPDATE OR DELETE` triggers (`app.block_if_approved_case`,
+  `app.block_transaction_change`) — not by convention. Original underwriting can
+  always be reconstructed, which is the whole basis of the variance reporting.
+- **The underwriting business plan is immutable** too
+  (`app.block_underwriting_plan`), so the baseline a forecast is measured against
+  cannot drift.
+- **Money is `numeric(18,2)`**, never float. Percentages are `numeric(7,4)`.
+  Currency is held per opportunity and per asset.
+- **Constraints are `check` on `text`, not Postgres enums.** Stage and status
+  vocabularies change as a business matures; a `check` constraint is altered in a
+  migration without the enum-dependency dance.
+- **`org_id` is denormalised onto every tenant-scoped table** so one RLS predicate
+  (`app.has_org(org_id)`) applies uniformly and is indexable.
 
 ---
 
 ## 2. Entities
 
-### `profiles`
-Mirror of Clerk users. `id` = Clerk `sub`. Holds `full_name`, `email`, `role`
-(`founder` | `analyst` | `adviser`), `avatar_url`. Synced via Clerk webhook.
+### Identity & tenancy (`0001_identity.sql`)
 
-### `deals` — Deal Pipeline + Deal Detail
-The core record.
+| Table | Purpose |
+| --- | --- |
+| `organizations` | Tenant root. `org_id`, `name`, `type`. |
+| `profiles` | One row per Supabase Auth user. `user_id` FK to `auth.users`, `email`, `name`, `global_role` (`reiwa_admin` \| `org_user` \| `investor_viewer`). |
+| `organization_members` | `(org_id, user_id)` with `role` (`owner` \| `manager` \| `analyst` \| `viewer`). A `reiwa_admin` needs no membership row — `app.is_admin()` short-circuits. |
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | uuid pk | |
-| `reference` | text | Human deal code, e.g. `RC-LON-0042` |
-| `name` | text | Working name |
-| `market` | enum `market` | `london` \| `amsterdam` |
-| `asset_class` | enum `asset_class` | office, residential, retail, … |
-| `stage` | enum `deal_stage` | sourced → closed (see §3) |
-| `status` | enum `deal_status` | `active` \| `on_hold` \| `dead` \| `completed` |
-| `currency` | enum `currency` | `GBP` \| `EUR` |
-| `target_price` | numeric(18,2) | Headline asking / target |
-| `owner_id` | fk profiles | Lead analyst |
-| `source` | text | Broker / off-market / direct |
-| `sourced_at` | date | |
-| `summary` | text | One-paragraph thesis |
-| `archived_at` | timestamptz null | Soft delete |
-| `created_by`, `created_at`, `updated_at` | | Audit |
+### Pipeline (`0002_pipeline.sql`)
 
-### `assets` — Asset Snapshot (1:1 with deal)
-Physical property facts: `address_line`, `city`, `postcode`, `country`, `latitude`,
-`longitude`, `tenure` (freehold/leasehold), `total_area_sqm`, `nia_sqm`, `gia_sqm`,
-`year_built`, `units_count`, `occupancy_pct`, `walt_years` (weighted avg lease term),
-`epc_rating`, `condition_notes`.
+**`portfolios`** — `org_id`, `name`, `country`, `currency`. Groups held assets.
 
-### `deal_financials` — Financial Metrics (1:1 with deal)
-Inputs and a curated set of derived metrics. Derived values are computed by pure
-functions in `src/lib/finance` and persisted for fast pipeline display / memo export.
+**`properties`** — the neutral physical identity: `name`, `address`, `city`,
+`country`, `market`, `asset_type`, `latitude`, `longitude`.
 
-Inputs: `purchase_price`, `acquisition_costs`, `gross_dev_value`, `net_operating_income`,
-`gross_rental_income`, `equity_invested`, `debt_amount`, `interest_rate_pct`,
-`hold_period_years`, `exit_yield_pct`.
+**`opportunities`** — the pre-acquisition canonical object.
 
-Derived (stored): `net_initial_yield_pct`, `gross_yield_pct`, `ltv_pct`, `dscr`,
-`levered_irr_pct`, `unlevered_irr_pct`, `equity_multiple`, `cash_on_cash_pct`,
-`price_per_sqm`.
-
-### `dd_items` — Due Diligence Tracker (1:many)
 | Field | Notes |
 | --- | --- |
-| `category` | enum `dd_category` — legal, financial, technical, commercial, tax, esg |
-| `title`, `description` | |
-| `status` | enum `dd_status` — `not_started` \| `in_progress` \| `complete` \| `flagged` \| `na` |
-| `assignee_id` | fk profiles |
-| `due_date` | |
-| `completed_at`, `notes` | |
+| `opportunity_id` | uuid pk |
+| `org_id`, `property_id` | tenant + physical identity |
+| `reference`, `name`, `market`, `submarket` | |
+| `asset_type`, `strategy` | |
+| `stage` | `new` \| `screening` \| `underwriting` \| `ic` \| `approved` \| `acquired` |
+| `status` | `active` \| `rejected` \| `withdrawn` \| `lost` \| `converted` |
+| `currency`, `target_price` | |
+| `source`, `broker_name`, `vendor_name` | provenance |
+| `size_sqft`, `size_sqm`, `passing_rent`, `erv` | |
+| `niy`, `reversionary_yield`, `capex_budget` | |
+| `target_irr`, `equity_multiple`, `probability` | |
+| `summary`, `owner_user_id`, `created_by` | |
+| `archived_at` | soft delete; preserves audit history |
 
-Seeded from category templates in `src/lib/constants` when a deal enters DD.
+`status` is orthogonal to `stage`, so an opportunity can be paused or lost at any
+stage without losing its position.
 
-### `risks` — Risk Register (1:many)
-`category` (market, tenant, structural, legal, financial, regulatory, esg, fx),
-`title`, `description`, `likelihood` (1–5), `impact` (1–5), `severity` (derived /
-stored band: low/medium/high/critical), `mitigation`, `owner_id`, `status`
-(`open` | `mitigated` | `accepted` | `closed`). Drives a 5×5 risk matrix in the UI.
+**`investment_cases`** — the underwriting snapshot, versioned per opportunity
+(`unique (opportunity_id, version)`), `status` `draft` → `approved`. Carries the
+assumptions that flow into the asset: `acquisition_price`, `acquisition_date`,
+`noi`, `occupancy_pct`, `erv`, `capex`, `debt`, `ltv_pct`, `valuation`,
+`target_irr`, `target_equity_multiple`, `thesis`, `business_plan_assumptions`.
+**Immutable once approved.**
 
-### `investment_scores` — Investment Score (1:1 with deal)
-A weighted multi-criteria score. Stores per-pillar sub-scores plus the weighting model
-used, so a score is always reproducible.
+**`transactions`** — the acquisition event: `opportunity_id`, `property_id`,
+`investment_case_id`, `acquisition_price`, `acquisition_date`,
+`acquisition_costs`, `equity_invested`, `debt`, `completed_at`.
+**Immutable always.**
 
-Pillars (0–100 each): `location_score`, `asset_quality_score`, `cashflow_score`,
-`risk_score`, `return_score`, `esg_score`. Plus `weights` (jsonb), `total_score`
-(0–100 derived), `recommendation` (enum: `pursue` | `hold` | `pass`), `rationale`.
+### Asset intelligence (`0003_asset_intelligence.sql`)
 
-### `documents` — Document Vault (1:many)
-Metadata for files in Supabase Storage. `storage_path`, `bucket`, `category` (enum:
-legal, financial, technical, marketing, valuation, correspondence, other), `file_name`,
-`mime_type`, `size_bytes`, `version`, `uploaded_by`, `uploaded_at`. Files live in a
-private bucket; access via short-lived signed URLs generated server-side.
+**`assets`** — the post-acquisition canonical object. Carries the full provenance
+chain: `portfolio_id`, `property_id`, `opportunity_id`, `investment_case_id`,
+`transaction_id`. Plus `name`, `lifecycle_stage`, `currency`, `acquisition_date`,
+`acquisition_price`, `equity_invested`, `hold_thesis`, `is_demo`.
 
-### `contacts` — Contacts (shared directory)
-`full_name`, `company`, `role_title`, `type` (enum: broker, vendor, lawyer, lender,
-valuer, investor, adviser, other), `email`, `phone`, `notes`. Linked to deals through
-`deal_contacts`.
+**`business_plans`** — `plan_type` (`underwriting` \| `approved` \|
+`current_forecast`), `version`, `as_of_date`, and the metric set
+(`gross_rental_income`, `noi`, `operating_expenses`, `occupancy_pct`, `capex`,
+`valuation`, `yield_pct`, `debt`, `ltv_pct`, `cash_on_cash_pct`,
+`equity_multiple`, `irr_pct`). The `underwriting` plan cannot be updated or
+deleted.
 
-### `deal_contacts` — join (many:many)
-`deal_id`, `contact_id`, `relationship` (e.g. "selling agent", "acquisition lawyer").
+**`performance_periods`** — actuals. `period_label`, `period_end`, `status`
+(`draft` \| `closed`), same metric set. Closed periods are the audit record.
 
-### `deal_activity` — Audit log (1:many)
-`deal_id`, `actor_id`, `action` (enum: created, stage_changed, score_updated,
-document_added, dd_updated, risk_added, note, …), `detail` (jsonb), `created_at`.
-Powers the deal Overview timeline and IC governance trail.
+**`valuations`** — `valuation_date`, `valuer`, `valuation`, `valuation_type`,
+`noi`, `yield_pct`, `erv`.
 
-### `memos` — Investment Memo (1:many, later phase)
-`deal_id`, `title`, `content` (jsonb / structured sections), `version`, `status`
-(`draft` | `final`), `generated_pdf_path`, `created_by`. Memo export is a later phase;
-the table is included now so the schema is forward-compatible.
+**`asset_risks`** — `title`, `category`, `description`, `probability`,
+`financial_impact`, `severity`, `mitigation`, `owner`, `deadline`, `status`.
+
+**`asset_decisions`** — `title`, `issue`, `recommendation`, `financial_impact`,
+`decision_maker`, `deadline`, `status`.
+
+### FX (`0004_fx.sql`)
+
+**`fx_rates`** — `currency`, `rate_to_gbp`, `as_of_date`, `source`. The source and
+date are surfaced on the portfolio screen. There is no fallback rate table in
+application code: `portfolioAggregate` requires an explicit rate map and raises
+rather than assume a missing currency.
+
+### Investor portal (`0005`, `0006`)
+
+| Table | Purpose |
+| --- | --- |
+| `investor_organizations` | External investor entity. `status`: `active` \| `suspended` \| `closed`. |
+| `investor_contacts` | People at an investor organisation; each maps to an Auth user. |
+| `investor_publications` | The investor-facing identity. `status`: `draft` \| `published` \| `withdrawn`. |
+| `publication_sources` | **Admin-only** mapping publication → opportunity. The only place the relationship exists; projected by no investor-readable view. |
+| `publication_versions` | Immutable published content. |
+| `publication_version_sources`, `publication_documents` | Version content and attachments. |
+| `publication_entitlements` | Which investor organisation may see which publication. |
+| `investor_saved`, `investor_requests` | Investor-generated records. |
+| `investor_activity_events` | Append-only engagement audit trail. |
+| `investor_invites` | `token_hash` only — the SHA-256 of the raw token. Single-use, time-limited, revocable. The raw token exists in the invitation link and nowhere else. |
 
 ---
 
-## 3. Deal pipeline stages (`deal_stage` enum)
+## 3. Opportunity stages (`opportunities.stage`)
 
-Ordered lifecycle, used for the pipeline board columns and stage-gate logic:
-
-1. `sourced` — opportunity logged
+1. `new` — logged
 2. `screening` — initial fit / thesis
-3. `underwriting` — financial modelling
-4. `due_diligence` — DD tracker active
-5. `ic_review` — investment committee
-6. `approved` — IC sign-off (founder only)
-7. `closed` — acquired / completed
-8. `rejected` — passed / dead (with reason)
+3. `underwriting` — investment case being built
+4. `ic` — investment committee
+5. `approved` — IC sign-off; the case is frozen
+6. `acquired` — converted; an asset exists
 
-`status` (`active`/`on_hold`/`dead`/`completed`) is orthogonal to `stage` so a deal can
-be paused at any stage without losing position.
+`status` (`active` / `rejected` / `withdrawn` / `lost` / `converted`) runs
+alongside.
+
+**This is the only stage vocabulary.** A second one (`PipelineStage`,
+`PIPELINE_STAGES`, `pipelineStageOf`) was removed in Phase 0.
 
 ---
 
-## 4. Row-Level Security model
+## 4. Row-Level Security
 
-- All application tables have RLS enabled.
-- A helper `current_profile_id()` returns `auth.jwt() ->> 'sub'`.
-- **MVP policy:** authenticated internal users (`founder`, `analyst`) can read and write
-  all deals and children — Reiwa Capital is one small trusted team. Writes that change
-  `stage` to `approved` are additionally gated to `founder` (enforced in server action;
-  policy backstop optional).
-- **External phase:** add a `deal_access` table (`deal_id`, `profile_id`, `level`) and
-  tighten policies so an `adviser` sees only deals they are granted, read-mostly.
-
-This keeps MVP simple while leaving a clean path to per-deal external access.
+See [`04-rls-and-types.md`](04-rls-and-types.md). In summary: RLS on every table,
+predicates built from JWT claims through `app.is_admin()`, `app.has_org()`,
+`app.can_write()`, and `anon` revoked everywhere.
 
 ---
 
@@ -176,10 +206,15 @@ This keeps MVP simple while leaving a clean path to per-deal external access.
 
 | Value | Source of truth | Where computed |
 | --- | --- | --- |
-| Financial metrics (IRR, NIY, LTV, DSCR…) | inputs on `deal_financials` | `src/lib/finance` pure fns; persisted on save |
-| Risk severity | likelihood × impact | `src/lib/risks`; stored band |
-| Investment total score | pillar scores × weights | `src/lib/scoring`; stored |
+| Asset snapshot (LTV, yield, IRR delta, valuation vs cost) | `business_plans` + `performance_periods` + `valuations` | `src/lib/asset-intelligence/metrics.ts`, computed on read |
+| Portfolio aggregate | the asset set + `fx_rates` | `portfolioAggregate`, computed on read; explicit FX required |
+| Investment Score overall + recommendation | category scores 1–10 × weights | `src/lib/scoring/model.ts` |
+| DD progress | DD workstream statuses | `src/lib/dd/progress.ts` |
 
-Derived values are **persisted** (not just computed on read) so the pipeline grid and
-memo export stay fast and a memo reflects the numbers as they were at sign-off. Recompute
-on every relevant write.
+Derived values are **computed on read**, not persisted. The inputs are immutable
+where it matters (approved case, underwriting plan, closed periods), so a figure
+is reproducible from the record rather than from a cached copy that can silently
+go stale.
+
+The exception is deliberate: `publication_versions` freeze their content at
+publication, because an investor must see exactly what was sent to them.

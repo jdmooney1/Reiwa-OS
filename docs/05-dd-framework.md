@@ -4,6 +4,20 @@ The DD Tracker is an **investment risk-control system**, not a task list. It enc
 Reiwa Capital's standing diligence frameworks for London and Amsterdam and tracks every
 workstream from request to clearance, surfacing issues to the investment committee.
 
+> **Status after Phase 0.**
+>
+> | | |
+> | --- | --- |
+> | **Exists today** | Nothing. There is no DD screen and no DD table. |
+> | **Reusable domain logic** | The frameworks themselves — `src/lib/dd/templates.ts` (both market templates, jurisdiction-branched) and `src/lib/dd/progress.ts` (completion and critical-item computation). Both are pure, tested by nothing yet, and depend on no removed code. |
+> | **Phase 1 must build** | A `due_diligence_items` table scoped to `opportunity_id`, the server actions to apply a template and update a status, and the tracker screen. |
+>
+> The DD tracker previously rendered at `/deals/[dealId]/due-diligence` against
+> `src/lib/mock-data.ts`. Statuses changed in React state and were never written
+> anywhere. That screen was removed in Phase 0; the frameworks below survived it,
+> which is the point — **the firm's diligence IP was the valuable part, not the
+> screen.**
+
 ## Framework sections (21)
 
 Both market templates share one section spine, in investment-memo order:
@@ -20,6 +34,10 @@ and Holding Structure · Currency Risk and Hedging · Further DD Required
 Each workstream carries: **item title, question, section, jurisdiction**
 (UK / Netherlands / Japan / Cross-border), **priority, status, owner, due date, risk
 level, notes, linked documents**.
+
+Typed as `DueDiligenceItem` in `src/types/database.ts`. The parent key is
+`opportunity_id` — diligence happens **before** acquisition, on the canonical
+pre-acquisition object. (It was `deal_id` until Phase 0.)
 
 ## Status model (8)
 
@@ -44,13 +62,34 @@ lines branch to the local regime:
 
 Defined in `src/lib/dd/templates.ts` (`buildTemplate`).
 
-## Behaviour
+## Preserved logic
 
-- **Apply template** — a deal with no DD shows the framework chooser (recommended
-  template pre-selected from `deal.market`); applying instantiates all 21 sections as
-  live, Not-Started workstreams (`applyTemplate`).
-- **Progress by category** — each section shows a proportional, status-coloured bar and
-  cleared/in-scope count; the control header rolls these up to an overall completion %.
-- **Critical Open Items** — a dedicated panel lists open workstreams that are flagged
-  issues or high/critical priority, ranked by severity.
-- Status is editable inline; the model excludes *Not Applicable* from completion maths.
+**`src/lib/dd/templates.ts`**
+
+- `DD_TEMPLATES` — both market frameworks, 21 sections each.
+- `defaultTemplateId(market)` — recommends a template from the opportunity's market.
+- `applyTemplate(templateId, opportunityId, now)` — instantiates every template
+  line as a live, Not-Started, unowned workstream.
+
+**`src/lib/dd/progress.ts`** (moved here in Phase 0 from the deleted deal-file tree,
+because it is firm logic rather than screen logic)
+
+- `computeProgress(items)` — totals, in-scope count, cleared, open, issues, and a
+  completion percentage. Two rules are deliberate and should survive any rewrite:
+  *Not Applicable* is excluded from the denominator, so progress measures work in
+  scope rather than being flattered by lines that were never required; and an
+  opportunity with nothing in scope is 100%, not 0%.
+- `criticalOpenItems(items)` — open workstreams that are flagged issues or
+  high/critical priority, ranked by severity.
+
+## Behaviour Phase 1 should build
+
+- **Apply template** — an opportunity with no DD shows the framework chooser
+  (pre-selected from `opportunity.market`); applying persists all 21 sections.
+- **Progress by section** — proportional, status-coloured bars and cleared/in-scope
+  counts, rolled up to an overall completion percentage.
+- **Critical Open Items** — a panel over `criticalOpenItems`.
+- **Inline status editing**, written through a server action under RLS.
+
+Nothing here needs new logic — it needs a table, actions and a screen. The
+computation is done.
