@@ -75,6 +75,10 @@ ALLOW_TEST_DATABASE_RESET=true npm test   # drops and reseeds TEST_DATABASE_URL
 npm run test:e2e                          # reads/writes only; never reset
 ```
 
+`npm run db:reset -- --yes` is gated the same way: `--yes` alone is not enough,
+and the target must carry `app.destructive_reset_allowed = 'true'`.
+
 Read [docs/19-test-database-safety.md](docs/19-test-database-safety.md) before
 the first run. Never point `TEST_DATABASE_URL` at `reiwa-dev`, staging or
-production.
+production, and never mark `reiwa-dev` destroyable while it backs a live-facing
+deployment.

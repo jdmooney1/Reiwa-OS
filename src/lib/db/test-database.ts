@@ -20,8 +20,10 @@
 //   3. ALLOW_TEST_DATABASE_RESET is exactly "true" — a deliberate opt-in that
 //      nothing sets for you.
 //   4. TEST_DATABASE_URL is not the same database as any application
-//      connection string this process can see, AND the database itself says it
-//      is disposable.
+//      connection string this process can see, AND the database itself answers
+//      BOTH questions: `app.environment = 'test'` (what it is for) and
+//      `app.destructive_reset_allowed = 'true'` (that it may be destroyed).
+//      Neither implies the other — see ./destructive-reset.ts.
 //
 // A caller that only CONNECTS to the test database — the Playwright suite, and
 // each Vitest worker — passes `purpose: "connect"` and is held to conditions 2
@@ -48,6 +50,9 @@
 // accident from a connection string or a checked-in file. If it is missing, or
 // is anything other than exactly "test", the reset is refused.
 // ============================================================================
+import {
+  DESTRUCTIVE_RESET_SETTING, assertDestructiveResetAllowed, type SettingsReader,
+} from "@/lib/db/destructive-reset";
 
 /** Any environment-shaped map: process.env, or one a test constructs. */
 export type EnvSource = Record<string, string | undefined>;
@@ -129,9 +134,10 @@ const PROVISIONING_HELP = [
   "To authorise a destructive test run:",
   "  1. Create a SEPARATE, disposable Supabase project (never reiwa-dev,",
   "     staging or production).",
-  "  2. Mark the database as disposable, connected as its owner:",
+  "  2. Classify it, and permit its destruction, connected as its owner:",
   `       ALTER DATABASE postgres SET ${ENVIRONMENT_MARKER_SETTING} = '${TEST_ENVIRONMENT_MARKER}';`,
-  "     then reconnect, because the setting applies to new sessions.",
+  `       ALTER DATABASE postgres SET ${DESTRUCTIVE_RESET_SETTING} = 'true';`,
+  "     then reconnect, because the settings apply to new sessions.",
   "  3. Put its connection string in TEST_DATABASE_URL (not DATABASE_URL).",
   `  4. Set ${RESET_OPT_IN}=true for the run.`,
   "",
@@ -211,31 +217,41 @@ export function checkTestDatabaseEnv(
   return url;
 }
 
-/** Reads a per-database setting. Injected so the gate is testable without one. */
-export type MarkerReader = (connectionString: string) => Promise<string | null>;
-
 /**
- * The whole gate: conditions 1-3, the URL comparison, then the marker.
+ * The whole gate: conditions 1-3, the URL comparison, then BOTH markers.
  *
  * The order is the point. Everything that can be decided without touching
  * Postgres is decided first, so a misconfigured run is refused before it opens
  * a connection; the marker read is the last check and is a single `SELECT`.
  * No DROP, no migration and no truncation can be reached from here.
+ *
+ * A test database must satisfy classification AND permission, because they
+ * answer different questions and neither implies the other:
+ *
+ *   app.environment = 'test'               this is the automated test project
+ *   app.destructive_reset_allowed = 'true' and it may be destroyed
+ *
+ * A project classified `test` that somebody has started demonstrating from, or
+ * pointed a preview deployment at, is still a test project — and is no longer
+ * one you may drop every table in. Withdrawing the permission leaves the
+ * classification true and stops the suite, which is the behaviour that makes
+ * the pair worth having.
  */
 export async function assertDisposableTestDatabase(
   env: EnvSource,
-  readMarker: MarkerReader,
+  readSettings: SettingsReader,
 ): Promise<string> {
   const url = checkTestDatabaseEnv(env);
 
-  let marker: string | null;
+  let settings: Record<string, string | null>;
   try {
-    marker = await readMarker(url);
+    settings = await readSettings(url, [ENVIRONMENT_MARKER_SETTING, DESTRUCTIVE_RESET_SETTING]);
   } catch (e) {
     throw new TestDatabaseRefusal(
       `the database could not be asked whether it is disposable: ${(e as Error).message}`,
       PROVISIONING_HELP);
   }
+  const marker = settings[ENVIRONMENT_MARKER_SETTING];
 
   // 4b. The database's own answer, not a guess from its name.
   if (marker === null || marker.trim() === "") {
@@ -250,6 +266,13 @@ export async function assertDisposableTestDatabase(
       `"${TEST_ENVIRONMENT_MARKER}".`,
       PROVISIONING_HELP);
   }
+
+  // 4c. Classification is not permission. Being the test project says what this
+  // database is FOR; it does not say it may be destroyed today. Throws its own
+  // refusal, with its own wording, because "this is not the test project" and
+  // "this database has not agreed to be destroyed" are different problems with
+  // different fixes.
+  assertDestructiveResetAllowed(settings[DESTRUCTIVE_RESET_SETTING]);
 
   return url;
 }

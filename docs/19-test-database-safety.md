@@ -1,8 +1,60 @@
-# Test Database Safety
+# Destructive Reset Safety
 
-**The automated suites destroy a database every time they run.** This document
-is how to give them one that is safe to destroy, and why they will refuse to run
-until you do.
+**The automated suites destroy a database every time they run, and so does
+`npm run db:reset`.** This document is how to give them a database that is safe
+to destroy, and why they refuse to run until you do.
+
+---
+
+## 0. Two different questions
+
+These get confused with each other, and the confusion is what destroys data.
+
+| | Setting | Question it answers |
+|---|---|---|
+| **Classification** | `app.environment` | What is this database *for*? |
+| **Permission** | `app.destructive_reset_allowed` | May this database be *destroyed*? |
+
+**Neither implies the other.** A database classified `development` can still be
+the one a live-facing preview deployment reads from, still hold the only copy of
+a week of manual setup, still be the thing somebody is demonstrating from in an
+hour. A project classified `test` is in exactly the same position the moment
+anyone starts relying on it.
+
+So permission is separate, is granted per database, and is withdrawable without
+changing what the database is for:
+
+```sql
+ALTER DATABASE postgres SET app.destructive_reset_allowed = 'true';   -- grant
+ALTER DATABASE postgres RESET app.destructive_reset_allowed;          -- withdraw
+```
+
+**Nothing else counts as evidence of disposability.** Not the database name, not
+the project name, not the hostname, not the word "development" anywhere in the
+connection string, not localhost, and not the operator having typed `--yes`.
+Every one of those is a statement about what somebody *believes* the database
+is. The marker is the database's own answer.
+
+> ### `reiwa-dev` must not carry the destructive-reset marker
+>
+> Not while it is connected to any live-facing deployment, and not while it
+> holds data anyone would miss — which, in practice, is most of the time.
+>
+> `reiwa-dev` is a development database by classification, and that is exactly
+> the trap: "it's only dev" is how a week of work disappears. If it is backing a
+> preview deploy, a demo, or a client-facing walkthrough, it is live-facing.
+> Leave it unmarked and it cannot be reset by accident, by anyone, ever.
+>
+> If you genuinely need to rebuild it: grant the marker, run the reset, and
+> withdraw the marker again in the same sitting.
+
+| Database | `app.environment` | `app.destructive_reset_allowed` |
+|---|---|---|
+| Production | `production` | **never set** |
+| Staging | `staging` | **never set** |
+| `reiwa-dev` | `development` | **not set** (see above) |
+| Dedicated test project | `test` | `true` |
+| A scratch database you just created | anything | `true`, while it is scratch |
 
 ---
 
@@ -45,16 +97,18 @@ A destructive reset happens only if **all** of these hold:
    itself; nothing in the application or a deployment does.
 2. **`TEST_DATABASE_URL` is set.** No fallback to `DATABASE_URL`, ever.
 3. **`ALLOW_TEST_DATABASE_RESET=true`** — a deliberate opt-in for this run.
-4. **The target is a disposable test database**, established two ways:
+4. **The target is a disposable test database**, established three ways:
    - it is not the same database as `DATABASE_URL`, `PRODUCTION_DATABASE_URL`,
      `PROD_DATABASE_URL`, `STAGING_DATABASE_URL`, `DEV_DATABASE_URL` or
      `DEVELOPMENT_DATABASE_URL`; **and**
-   - the database itself reports `app.environment = 'test'`.
+   - the database reports `app.environment = 'test'` (classification); **and**
+   - the database reports `app.destructive_reset_allowed = 'true'` (permission).
 
-Conditions 1-3 and the URL comparison are decided from environment variables
-alone — no connection is opened, so a misconfigured run is refused before it can
-reach any database. The marker check is a single `SELECT`. **No `DROP` is
-reachable from a refused run.**
+Both markers are read in a single round trip. Conditions 1-3 and the URL
+comparison are decided from environment variables alone — no connection is
+opened, so a misconfigured run is refused before it can reach any database. The
+marker check is a single `SELECT`. **No `DROP` is reachable from a refused
+run.**
 
 ### Why a database-level marker rather than a name
 
@@ -86,19 +140,22 @@ and the port:
    anything else, e.g. `reiwa-test-throwaway`. It needs no custom domain, no
    real data and no backups — everything in it is recreated by the seeder.
 
-2. **Mark the database as disposable.** In the project's SQL editor, connected
-   as the database owner:
+2. **Classify it and permit its destruction.** In the project's SQL editor,
+   connected as the database owner:
 
    ```sql
-   ALTER DATABASE postgres SET app.environment = 'test';
+   ALTER DATABASE postgres SET app.environment = 'test';                 -- what it is for
+   ALTER DATABASE postgres SET app.destructive_reset_allowed = 'true';   -- may be destroyed
    ```
 
-   This is a per-database setting, so it survives `drop schema` and cannot be
-   inherited by accident from a connection string or a checked-in file. Confirm
-   it, **in a new session** — the setting applies to sessions opened after it:
+   Both are needed, and they mean different things (see §0). These are
+   per-database settings, so they survive `drop schema` and cannot be inherited
+   by accident from a connection string or a checked-in file. Confirm them **in
+   a new session** — the settings apply to sessions opened after them:
 
    ```sql
-   SELECT current_setting('app.environment', true);   -- expect: test
+   SELECT current_setting('app.environment', true),
+          current_setting('app.destructive_reset_allowed', true);  -- expect: test, true
    ```
 
 3. **Put its connection string in `TEST_DATABASE_URL`**, in `.env.local`:
@@ -114,8 +171,12 @@ and the port:
    through the Admin API using `SUPABASE_SECRET_KEY`, so that key must belong to
    the *test* project for a test run.
 
-> **Reversing the marker.** If a database should no longer be resettable:
-> `ALTER DATABASE postgres RESET app.environment;`
+> **Withdrawing permission.** The moment anyone starts relying on the test
+> project — a demo, a shared fixture, a preview deploy — take the permission
+> away and leave the classification alone:
+> `ALTER DATABASE postgres RESET app.destructive_reset_allowed;`
+> The suite then refuses, which is the behaviour that makes two markers worth
+> having.
 
 ---
 
@@ -180,18 +241,33 @@ That is the exact accident this exists to prevent, and it is refused too.
 
 ---
 
-## 7. `npm run db:reset` is a different thing
+## 7. `npm run db:reset` — the operator path
 
-`npm run db:reset -- --yes` resets **`DATABASE_URL`** — your own development
-database — because a person asked for it at a terminal. That path is unchanged
-and is not covered by this gate: the confirmation is the authorisation.
+`npm run db:reset -- --yes` resets **`DATABASE_URL`**, and it is gated too.
 
-The automated suites cannot reach it. They have no way to pass `--yes`, and
-`resetDatabase()` now requires an authorisation token that only the
-test-database gate or an operator confirmation can mint.
+**`--yes` is necessary and not sufficient.** It records that you meant to type
+the command. It says nothing about which database `DATABASE_URL` is pointed at
+right now — and that is the failure that costs data: a stale `.env.local`, a
+shell that still has last week's export in it, a terminal that is not the one
+you think it is. The case that matters is the one where the operator is certain
+and wrong.
 
-Be as careful with `db:reset` as you always were. It will happily destroy
-whatever `DATABASE_URL` names.
+So the target must also carry `app.destructive_reset_allowed = 'true'`:
+
+```
+Refusing destructive database reset: target database is not explicitly marked disposable.
+
+  Reason: app.destructive_reset_allowed is not set on the target database.
+  An unmarked database is treated as one whose data matters.
+```
+
+Note that the operator path checks **permission only**, not classification: you
+may legitimately rebuild a scratch database that is not the test project. What
+you may not do is rebuild one that has never said it is disposable.
+
+The automated suites cannot reach this path — they have no way to pass `--yes` —
+and `resetDatabase()` requires an authorisation token that only the test-database
+gate or an operator confirmation can mint.
 
 ---
 
@@ -199,9 +275,10 @@ whatever `DATABASE_URL` names.
 
 | File | Role |
 |---|---|
-| `src/lib/db/test-database.ts` | The gate. Pure environment checks plus the marker rule. |
+| `src/lib/db/destructive-reset.ts` | Permission: the `app.destructive_reset_allowed` rule, shared by both paths. |
+| `src/lib/db/test-database.ts` | Classification: the test-database environment checks and `app.environment`. |
 | `src/lib/db/reset.ts` | `resetDatabase()` requires a `ResetAuthorization`; mints them via `authorizeTestDatabaseReset()` or `authorizeOperatorReset()`. |
-| `src/lib/db/client.ts` | `probeDatabaseSetting()` — the read-only marker probe. |
+| `src/lib/db/client.ts` | `probeDatabaseSettings()` — the read-only marker probe, both settings in one round trip. |
 | `tests/test-database-env.ts` | Points a test process at `TEST_DATABASE_URL`. |
 | `tests/global-setup.ts` | The destructive reset, behind the gate. |
 | `tests/unit/test-database-guard.test.ts` | The guard's own tests. No database required. |

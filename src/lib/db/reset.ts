@@ -17,19 +17,19 @@
 //     runtime, TEST_DATABASE_URL, an explicit opt-in, a database that is not
 //     the application's, and a database that says it is disposable.
 //     See ./test-database.ts.
-//   * authorizeOperatorReset()      — `npm run db:reset -- --yes`, a person
-//     deliberately resetting their own development database.
+//   * authorizeOperatorReset()      — `npm run db:reset -- --yes`. The
+//     confirmation is necessary and not sufficient: the target database must
+//     also carry `app.destructive_reset_allowed = 'true'`. A person can be
+//     certain and still be pointed at the wrong database.
 //
 // The brand is a module-private symbol, so an authorisation cannot be written
 // as an object literal by a caller in a hurry.
 // ============================================================================
 import type { Pool } from "pg";
-import { getPool, runMigrations, probeDatabaseSetting } from "@/lib/db/client";
+import { getPool, runMigrations, probeDatabaseSettings } from "@/lib/db/client";
 import { seedIfEmpty } from "@/lib/db/seed";
-import {
-  assertDisposableTestDatabase, ENVIRONMENT_MARKER_SETTING,
-  type EnvSource, type MarkerReader,
-} from "@/lib/db/test-database";
+import { assertDisposableTestDatabase, type EnvSource } from "@/lib/db/test-database";
+import { assertTargetIsDisposable, type SettingsReader } from "@/lib/db/destructive-reset";
 
 const AUTHORISED = Symbol("reiwa.destructive-reset.authorised");
 
@@ -43,15 +43,15 @@ export interface ResetAuthorization {
 }
 
 /**
- * Read the disposability marker from the target database itself.
+ * Read markers from the target database itself.
  *
- * A single `SELECT` on a short-lived connection to TEST_DATABASE_URL. It never
- * borrows the application pool, which is bound to DATABASE_URL — asking the
- * wrong database whether the right one is disposable would be worse than not
- * asking at all.
+ * A single `SELECT` on a short-lived connection to the database about to be
+ * destroyed. It never borrows the application pool, which is bound to
+ * DATABASE_URL — asking the wrong database whether the right one is disposable
+ * would be worse than not asking at all.
  */
-const readEnvironmentMarker: MarkerReader = (connectionString) =>
-  probeDatabaseSetting(connectionString, ENVIRONMENT_MARKER_SETTING);
+const readSettings: SettingsReader = (connectionString, settings) =>
+  probeDatabaseSettings(connectionString, settings);
 
 /**
  * Authorise a reset of the dedicated test database, or throw.
@@ -61,24 +61,37 @@ const readEnvironmentMarker: MarkerReader = (connectionString) =>
  */
 export async function authorizeTestDatabaseReset(
   env: EnvSource = process.env,
-  readMarker: MarkerReader = readEnvironmentMarker,
+  settingsReader: SettingsReader = readSettings,
 ): Promise<ResetAuthorization> {
-  const url = await assertDisposableTestDatabase(env, readMarker);
+  const url = await assertDisposableTestDatabase(env, settingsReader);
   return { [AUTHORISED]: true, grantedBy: "test-database-gate", target: url };
 }
 
 /**
  * Authorise a reset a person has asked for at the command line.
  *
- * Unchanged in substance from what `npm run db:reset -- --yes` always did: the
- * confirmation IS the authorisation. It is expressed as a token here so that
- * the destructive function has exactly one door, not two.
+ * `--yes` is necessary and NOT sufficient. It records that somebody meant to
+ * type the command; it says nothing about which database the command is
+ * pointed at, and the case that matters is precisely the one where the operator
+ * is certain and wrong — a stale DATABASE_URL, a shell that still has last
+ * week's export in it, a terminal that is not the one they think it is.
+ *
+ * So the database has to agree, on its own account, that it may be destroyed:
+ * `app.destructive_reset_allowed = 'true'`. Nothing else is accepted as
+ * evidence — not the database or project name, not the hostname, not the word
+ * "development", and not localhost. `reiwa-dev` on localhost is exactly the
+ * shape of database that turns out to matter.
  */
-export function authorizeOperatorReset(confirmed: boolean, target: string): ResetAuthorization {
+export async function authorizeOperatorReset(
+  confirmed: boolean,
+  connectionString: string,
+  settingsReader: SettingsReader = readSettings,
+): Promise<ResetAuthorization> {
   if (!confirmed) {
     throw new Error("Refusing destructive reset: no operator confirmation was given.");
   }
-  return { [AUTHORISED]: true, grantedBy: "operator", target };
+  await assertTargetIsDisposable(connectionString, settingsReader);
+  return { [AUTHORISED]: true, grantedBy: "operator", target: connectionString };
 }
 
 function assertAuthorised(authorization: ResetAuthorization): void {

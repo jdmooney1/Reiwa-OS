@@ -14,8 +14,13 @@ import { describe, it, expect } from "vitest";
 import {
   checkTestDatabaseEnv, assertDisposableTestDatabase, databaseIdentity,
   TestDatabaseRefusal, RESET_REFUSAL, ENVIRONMENT_MARKER_SETTING,
-  type EnvSource, type MarkerReader,
+  type EnvSource,
 } from "@/lib/db/test-database";
+import {
+  DESTRUCTIVE_RESET_SETTING, NOT_DISPOSABLE_REFUSAL, NotDisposableRefusal,
+  type SettingsReader,
+} from "@/lib/db/destructive-reset";
+import { authorizeOperatorReset } from "@/lib/db/reset";
 
 const APP_URL = "postgresql://postgres.liveproject:hunter2@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres";
 const TEST_URL = "postgresql://postgres.testproject:swordfish@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres";
@@ -31,10 +36,22 @@ function goodEnv(over: EnvSource = {}): EnvSource {
   };
 }
 
-/** A marker reader that records every connection string it was asked about. */
-function recordingMarker(value: string | null) {
+/**
+ * A settings reader that records every connection string it was asked about.
+ *
+ * `destructiveAllowed` defaults to "true" so that a case spoiling only the
+ * CLASSIFICATION is not accidentally also spoiling the PERMISSION — the two are
+ * separate conditions and each deserves to fail on its own.
+ */
+function recordingMarker(environment: string | null, destructiveAllowed: string | null = "true") {
   const asked: string[] = [];
-  const read: MarkerReader = async (url) => { asked.push(url); return value; };
+  const read: SettingsReader = async (url) => {
+    asked.push(url);
+    return {
+      [ENVIRONMENT_MARKER_SETTING]: environment,
+      [DESTRUCTIVE_RESET_SETTING]: destructiveAllowed,
+    };
+  };
   return { read, asked };
 }
 
@@ -201,7 +218,7 @@ describe("Condition 4b — the database's own disposability marker", () => {
   });
 
   it("refuses when the database cannot be asked at all", async () => {
-    const exploding: MarkerReader = async () => { throw new Error("ECONNREFUSED"); };
+    const exploding: SettingsReader = async () => { throw new Error("ECONNREFUSED"); };
     await expect(assertDisposableTestDatabase(goodEnv(), exploding))
       .rejects.toThrow(/could not be asked whether it is disposable/);
   });
@@ -277,6 +294,150 @@ describe("Every refusal carries the same loud headline", () => {
       const message = (e as Error).message;
       expect(message).toContain("ALTER DATABASE");
       expect(message).toContain("docs/19-test-database-safety.md");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Classification and permission are different questions.
+describe("A test database needs both markers", () => {
+  it("refuses a test project that has not permitted its own destruction", async () => {
+    // app.environment = 'test' says what the database is FOR. It does not say
+    // it may be dropped today — somebody may be demonstrating from it, or a
+    // preview deployment may have been pointed at it this morning.
+    const marker = recordingMarker("test", null);
+    await expect(assertDisposableTestDatabase(goodEnv(), marker.read))
+      .rejects.toThrow(NOT_DISPOSABLE_REFUSAL);
+  });
+
+  it("refuses when the permission is present but not exactly true", async () => {
+    for (const value of ["false", "TRUE", "True", "1", "yes", "", "  "]) {
+      const marker = recordingMarker("test", value);
+      await expect(assertDisposableTestDatabase(goodEnv(), marker.read))
+        .rejects.toThrow(NotDisposableRefusal);
+    }
+  });
+
+  it("allows only when classification AND permission both hold", async () => {
+    await expect(assertDisposableTestDatabase(goodEnv(), recordingMarker("test", "true").read))
+      .resolves.toBe(TEST_URL);
+  });
+
+  it("reads both markers in a single round trip", async () => {
+    const asked: string[][] = [];
+    const read: SettingsReader = async (_url, settings) => {
+      asked.push([...settings]);
+      return {
+        [ENVIRONMENT_MARKER_SETTING]: "test",
+        [DESTRUCTIVE_RESET_SETTING]: "true",
+      };
+    };
+    await assertDisposableTestDatabase(goodEnv(), read);
+    expect(asked).toEqual([[ENVIRONMENT_MARKER_SETTING, DESTRUCTIVE_RESET_SETTING]]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `npm run db:reset -- --yes`. The gap this closes: --yes said the operator
+// meant to type the command, and nothing said which database it was aimed at.
+describe("Operator reset — --yes is necessary, never sufficient", () => {
+  const DEV_URL = "postgresql://postgres.devproject:pw@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres";
+
+  /** Records the settings read, and the destructive SQL that must never run. */
+  function operatorHarness(marker: string | null) {
+    const statements: string[] = [];
+    const read: SettingsReader = async () => ({ [DESTRUCTIVE_RESET_SETTING]: marker });
+    const reset = async (auth: unknown) => {
+      if (!auth) throw new Error("unauthorised");
+      statements.push("drop schema if exists app cascade");
+    };
+    return { read, reset, statements };
+  }
+
+  it("refuses without --yes, before asking the database anything", async () => {
+    let asked = 0;
+    const read: SettingsReader = async () => { asked += 1; return { [DESTRUCTIVE_RESET_SETTING]: "true" }; };
+    await expect(authorizeOperatorReset(false, DEV_URL, read))
+      .rejects.toThrow(/no operator confirmation/);
+    expect(asked).toBe(0);
+  });
+
+  it("refuses with --yes when the database carries no marker", async () => {
+    const h = operatorHarness(null);
+    await expect(authorizeOperatorReset(true, DEV_URL, h.read))
+      .rejects.toThrow(NOT_DISPOSABLE_REFUSAL);
+  });
+
+  it("refuses with --yes when the marker is false", async () => {
+    const h = operatorHarness("false");
+    await expect(authorizeOperatorReset(true, DEV_URL, h.read))
+      .rejects.toThrow(NotDisposableRefusal);
+  });
+
+  it("refuses anything that is not exactly 'true'", async () => {
+    for (const value of ["TRUE", "True", "yes", "1", "allowed", "true!", "truthy"]) {
+      const h = operatorHarness(value);
+      await expect(authorizeOperatorReset(true, DEV_URL, h.read))
+        .rejects.toThrow(NotDisposableRefusal);
+    }
+  });
+
+  it("allows with --yes and a marker of exactly 'true'", async () => {
+    const h = operatorHarness("true");
+    const authorization = await authorizeOperatorReset(true, DEV_URL, h.read);
+    expect(authorization.grantedBy).toBe("operator");
+    await h.reset(authorization);
+    expect(h.statements).toEqual(["drop schema if exists app cascade"]);
+  });
+
+  it("issues no destructive SQL on any refusal", async () => {
+    for (const marker of [null, "false", "development", "TRUE", ""]) {
+      const h = operatorHarness(marker);
+      try {
+        const authorization = await authorizeOperatorReset(true, DEV_URL, h.read);
+        await h.reset(authorization);
+      } catch { /* every one of these must refuse */ }
+      expect({ marker, statements: h.statements }).toEqual({ marker, statements: [] });
+    }
+  });
+
+  it("refuses when the database cannot be asked", async () => {
+    const read: SettingsReader = async () => { throw new Error("ECONNREFUSED"); };
+    await expect(authorizeOperatorReset(true, DEV_URL, read))
+      .rejects.toThrow(/could not be asked whether it may be destroyed/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("Disposability is never inferred", () => {
+  const NAMES = [
+    "postgresql://postgres:pw@localhost:5432/postgres",
+    "postgresql://postgres:pw@127.0.0.1:5432/reiwa_development",
+    "postgresql://postgres.reiwadev:pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres",
+    "postgresql://postgres:pw@localhost:5432/reiwa_test_scratch",
+    "postgresql://postgres:pw@dev.internal:5432/throwaway",
+  ];
+
+  it("refuses every 'obviously disposable' database that lacks the marker", async () => {
+    // Name, hostname, the word development, and localhost are all statements
+    // about what somebody BELIEVES. None of them is the database's own answer.
+    const read: SettingsReader = async () => ({ [DESTRUCTIVE_RESET_SETTING]: null });
+    for (const url of NAMES) {
+      await expect(authorizeOperatorReset(true, url, read))
+        .rejects.toThrow(NOT_DISPOSABLE_REFUSAL);
+    }
+  });
+
+  it("tells the operator how to mark it, and warns against marking a live one", async () => {
+    const read: SettingsReader = async () => ({ [DESTRUCTIVE_RESET_SETTING]: null });
+    try {
+      await authorizeOperatorReset(true, NAMES[0], read);
+      throw new Error("should have refused");
+    } catch (e) {
+      const message = (e as Error).message;
+      expect(message.split("\n")[0]).toBe(NOT_DISPOSABLE_REFUSAL);
+      expect(message).toContain(`ALTER DATABASE <database> SET ${DESTRUCTIVE_RESET_SETTING}`);
+      expect(message).toContain("live-facing deployment");
     }
   });
 });

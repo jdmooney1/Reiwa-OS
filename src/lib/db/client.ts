@@ -116,21 +116,24 @@ function createPool(): Pool {
 }
 
 /**
- * Read one per-database setting from an ARBITRARY connection string.
+ * Read per-database settings from an ARBITRARY connection string.
  *
  * The only function here that does not use the application pool, and
- * deliberately so: it exists for the destructive-reset gate, which must ask the
- * database it is about to destroy whether it is disposable. Asking the
- * application's database about a different one would be worse than not asking.
+ * deliberately so: it exists for the destructive-reset gates, which must ask the
+ * database they are about to destroy about itself. Asking the application's
+ * database about a different one would be worse than not asking.
  *
- * Read-only by construction — one `SELECT current_setting(...)` on a
- * short-lived, single-connection pool that is always closed. `current_setting`
- * with `missing_ok` returns null rather than raising when the setting has never
- * been set, which is the answer the gate treats as "not a test database".
+ * Read-only by construction — one `SELECT current_setting(...)` per setting in
+ * a single statement, on a short-lived, single-connection pool that is always
+ * closed. Both markers come back in one round trip, so a gate that needs the
+ * classification AND the permission opens one connection, not two.
+ *
+ * `current_setting` with `missing_ok` returns null rather than raising when a
+ * setting has never been set, which is the answer both gates treat as "no".
  */
-export async function probeDatabaseSetting(
-  connectionString: string, setting: string,
-): Promise<string | null> {
+export async function probeDatabaseSettings(
+  connectionString: string, settings: readonly string[],
+): Promise<Record<string, string | null>> {
   const pool = new Pool({
     connectionString,
     ssl: sslConfig(connectionString),
@@ -139,9 +142,15 @@ export async function probeDatabaseSetting(
     connectionTimeoutMillis: 15_000,
   });
   try {
-    const { rows } = await pool.query<{ value: string | null }>(
-      "select current_setting($1::text, true) as value", [setting]);
-    return rows[0]?.value ?? null;
+    // One projection per setting: `select current_setting($1,true) as s0, ...`.
+    const projection = settings
+      .map((_, i) => `current_setting($${i + 1}::text, true) as s${i}`)
+      .join(", ");
+    const { rows } = await pool.query<Record<string, string | null>>(
+      `select ${projection}`, [...settings]);
+    const out: Record<string, string | null> = {};
+    settings.forEach((name, i) => { out[name] = rows[0]?.[`s${i}`] ?? null; });
+    return out;
   } finally {
     await pool.end();
   }

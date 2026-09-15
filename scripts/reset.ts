@@ -1,13 +1,24 @@
 // DESTRUCTIVE: drop the application schema, re-migrate and re-seed.
-// Development databases only. Requires --yes to run.
 //   npm run db:reset -- --yes
+//
+// TWO things must be true, and --yes is only one of them. The other is that the
+// target database carries `app.destructive_reset_allowed = 'true'`, which it can
+// only have because somebody set it there deliberately. Confirming at a terminal
+// says you meant to run the command; it says nothing about which database
+// DATABASE_URL is pointed at right now, and that is the failure that costs data.
+//
+// Nothing else is accepted as evidence of disposability — not the project name,
+// not the hostname, not "dev" in the connection string, not localhost.
+// See docs/19-test-database-safety.md.
 import { requireEnv } from "./env";
 import { closePool } from "@/lib/db/client";
 import { resetDatabase, authorizeOperatorReset } from "@/lib/db/reset";
 
 async function main(): Promise<void> {
   requireEnv();
-  const host = new URL(process.env.DATABASE_URL!).host;
+  const connectionString = process.env.DATABASE_URL!;
+  const host = new URL(connectionString).host;
+
   if (!process.argv.includes("--yes")) {
     console.error(
       `Refusing to reset ${host} without confirmation.\n` +
@@ -16,12 +27,13 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+
+  // Asks the database itself. Throws before a single DROP if it has not been
+  // marked disposable.
+  const authorization = await authorizeOperatorReset(true, connectionString);
+
   console.log(`Resetting application schema on ${host} …`);
-  // The operator's --yes IS the authorisation here. This path is unchanged in
-  // substance: it resets DATABASE_URL, deliberately, because a person asked it
-  // to at a terminal. The automated suites cannot reach it — they have no way
-  // to pass --yes, and they go through the test-database gate instead.
-  const applied = await resetDatabase(authorizeOperatorReset(true, host));
+  const applied = await resetDatabase(authorization);
   console.log(`Re-applied ${applied.length} migration(s); demonstration data seeded.`);
 }
 

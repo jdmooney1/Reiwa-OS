@@ -41,11 +41,28 @@ Tests only — never set in a deployment:
 | `TEST_DATABASE_URL` | The **only** database the automated suites will touch, and they drop every table in it on every run. A separate, disposable project — never `reiwa-dev`, staging or production. There is no fallback to `DATABASE_URL`, and naming the same database in both is refused. |
 | `ALLOW_TEST_DATABASE_RESET` | Must be exactly `true` to authorise a destructive run. Typed per run, never exported and never put in `.env.local`. |
 
+**Destructive-reset markers.** Two per-database settings, answering two
+different questions. Neither is implied by the other, and neither is inferred
+from a name, a hostname, `development`, localhost or `--yes`:
+
+| Setting | Question | Set on |
+| --- | --- | --- |
+| `app.environment` | What is this database *for*? (`test`, `development`, `staging`, `production`) | Every database, as documentation. Only `test` satisfies the test-suite gate. |
+| `app.destructive_reset_allowed` | May this database be *destroyed*? Only `'true'` counts. | **Only** the dedicated test project and genuine scratch databases. |
+
+> **`reiwa-dev` must NOT carry `app.destructive_reset_allowed` while it is
+> connected to any live-facing deployment or holds data we care about.** "It's
+> only dev" is how a week of work disappears. Leave it unmarked and it cannot be
+> reset by accident, by anyone. If you genuinely need to rebuild it, grant the
+> marker, reset, and withdraw the marker in the same sitting.
+>
+> Production and staging must never carry it at all.
+
 > **Read [19-test-database-safety.md](19-test-database-safety.md) before running
-> the integration suite for the first time.** `npm test` drops and reseeds
-> `TEST_DATABASE_URL`, and refuses to run at all until a disposable test
-> database has been provisioned and marked with
-> `ALTER DATABASE postgres SET app.environment = 'test';`.
+> the integration suite or `db:reset` for the first time.** `npm test` drops and
+> reseeds `TEST_DATABASE_URL`, and `npm run db:reset -- --yes` drops
+> `DATABASE_URL`; both refuse until the target database carries the markers
+> above.
 
 **Checks before every deploy**
 
