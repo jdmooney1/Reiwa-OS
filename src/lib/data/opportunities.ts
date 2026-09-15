@@ -100,12 +100,14 @@ export async function createOpportunity(session: Session, input: NewOpportunity)
       `insert into opportunities(org_id, property_id, name, market, submarket, asset_type, strategy, currency,
          source, broker_name, vendor_name, probability, summary,
          owner_user_id, created_by, stage, status)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14,'new','active')
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'new','active')
        returning opportunity_id`,
       [input.orgId, prop.rows[0].property_id, input.name, input.market ?? null, input.submarket ?? null,
        input.assetType ?? "other", input.strategy ?? null, input.currency ?? "GBP",
        input.source ?? null, input.brokerName ?? null, input.vendorName ?? null,
-       input.probability ?? null, input.summary ?? null, input.ownerUserId ?? null]);
+       input.probability ?? null, input.summary ?? null,
+       // Owner is a choice and may be unassigned; author is a fact and is not.
+       input.ownerUserId ?? null, session.userId]);
     const opportunityId = opp.rows[0].opportunity_id;
 
     const economics: [string, number | null | undefined][] = [
@@ -123,9 +125,7 @@ export async function createOpportunity(session: Session, input: NewOpportunity)
       await tx.query(
         `insert into investment_cases(org_id, opportunity_id, version, status, created_by, strategy, ${cols.join(", ")})
          values ($1,$2,1,'current',$3,$4,${cols.map((_, i) => `$${start + i}`).join(", ")})`,
-        // created_by mirrors the opportunity row's own, so the two records agree
-        // about who logged this and a caller needs to supply it in one place.
-        [input.orgId, opportunityId, input.ownerUserId ?? null, input.strategy ?? null, ...vals]);
+        [input.orgId, opportunityId, session.userId, input.strategy ?? null, ...vals]);
     }
     return opportunityId;
   });

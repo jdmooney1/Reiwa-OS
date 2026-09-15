@@ -287,8 +287,8 @@ describe("Due diligence", () => {
 
   it("cannot belong to an opportunity that does not exist", async () => {
     await expect(adminQuery(
-      `insert into opportunity_dd_items(org_id, opportunity_id, section, item)
-       values ($1, '00000000-0000-0000-0000-0000000000ff', 'X', 'Y')`, [meiji],
+      `insert into opportunity_dd_items(org_id, opportunity_id, section, item, created_by)
+       values ($1, '00000000-0000-0000-0000-0000000000ff', 'X', 'Y', $2)`, [meiji, analyst],
     )).rejects.toThrow(/foreign key/i);
   });
 
@@ -592,9 +592,9 @@ describe("Supplemental due diligence frameworks", () => {
     // The database is the backstop, not the data layer.
     const sample = items[0];
     await expect(adminQuery(
-      `insert into opportunity_dd_items(org_id, opportunity_id, section, item, template_item_key)
-       values ($1,$2,$3,$4,$5)`,
-      [meiji, opp, sample.section, sample.item, sample.templateItemKey],
+      `insert into opportunity_dd_items(org_id, opportunity_id, section, item, template_item_key, created_by)
+       values ($1,$2,$3,$4,$5,$6)`,
+      [meiji, opp, sample.section, sample.item, sample.templateItemKey, analyst],
     )).rejects.toThrow(/opportunity_dd_items_template_item/);
   });
 });
@@ -677,5 +677,76 @@ describe("Publication provenance is durable", () => {
     await expect(adminQuery(
       "delete from opportunities where opportunity_id = $1", [opp],
     )).rejects.toThrow(/violates foreign key|permanent|immutable/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("Authorship is required", () => {
+  it("attributes every record to the acting user", async () => {
+    const opp = await createOpportunity(session, {
+      orgId: meiji, name: "Attribution", market: "London",
+      assetType: "office", currency: "GBP", targetPrice: 5_000_000,
+    });
+    const [oppRow] = await adminQuery<{ created_by: string; owner_user_id: string | null }>(
+      "select created_by, owner_user_id from opportunities where opportunity_id = $1", [opp]);
+    expect(oppRow.created_by).toBe(analyst);
+    // Owner is a choice and was not made; author is a fact and was recorded.
+    expect(oppRow.owner_user_id).toBeNull();
+
+    const caseId = (await currentVersion(session, opp))!.caseId;
+    expect((await getVersion(session, caseId))!.createdBy).toBe(analyst);
+
+    const ddId = await addDdItem(session, opp, { section: "SWOT", item: "Threats" });
+    const riskId = await createRisk(session, opp, { title: "Attributed risk" });
+    const docId = await recordDocument(session, opp, { title: "D", storagePath: "a/b.pdf" });
+    const decisionId = await recordDecision(session, opp, {
+      investmentCaseId: caseId, outcome: "deferred", rationale: "More work.",
+    });
+    const amendmentId = await amendDecision(session, decisionId, {
+      reason: "Clarify.", rationale: "More work on the survey.",
+    });
+
+    const authored = await adminQuery<{ who: string | null }>(
+      `select created_by  as who from opportunity_dd_items   where dd_item_id = $1
+       union all select created_by  from opportunity_risks     where risk_id = $2
+       union all select uploaded_by from opportunity_documents where document_id = $3
+       union all select recorded_by from ic_decisions          where decision_id = $4
+       union all select amended_by  from ic_decision_amendments where amendment_id = $5`,
+      [ddId, riskId, docId, decisionId, amendmentId]);
+    expect(authored).toHaveLength(5);
+    expect(authored.every((r) => r.who === analyst)).toBe(true);
+  });
+
+  it("refuses an unattributed record at the database", async () => {
+    const opp = await newOpportunity("Unattributed");
+    for (const sql of [
+      `insert into opportunity_risks(org_id, opportunity_id, title) values ($1,$2,'x')`,
+      `insert into opportunity_documents(org_id, opportunity_id, title, storage_path) values ($1,$2,'x','y')`,
+    ]) {
+      await expect(adminQuery(sql, [meiji, opp])).rejects.toThrow(/not-null constraint/i);
+    }
+  });
+
+  it("keeps null where it means 'not yet', not 'we did not record who'", async () => {
+    const opp = await newOpportunity("Legitimate nulls");
+    const caseId = await createVersion(session, opp, { acquisitionPrice: 1_000_000 });
+
+    // Not yet approved: approved_by is null and approved_at agrees.
+    const before = await getVersion(session, caseId);
+    expect(before!.approvedBy).toBeNull();
+    expect(before!.approvedAt).toBeNull();
+    expect(before!.createdBy).toBe(analyst); // but the author is known
+
+    await recordDecision(session, opp, { investmentCaseId: caseId, outcome: "approved" });
+    const after = await getVersion(session, caseId);
+    expect(after!.approvedBy).toBe(analyst);
+    expect(after!.approvedAt).not.toBeNull();
+
+    // An unowned workstream is unowned, not unattributed.
+    const ddId = await addDdItem(session, opp, { section: "SWOT", item: "Unowned" });
+    const [item] = await adminQuery<{ owner_user_id: string | null; created_by: string }>(
+      "select owner_user_id, created_by from opportunity_dd_items where dd_item_id = $1", [ddId]);
+    expect(item.owner_user_id).toBeNull();
+    expect(item.created_by).toBe(analyst);
   });
 });

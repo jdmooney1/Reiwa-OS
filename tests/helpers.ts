@@ -11,17 +11,68 @@ export function testPool(): Pool {
   return getPool();
 }
 
+// ---------------------------------------------------------------------------
+// Test identities are REAL seeded profiles, not synthetic UUIDs.
+//
+// They used to be invented constants, which worked only because nothing wrote
+// an author. The moment records started carrying created_by, every one of those
+// sessions was a user who does not exist — and the workaround was to pass a
+// null author, i.e. to record that nobody wrote it. On a system whose whole
+// value is being able to say who decided what, a test suite that routinely
+// produces unattributed records is not testing the system.
+//
+// tests/setup.ts loads these once per file, before any test runs, so the
+// session builders below stay synchronous and no call site changes.
+// ---------------------------------------------------------------------------
+const SEED_EMAILS = {
+  admin: "admin@reiwa.com",
+  analyst: "analyst@meiji.com",
+  viewer: "viewer@meiji.com",
+  aoyama: "user@aoyama.com",
+} as const;
+
+type SeedRole = keyof typeof SEED_EMAILS;
+
+let seeded: Record<SeedRole, string> | null = null;
+
+/** Resolve the seeded profiles. Called from tests/setup.ts before collection. */
+export async function loadSeededIdentities(): Promise<void> {
+  if (seeded) return;
+  const rows = await adminQuery<{ email: string; user_id: string }>(
+    "select lower(email) as email, user_id from profiles where lower(email) = any($1)",
+    [Object.values(SEED_EMAILS)]);
+  const byEmail = new Map(rows.map((r) => [r.email, r.user_id]));
+  const resolved = {} as Record<SeedRole, string>;
+  for (const [role, email] of Object.entries(SEED_EMAILS) as [SeedRole, string][]) {
+    const id = byEmail.get(email);
+    if (!id) throw new Error(`Seeded profile ${email} is missing — was the database seeded?`);
+    resolved[role] = id;
+  }
+  seeded = resolved;
+  // adminSession is exported as a value, so mutate it rather than rebuild it:
+  // every importer already holds this reference.
+  adminSession.userId = resolved.admin;
+}
+
+export function seededUserId(role: SeedRole): string {
+  if (!seeded) {
+    throw new Error("Seeded identities not loaded — tests/setup.ts should have awaited loadSeededIdentities().");
+  }
+  return seeded[role];
+}
+
+/** Reiwa staff admin. `userId` is filled in by loadSeededIdentities(). */
 export const adminSession: Session = {
-  userId: "00000000-0000-0000-0000-000000000000",
+  userId: "",
   orgIds: [],
   role: "reiwa_admin",
   canWrite: true,
 };
 
-export function orgUserSession(orgIds: string[], userId = "11111111-1111-1111-1111-111111111111"): Session {
+export function orgUserSession(orgIds: string[], userId = seededUserId("analyst")): Session {
   return { userId, orgIds, role: "org_user", canWrite: true };
 }
-export function viewerSession(orgIds: string[], userId = "22222222-2222-2222-2222-222222222222"): Session {
+export function viewerSession(orgIds: string[], userId = seededUserId("viewer")): Session {
   return { userId, orgIds, role: "investor_viewer", canWrite: false };
 }
 

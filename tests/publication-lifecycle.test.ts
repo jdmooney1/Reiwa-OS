@@ -330,7 +330,7 @@ describe("The publication is independent of the internal opportunity", () => {
     // opportunity — there is no second writable copy of it any more.
     await createVersion(staff, opportunityId, {
       acquisitionPrice: 47500000, changeRationale: "Second inspection.",
-    }, { createdBy: null }); // this suite's session is synthetic; authorship is not what it tests
+    });
     await updateOpportunity(staff, opportunityId, {
       name: "14 Cavendish Row (renamed internally)",
       summary: "Internal view revised after the second inspection.",

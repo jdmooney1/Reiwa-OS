@@ -298,7 +298,7 @@ describe("Source drift", () => {
     // (Phase 1A). The internal record still moves, which is what drift means.
     await createVersion(staff, oppA, {
       acquisitionPrice: 45000000, changeRationale: "Repriced guide.",
-    }, { createdBy: null }); // this suite's session is synthetic; authorship is not what it tests
+    });
     await updateOpportunity(staff, oppA, { summary: "Repriced guide." });
 
     const drift = await publicationSourceDrift(adminSession, versionTwo);

@@ -250,11 +250,12 @@ async function seedAssetChain(
   const kase = await one<{ case_id: string }>(
     `insert into investment_cases(org_id, opportunity_id, version, status, approved_at,
        acquisition_price, acquisition_date, noi, occupancy_pct, erv, capex, debt, ltv_pct, valuation,
-       target_irr, target_equity_multiple, thesis)
-     values ($1,$2,1,'approved',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning case_id`,
+       target_irr, target_equity_multiple, thesis, created_by, approved_by)
+     values ($1,$2,1,'approved',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$16) returning case_id`,
     [orgId, opp!.opportunity_id, a.acquisition_date, a.acquisition_price, a.acquisition_date,
      uw?.noi ?? null, uw?.occupancy_pct ?? null, null, uw?.capex ?? null, uw?.debt ?? null,
-     uw?.ltv_pct ?? null, uw?.valuation ?? null, uw?.irr_pct ?? null, uw?.equity_multiple ?? null, a.hold_thesis]);
+     uw?.ltv_pct ?? null, uw?.valuation ?? null, uw?.irr_pct ?? null, uw?.equity_multiple ?? null,
+     a.hold_thesis, userId]);
 
   const txn = await one<{ transaction_id: string }>(
     `insert into transactions(org_id, opportunity_id, property_id, investment_case_id,
@@ -314,9 +315,9 @@ async function seedStandaloneAsset(q: Q, one: One, orgId: string, portfolioId: s
      values ($1,$2,'Roppongi Tower','Other','office','core','acquired','converted','GBP',110000000,$3,$3) returning opportunity_id`,
     [orgId, prop!.property_id, userId]);
   const kase = await one<{ case_id: string }>(
-    `insert into investment_cases(org_id, opportunity_id, version, status, approved_at, acquisition_price, acquisition_date, noi, valuation, target_irr, thesis)
-     values ($1,$2,1,'approved','2025-01-15',110000000,'2025-01-15',5200000,110000000,11.0,'Core Tokyo office (Aoyama Holdings — isolation fixture).') returning case_id`,
-    [orgId, opp!.opportunity_id]);
+    `insert into investment_cases(org_id, opportunity_id, version, status, approved_at, acquisition_price, acquisition_date, noi, valuation, target_irr, thesis, created_by, approved_by)
+     values ($1,$2,1,'approved','2025-01-15',110000000,'2025-01-15',5200000,110000000,11.0,'Core Tokyo office (Aoyama Holdings — isolation fixture).',$3,$3) returning case_id`,
+    [orgId, opp!.opportunity_id, userId]);
   const txn = await one<{ transaction_id: string }>(
     `insert into transactions(org_id, opportunity_id, property_id, investment_case_id, acquisition_price, acquisition_date, equity_invested, debt)
      values ($1,$2,$3,$4,110000000,'2025-01-15',66000000,44000000) returning transaction_id`,
