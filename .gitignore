@@ -29,3 +29,6 @@ yarn-error.log*
 
 # Local scratch
 /.data
+
+# Local migration-verification cluster (npm run db:verify)
+/.pgverify

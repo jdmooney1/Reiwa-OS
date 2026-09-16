@@ -33,6 +33,23 @@ describe("normaliseDecimal", () => {
   it("reads a bare comma group as grouping", () => {
     expect(normaliseDecimal("1,234")).toBe(1234);
   });
+  it("resolves repeated separators as grouping, not ambiguity", () => {
+    // A number has at most one decimal separator, so a repeated one can only be
+    // grouping - whichever convention it is.
+    expect(normaliseDecimal("85.000.000")).toBe(85_000_000);
+    expect(normaliseDecimal("12,500,000")).toBe(12_500_000);
+    expect(normaliseDecimal("12,500,000.75")).toBe(12_500_000.75);
+    expect(normaliseDecimal("1.234.567,89")).toBe(1_234_567.89);
+  });
+  it("reads a lone comma as a decimal when it is not a thousands group", () => {
+    expect(normaliseDecimal("4,12")).toBe(4.12);
+    expect(normaliseDecimal("4,5")).toBe(4.5);
+  });
+  it("rejects malformed mixtures", () => {
+    expect(normaliseDecimal("1.2.3,4,5")).toBeNull();
+    expect(normaliseDecimal("abc")).toBeNull();
+    expect(normaliseDecimal("")).toBeNull();
+  });
 });
 
 describe("parseMoney", () => {

@@ -127,27 +127,39 @@ export function normaliseDecimal(input: string): number | null {
   const s = input.replace(/[\s ]/g, "");
   if (!/^-?[\d,.]+$/.test(s) || !/\d/.test(s)) return null;
 
-  const lastComma = s.lastIndexOf(",");
-  const lastDot = s.lastIndexOf(".");
+  const dots = (s.match(/\./g) ?? []).length;
+  const commas = (s.match(/,/g) ?? []).length;
+
+  // A number carries at most ONE decimal separator, so a repeated separator can
+  // only be grouping. That single fact resolves most of the UK/European
+  // ambiguity without having to guess a locale.
+  const strip = (value: string, char: string) => value.split(char).join("");
+  const decimalise = (value: string, char: string) =>
+    strip(value, char === "." ? "," : ".").replace(char, ".");
 
   let normalised: string;
-  if (lastComma === -1 && lastDot === -1) {
+  if (dots > 1 && commas > 1) {
+    return null;                                   // malformed
+  } else if (dots > 1) {
+    // "85.000.000" or "1.234.567,89" - dots group, a lone comma is decimal.
+    normalised = commas === 1 ? decimalise(s, ",") : strip(s, ".");
+  } else if (commas > 1) {
+    // "12,500,000" or "12,500,000.75" - commas group, a lone dot is decimal.
+    normalised = dots === 1 ? decimalise(s, ".") : strip(s, ",");
+  } else if (dots === 1 && commas === 1) {
+    // Whichever comes last is the decimal separator.
+    normalised = s.lastIndexOf(",") > s.lastIndexOf(".") ? decimalise(s, ",") : decimalise(s, ".");
+  } else if (dots === 1) {
+    // "1.234" is either 1234 (European grouping) or 1.234 (UK decimal), with
+    // nothing to tell them apart. Refuse rather than corrupt the figure.
+    if (/^-?\d{1,3}\.\d{3}$/.test(s)) return null;
     normalised = s;
-  } else if (lastComma > lastDot) {
-    // Comma is the decimal separator (European): dots are grouping.
-    const decimals = s.length - lastComma - 1;
-    if (decimals === 3 && lastDot === -1 && /^-?\d{1,3}(,\d{3})+$/.test(s)) {
-      normalised = s.replace(/,/g, ""); // "1,234" - grouping, not a decimal
-    } else {
-      normalised = s.replace(/\./g, "").replace(",", ".");
-    }
+  } else if (commas === 1) {
+    // "1,234" at exactly three trailing digits is UK grouping; "4,12" is a
+    // European decimal.
+    normalised = /^-?\d{1,3},\d{3}$/.test(s) ? strip(s, ",") : s.replace(",", ".");
   } else {
-    // Dot is the decimal separator (UK/US): commas are grouping.
-    const decimals = s.length - lastDot - 1;
-    if (decimals === 3 && lastComma === -1 && /^-?\d{1,3}(\.\d{3})+$/.test(s)) {
-      return null; // "1.234" - could be 1234 or 1.234. Genuinely ambiguous.
-    }
-    normalised = s.replace(/,/g, "");
+    normalised = s;
   }
 
   const n = Number(normalised);
