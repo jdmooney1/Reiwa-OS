@@ -11,7 +11,9 @@ export default defineConfig({
     // Integration tests hit the real Supabase Postgres over the network.
     testTimeout: 120000,
     hookTimeout: 180000,
-    include: ["tests/**/*.test.ts"],
+    // Top-level only. tests/unit/** is the DB-free suite and runs under
+    // vitest.unit.config.mts, which has no globalSetup.
+    include: ["tests/*.test.ts", "tests/integration/**/*.test.ts"],
     globalSetup: ["tests/global-setup.ts"],
     setupFiles: ["tests/setup.ts"],
     // One shared database: files must not interleave.
