@@ -228,7 +228,7 @@ function isStreetType(token: string): boolean {
  * Falls back to the first two tokens when no street type is recognisable, which
  * keeps unfamiliar formats comparable without swallowing the whole tail.
  */
-function streetPart(address: string): string | null {
+export function streetPart(address: string): string | null {
   if (!address) return null;
   const tokens = address.split(" ").filter(Boolean);
   if (tokens.length === 0) return null;
@@ -278,4 +278,14 @@ export function similarity(a: string, b: string): number {
   }
 
   return (2 * hits) / (x.length - 1 + y.length - 1);
+}
+
+/**
+ * The leading building number of a normalised address, or null.
+ * This is the discriminator between 16 and 22 Conduit Street, so the matcher
+ * treats a mismatch here as strong evidence of two different buildings.
+ */
+export function buildingNumber(address: string | null | undefined): string | null {
+  const normalised = normaliseAddress(address);
+  return normalised.match(/^(\d+[a-z]?(?:-\d+[a-z]?)?)\b/)?.[1] ?? null;
 }
