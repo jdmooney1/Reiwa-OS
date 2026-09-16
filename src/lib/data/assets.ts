@@ -38,53 +38,101 @@ const ASSET_SELECT = `
   left join properties p on p.property_id = a.property_id
   left join opportunities o on o.opportunity_id = a.opportunity_id`;
 
-async function assembleOne(tx: Queryable, assetRow: any): Promise<AssetFile> {
-  const id = assetRow.asset_id;
-  const plans = (await tx.query(`select * from business_plans where asset_id = $1 order by version`, [id])).rows.map((r: any): BusinessPlan => ({
-    plan_id: r.plan_id, asset_id: id, plan_type: r.plan_type as PlanType, version: Number(r.version),
-    as_of_date: r.as_of_date, label: str(r.label), ...metrics(r),
+/** Group rows by their `asset_id`, so one batched read fans out per asset. */
+function byAsset<T>(rows: Row[], map: (r: Row) => T): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const r of rows) {
+    const id = r.asset_id as string;
+    const list = out.get(id);
+    if (list) list.push(map(r));
+    else out.set(id, [map(r)]);
+  }
+  return out;
+}
+
+/**
+ * Assemble the full file for a set of assets in a FIXED number of queries.
+ *
+ * The previous shape ran five child queries per asset, sequentially awaited, so
+ * the portfolio cost 1 + 5N round trips through the transaction pooler — three
+ * seeded assets were sixteen, and thirty assets would be a hundred and fifty-one
+ * with nothing overlapping. It is six now, whatever N is.
+ *
+ * Ordering within each collection is preserved by ordering the batched read the
+ * same way the per-asset read did, and grouping is stable — so a caller receives
+ * exactly the arrays it received before.
+ */
+async function assembleMany(tx: Queryable, assetRows: Row[]): Promise<AssetFile[]> {
+  if (assetRows.length === 0) return [];
+  const ids = assetRows.map((r) => r.asset_id as string);
+
+  const [planRows, periodRows, valuationRows, riskRows, decisionRows] = await Promise.all([
+    tx.query<Row>("select * from business_plans where asset_id = any($1::uuid[]) order by asset_id, version", [ids]),
+    tx.query<Row>("select * from performance_periods where asset_id = any($1::uuid[]) order by asset_id, period_end", [ids]),
+    tx.query<Row>("select * from valuations where asset_id = any($1::uuid[]) order by asset_id, valuation_date", [ids]),
+    tx.query<Row>("select * from asset_risks where asset_id = any($1::uuid[]) order by asset_id", [ids]),
+    tx.query<Row>("select * from asset_decisions where asset_id = any($1::uuid[]) order by asset_id", [ids]),
+  ]);
+
+  const plans = byAsset(planRows.rows, (r): BusinessPlan => ({
+    plan_id: r.plan_id as string, asset_id: r.asset_id as string, plan_type: r.plan_type as PlanType,
+    version: Number(r.version), as_of_date: r.as_of_date as string, label: str(r.label), ...metrics(r),
   }));
-  const periods = (await tx.query(`select * from performance_periods where asset_id = $1 order by period_end`, [id])).rows.map((r: any): PerformancePeriod => ({
-    period_id: r.period_id, asset_id: id, period_label: r.period_label, period_end: r.period_end,
+  const periods = byAsset(periodRows.rows, (r): PerformancePeriod => ({
+    period_id: r.period_id as string, asset_id: r.asset_id as string,
+    period_label: r.period_label as string, period_end: r.period_end as string,
     status: r.status as PeriodStatus, ...metrics(r),
   }));
-  const valuations = (await tx.query(`select * from valuations where asset_id = $1 order by valuation_date`, [id])).rows.map((r: any): Valuation => ({
-    valuation_id: r.valuation_id, asset_id: id, valuation_date: r.valuation_date, valuer: str(r.valuer),
+  const valuations = byAsset(valuationRows.rows, (r): Valuation => ({
+    valuation_id: r.valuation_id as string, asset_id: r.asset_id as string,
+    valuation_date: r.valuation_date as string, valuer: str(r.valuer),
     valuation: num(r.valuation), valuation_type: r.valuation_type as ValuationType, noi: num(r.noi),
     yield_pct: num(r.yield_pct), erv: num(r.erv), methodology: null, key_assumptions: null,
   }));
-  const risks = (await tx.query(`select * from asset_risks where asset_id = $1`, [id])).rows.map((r: any): AssetRisk => ({
-    risk_id: r.risk_id, asset_id: id, title: r.title, category: r.category as AssetRiskCategory,
+  const risks = byAsset(riskRows.rows, (r): AssetRisk => ({
+    risk_id: r.risk_id as string, asset_id: r.asset_id as string, title: r.title as string,
+    category: r.category as AssetRiskCategory,
     description: str(r.description), probability: num(r.probability), financial_impact: num(r.financial_impact),
     severity: (str(r.severity) as SeverityBand | null), mitigation: str(r.mitigation), owner: str(r.owner),
     deadline: str(r.deadline), status: r.status as RiskStatus,
   }));
-  const decisions = (await tx.query(`select * from asset_decisions where asset_id = $1`, [id])).rows.map((r: any): AssetDecision => ({
-    decision_id: r.decision_id, asset_id: id, title: r.title, issue: str(r.issue), background: null,
+  const decisions = byAsset(decisionRows.rows, (r): AssetDecision => ({
+    decision_id: r.decision_id as string, asset_id: r.asset_id as string, title: r.title as string,
+    issue: str(r.issue), background: null,
     options: null, financial_impact: num(r.financial_impact), recommendation: str(r.recommendation),
-    decision_maker: str(r.decision_maker), deadline: str(r.deadline), status: r.status,
+    decision_maker: str(r.decision_maker), deadline: str(r.deadline),
+    status: r.status as AssetDecision["status"],
     final_decision: null, decision_date: null, rationale: null,
   }));
-  return {
-    asset: mapAsset(assetRow), plans, periods, valuations, risks, decisions,
-  };
+
+  return assetRows.map((row) => {
+    const id = row.asset_id as string;
+    return {
+      asset: mapAsset(row),
+      plans: plans.get(id) ?? [],
+      periods: periods.get(id) ?? [],
+      valuations: valuations.get(id) ?? [],
+      risks: risks.get(id) ?? [],
+      decisions: decisions.get(id) ?? [],
+    };
+  });
 }
 
 export async function getAssetFile(session: Session, assetId: string): Promise<AssetFile | null> {
   return withSession(session, async (tx) => {
-    const { rows } = await tx.query(`${ASSET_SELECT} where a.asset_id = $1`, [assetId]);
-    return rows[0] ? assembleOne(tx, rows[0]) : null;
+    const { rows } = await tx.query<Row>(`${ASSET_SELECT} where a.asset_id = $1`, [assetId]);
+    if (!rows[0]) return null;
+    return (await assembleMany(tx, rows))[0];
   });
 }
 
 export async function listAssetFiles(session: Session): Promise<AssetFile[]> {
   return withSession(session, async (tx) => {
-    const { rows } = await tx.query(`${ASSET_SELECT} order by a.name`);
-    const out: AssetFile[] = [];
-    for (const r of rows) out.push(await assembleOne(tx, r));
-    return out;
+    const { rows } = await tx.query<Row>(`${ASSET_SELECT} order by a.name`);
+    return assembleMany(tx, rows);
   });
 }
+
 
 export async function listAssetsForNav(session: Session): Promise<{ assetId: string; name: string }[]> {
   return withSession(session, async (tx) => {

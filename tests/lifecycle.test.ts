@@ -6,6 +6,7 @@ import {
 import { convertToAsset } from "@/lib/data/conversion";
 import { getAssetFile, listAssetFiles, addPerformancePeriod } from "@/lib/data/assets";
 import { getPortfolioData } from "@/lib/data/portfolio";
+import { portfolioAggregate } from "@/lib/asset-intelligence/metrics";
 import { threeWay, variance, varianceTone } from "@/lib/asset-intelligence/metrics";
 import { orgIdByName, orgUserSession } from "./helpers";
 
@@ -104,10 +105,55 @@ describe("Portfolio aggregates from stored assets", () => {
     });
 
     const after = await getPortfolioData(session);
-    expect(after.aggregate.noi).not.toBe(before.aggregate.noi);
-    expect(after.aggregate.noi!).toBeGreaterThan(before.aggregate.noi!); // higher latest NOI lifts the total
+    // Aggregate exactly as the dashboard does, from the same two inputs. The
+    // data layer used to roll this up as well and nothing read it, so asserting
+    // on its copy tested a path no screen went down.
+    const totalBefore = portfolioAggregate(before.files, before.fx.rates, "GBP").noi;
+    const totalAfter = portfolioAggregate(after.files, after.fx.rates, "GBP").noi;
+    expect(totalAfter).not.toBe(totalBefore);
+    expect(totalAfter!).toBeGreaterThan(totalBefore!); // higher latest NOI lifts the total
     // FX is explicit + labelled (not silently hard-coded).
     expect(after.fx.source).toMatch(/rates/i);
     expect(after.fx.asOf).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The portfolio assembles every asset's file in a fixed number of queries
+// rather than five per asset. Batching is only safe if it produces exactly what
+// the per-asset read produced, so that is what this asserts — including the
+// ordering inside each collection, which grouping is easy to get subtly wrong.
+describe("Batched asset assembly", () => {
+  it("gives the same file per asset as reading that asset on its own", async () => {
+    const listed = await listAssetFiles(session);
+    expect(listed.length).toBeGreaterThan(1); // otherwise this proves nothing
+
+    for (const file of listed) {
+      const alone = await getAssetFile(session, file.asset.asset_id);
+      expect(alone).not.toBeNull();
+      expect(alone).toEqual(file);
+    }
+  });
+
+  it("keeps each asset's children to that asset", async () => {
+    // The failure mode of a bad group-by: one asset inheriting another's
+    // valuations, which reads as a plausible number rather than an error.
+    for (const file of await listAssetFiles(session)) {
+      const id = file.asset.asset_id;
+      for (const collection of [file.plans, file.periods, file.valuations, file.risks, file.decisions]) {
+        for (const child of collection as { asset_id: string }[]) {
+          expect(child.asset_id).toBe(id);
+        }
+      }
+    }
+  });
+
+  it("orders periods and valuations oldest first, as the dashboard assumes", async () => {
+    for (const file of await listAssetFiles(session)) {
+      const ends = file.periods.map((p) => p.period_end);
+      expect([...ends].sort()).toEqual(ends);
+      const dates = file.valuations.map((v) => v.valuation_date);
+      expect([...dates].sort()).toEqual(dates);
+    }
   });
 });

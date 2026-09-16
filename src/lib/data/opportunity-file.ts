@@ -14,7 +14,7 @@ import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { num } from "@/lib/data/coerce";
 import type { Opportunity } from "@/lib/data/opportunity-types";
 import type { UnderwritingVersion } from "@/lib/data/underwriting-types";
-import { getOpportunity } from "@/lib/data/opportunities";
+import { getOpportunity, listOpportunitiesOn } from "@/lib/data/opportunities";
 import { listVersions } from "@/lib/data/underwriting";
 
 export interface OpportunityFile {
@@ -106,11 +106,15 @@ export interface PipelineRow extends Opportunity {
  * an obvious way rather than a plausible one.
  */
 export async function listPipeline(session: Session): Promise<PipelineRow[]> {
-  const { listOpportunities } = await import("@/lib/data/opportunities");
-  const opportunities = await listOpportunities(session);
-  if (opportunities.length === 0) return [];
+  // ONE transaction for both halves. They used to be two, which meant the rows
+  // and their figures were read from two different snapshots: a version
+  // approved between them would have produced a pipeline stating a basis its
+  // own figures did not come from. The window was small and the wrong answer
+  // was plausible, which is the combination worth removing rather than timing.
+  return withSession(session, async (tx) => {
+    const opportunities = await listOpportunitiesOn(tx);
+    if (opportunities.length === 0) return [];
 
-  const cases = await withSession(session, async (tx) => {
     const { rows } = await tx.query<Record<string, any>>(
       `select distinct on (opportunity_id)
               opportunity_id, version, status, acquisition_price, total_cost,
@@ -118,20 +122,20 @@ export async function listPipeline(session: Session): Promise<PipelineRow[]> {
          from investment_cases
         where status in ('approved', 'current')
         order by opportunity_id, (status = 'approved') desc, version desc`);
-    return new Map(rows.map((r) => [r.opportunity_id as string, r]));
-  });
+    const cases = new Map(rows.map((r) => [r.opportunity_id as string, r]));
 
-  return opportunities.map((o) => {
-    const c = cases.get(o.opportunityId);
-    return {
-      ...o,
-      caseBasis: c ? (c.status === "approved" ? "approved" : "working") : "none",
-      caseVersion: c ? Number(c.version) : null,
-      caseAcquisitionPrice: c ? num(c.acquisition_price) : null,
-      caseTotalCost: c ? num(c.total_cost) : null,
-      caseEntryYieldPct: c ? num(c.entry_yield_pct) : null,
-      caseTargetIrr: c ? num(c.target_irr) : null,
-      caseEquityMultiple: c ? num(c.target_equity_multiple) : null,
-    };
+    return opportunities.map((o) => {
+      const c = cases.get(o.opportunityId);
+      return {
+        ...o,
+        caseBasis: c ? (c.status === "approved" ? "approved" : "working") : "none",
+        caseVersion: c ? Number(c.version) : null,
+        caseAcquisitionPrice: c ? num(c.acquisition_price) : null,
+        caseTotalCost: c ? num(c.total_cost) : null,
+        caseEntryYieldPct: c ? num(c.entry_yield_pct) : null,
+        caseTargetIrr: c ? num(c.target_irr) : null,
+        caseEquityMultiple: c ? num(c.target_equity_multiple) : null,
+      };
+    });
   });
 }

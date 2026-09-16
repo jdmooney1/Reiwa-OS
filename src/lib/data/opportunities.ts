@@ -59,11 +59,20 @@ async function withOwnerNames(
   }));
 }
 
+/**
+ * Every opportunity, read INSIDE a caller's transaction.
+ *
+ * Exported so a caller that needs opportunities and something else together —
+ * the pipeline needs their investment cases — can read both from one snapshot
+ * rather than two. Same naming convention as withSessionOn/adminQueryOn.
+ */
+export async function listOpportunitiesOn(tx: Queryable): Promise<Opportunity[]> {
+  const { rows } = await tx.query<Record<string, any>>(`${SELECT} order by o.updated_at desc`);
+  return withOwnerNames(tx, rows);
+}
+
 export async function listOpportunities(session: Session): Promise<Opportunity[]> {
-  return withSession(session, async (tx: Queryable) => {
-    const { rows } = await tx.query(`${SELECT} order by o.updated_at desc`);
-    return withOwnerNames(tx, rows);
-  });
+  return withSession(session, (tx: Queryable) => listOpportunitiesOn(tx));
 }
 
 export async function getOpportunity(session: Session, id: string): Promise<Opportunity | null> {
