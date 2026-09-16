@@ -122,3 +122,26 @@ export function Empty({ title, hint }: { title: string; hint?: string }) {
 export function Provenance({ children }: { children: React.ReactNode }) {
   return <p className="text-2xs text-ink-faint">{children}</p>;
 }
+
+/**
+ * What went wrong with the thing you just tried, said where you tried it.
+ *
+ * One component, used by every workspace write, so a recoverable failure looks
+ * the same wherever it happens and no section invents its own treatment. It
+ * renders nothing when there is nothing to say, so a call site is one line and
+ * cannot forget the empty case.
+ *
+ * `role="alert"` because the message usually appears without the focus moving —
+ * a screen reader would otherwise never learn the submission failed.
+ *
+ * Only ever passed a message that has been through the classification in
+ * @/lib/actions/result, which is what makes it safe to display.
+ */
+export function ActionError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="border-l-2 border-negative pl-3 text-xs leading-relaxed text-negative">
+      {message}
+    </p>
+  );
+}

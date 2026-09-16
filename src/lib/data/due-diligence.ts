@@ -13,6 +13,7 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { str } from "@/lib/data/coerce";
+import { AppError } from "@/lib/errors";
 import { staffNamesOn, nameOf } from "@/lib/data/directory";
 import type { DueDiligenceItem, DdStatus } from "@/types/database";
 import {
@@ -105,7 +106,7 @@ export async function applyDdTemplate(
       "select count(*)::int as n from opportunity_dd_items where opportunity_id = $1 and template_id = $2",
       [opportunityId, chosen]);
     if (Number(already.rows[0].n) > 0) {
-      throw new Error(`The ${chosen} due diligence framework has already been applied to this opportunity.`);
+      throw new AppError(`The ${chosen} due diligence framework has already been applied to this opportunity.`);
     }
 
     const items = applyTemplate(chosen, opportunityId);

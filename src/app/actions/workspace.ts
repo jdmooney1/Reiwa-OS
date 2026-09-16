@@ -9,10 +9,18 @@
 // functions resolve the session, pass the form through, and let the rules
 // refuse. A guard written here as well would be a second, weaker copy of one
 // that already holds, and the copy is what gets forgotten.
+//
+// Every one of them returns an ActionResult rather than throwing, so a refusal
+// the person can act on — a file too large, a framework applied twice, an
+// approved version that cannot be edited — comes back to the screen they are
+// on instead of replacing it with the route error boundary. Faults still throw.
+// The classification is in one place: see @/lib/actions/result.
 // ============================================================================
 import { revalidatePath } from "next/cache";
 import { requireDbSession } from "@/lib/auth/session";
 import { AppError } from "@/lib/errors";
+import { runAction } from "@/lib/actions/run-action";
+import type { ActionResult } from "@/lib/actions/result";
 import { createVersion, makeCurrent, type UnderwritingInput } from "@/lib/data/underwriting";
 import { applyDdTemplate, updateDdItem, addDdItem, type DdItemPatch } from "@/lib/data/due-diligence";
 import { createRisk, promoteFindingToRisk, updateRisk, type RiskPatch } from "@/lib/data/opportunity-risks";
@@ -46,8 +54,8 @@ const UNDERWRITING_NUMERIC: (keyof UnderwritingInput)[] = [
 ];
 
 export async function createVersionAction(
-  opportunityId: string, formData: FormData,
-): Promise<void> {
+  opportunityId: string, _prev: ActionResult, formData: FormData,
+): Promise<ActionResult> {
   const session = await requireDbSession();
   const input: UnderwritingInput = {
     strategy: text(formData.get("strategy")),
@@ -58,30 +66,43 @@ export async function createVersionAction(
   for (const key of UNDERWRITING_NUMERIC) {
     (input as Record<string, unknown>)[key] = num(formData.get(key));
   }
-  await createVersion(session, opportunityId, input);
-  refresh(opportunityId);
+  return runAction("workspace.underwriting.create", { opportunityId }, async () => {
+    await createVersion(session, opportunityId, input);
+    refresh(opportunityId);
+  }, {
+    ruleMessage:
+      "This underwriting version could not be created. An approved or superseded " +
+      "version cannot be altered — revise by creating the next version.",
+  });
 }
 
 export async function makeCurrentVersionAction(
   opportunityId: string, caseId: string,
-): Promise<void> {
+): Promise<ActionResult> {
   const session = await requireDbSession();
-  await makeCurrent(session, caseId);
-  refresh(opportunityId);
+  return runAction("workspace.underwriting.makeCurrent", { opportunityId, caseId }, async () => {
+    await makeCurrent(session, caseId);
+    refresh(opportunityId);
+  }, {
+    ruleMessage: "That version cannot become the working version. Approved and " +
+      "superseded underwriting is immutable.",
+  });
 }
 
 // ---- Due diligence --------------------------------------------------------
 export async function applyDdTemplateAction(
   opportunityId: string, templateId: "london" | "amsterdam",
-): Promise<void> {
+): Promise<ActionResult> {
   const session = await requireDbSession();
-  await applyDdTemplate(session, opportunityId, templateId);
-  refresh(opportunityId);
+  return runAction("workspace.dd.applyTemplate", { opportunityId, templateId }, async () => {
+    await applyDdTemplate(session, opportunityId, templateId);
+    refresh(opportunityId);
+  });
 }
 
 export async function updateDdItemAction(
-  opportunityId: string, ddItemId: string, formData: FormData,
-): Promise<void> {
+  opportunityId: string, ddItemId: string, _prev: ActionResult, formData: FormData,
+): Promise<ActionResult> {
   const session = await requireDbSession();
   const patch: DdItemPatch = {
     status: String(formData.get("status") || "not_started") as DdStatus,
@@ -91,92 +112,107 @@ export async function updateDdItemAction(
   };
   const owner = text(formData.get("ownerUserId"));
   if (owner !== null) patch.ownerUserId = owner;
-  await updateDdItem(session, ddItemId, patch);
-  refresh(opportunityId);
+  return runAction("workspace.dd.update", { opportunityId, ddItemId }, async () => {
+    await updateDdItem(session, ddItemId, patch);
+    refresh(opportunityId);
+  });
 }
 
 export async function addDdItemAction(
-  opportunityId: string, formData: FormData,
-): Promise<void> {
+  opportunityId: string, _prev: ActionResult, formData: FormData,
+): Promise<ActionResult> {
   const session = await requireDbSession();
-  const section = text(formData.get("section"));
-  const item = text(formData.get("item"));
-  if (!section || !item) throw new AppError("A workstream needs a section and a title.");
-  await addDdItem(session, opportunityId, {
-    section, item,
-    question: text(formData.get("question")),
-    priority: String(formData.get("priority") || "medium"),
+  return runAction("workspace.dd.add", { opportunityId }, async () => {
+    const section = text(formData.get("section"));
+    const item = text(formData.get("item"));
+    if (!section || !item) throw new AppError("A workstream needs a section and a title.");
+    await addDdItem(session, opportunityId, {
+      section, item,
+      question: text(formData.get("question")),
+      priority: String(formData.get("priority") || "medium"),
+    });
+    refresh(opportunityId);
   });
-  refresh(opportunityId);
 }
 
 // ---- Risks ----------------------------------------------------------------
 export async function promoteFindingAction(
   opportunityId: string, ddItemId: string,
-): Promise<void> {
+): Promise<ActionResult> {
   const session = await requireDbSession();
-  await promoteFindingToRisk(session, ddItemId);
-  refresh(opportunityId);
+  return runAction("workspace.risk.promote", { opportunityId, ddItemId }, async () => {
+    await promoteFindingToRisk(session, ddItemId);
+    refresh(opportunityId);
+  });
 }
 
 export async function createRiskAction(
-  opportunityId: string, formData: FormData,
-): Promise<void> {
+  opportunityId: string, _prev: ActionResult, formData: FormData,
+): Promise<ActionResult> {
   const session = await requireDbSession();
-  const title = text(formData.get("title"));
-  if (!title) throw new AppError("A risk needs a title.");
-  await createRisk(session, opportunityId, {
-    title,
-    category: String(formData.get("category") || "other"),
-    description: text(formData.get("description")),
-    severity: String(formData.get("severity") || "medium") as RiskPatch["severity"],
-    mitigation: text(formData.get("mitigation")),
-    financialImpact: num(formData.get("financialImpact")),
+  return runAction("workspace.risk.create", { opportunityId }, async () => {
+    const title = text(formData.get("title"));
+    if (!title) throw new AppError("A risk needs a title.");
+    await createRisk(session, opportunityId, {
+      title,
+      category: String(formData.get("category") || "other"),
+      description: text(formData.get("description")),
+      severity: String(formData.get("severity") || "medium") as RiskPatch["severity"],
+      mitigation: text(formData.get("mitigation")),
+      financialImpact: num(formData.get("financialImpact")),
+    });
+    refresh(opportunityId);
   });
-  refresh(opportunityId);
 }
 
 export async function updateRiskAction(
-  opportunityId: string, riskId: string, formData: FormData,
-): Promise<void> {
+  opportunityId: string, riskId: string, _prev: ActionResult, formData: FormData,
+): Promise<ActionResult> {
   const session = await requireDbSession();
-  await updateRisk(session, riskId, {
-    status: String(formData.get("status") || "open") as RiskPatch["status"],
-    severity: String(formData.get("severity") || "medium") as RiskPatch["severity"],
-    mitigation: text(formData.get("mitigation")),
+  return runAction("workspace.risk.update", { opportunityId, riskId }, async () => {
+    await updateRisk(session, riskId, {
+      status: String(formData.get("status") || "open") as RiskPatch["status"],
+      severity: String(formData.get("severity") || "medium") as RiskPatch["severity"],
+      mitigation: text(formData.get("mitigation")),
+    });
+    refresh(opportunityId);
   });
-  refresh(opportunityId);
 }
 
 // ---- Investment committee -------------------------------------------------
 export async function recordDecisionAction(
-  opportunityId: string, formData: FormData,
-): Promise<void> {
+  opportunityId: string, _prev: ActionResult, formData: FormData,
+): Promise<ActionResult> {
   const session = await requireDbSession();
-  const investmentCaseId = String(formData.get("investmentCaseId") || "");
-  if (!investmentCaseId) throw new AppError("Choose the underwriting version the committee considered.");
-  const makers = String(formData.get("decisionMakers") || "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  await recordDecision(session, opportunityId, {
-    investmentCaseId,
-    outcome: String(formData.get("outcome") || "deferred") as IcOutcome,
-    decisionDate: text(formData.get("decisionDate")) ?? undefined,
-    recommendation: (text(formData.get("recommendation")) as Recommendation | null) ?? null,
-    conditions: text(formData.get("conditions")),
-    rationale: text(formData.get("rationale")),
-    followUp: text(formData.get("followUp")),
-    decisionMakers: makers,
+  return runAction("workspace.decision.record", { opportunityId }, async () => {
+    const investmentCaseId = String(formData.get("investmentCaseId") || "");
+    if (!investmentCaseId) throw new AppError("Choose the underwriting version the committee considered.");
+    const makers = String(formData.get("decisionMakers") || "")
+      .split(",").map((s) => s.trim()).filter(Boolean);
+    await recordDecision(session, opportunityId, {
+      investmentCaseId,
+      outcome: String(formData.get("outcome") || "deferred") as IcOutcome,
+      decisionDate: text(formData.get("decisionDate")) ?? undefined,
+      recommendation: (text(formData.get("recommendation")) as Recommendation | null) ?? null,
+      conditions: text(formData.get("conditions")),
+      rationale: text(formData.get("rationale")),
+      followUp: text(formData.get("followUp")),
+      decisionMakers: makers,
+    });
+    refresh(opportunityId);
+  }, {
+    ruleMessage:
+      "The committee decision could not be recorded against that underwriting " +
+      "version. A superseded version cannot be taken to committee.",
   });
-  refresh(opportunityId);
 }
 
 export async function amendDecisionAction(
-  opportunityId: string, decisionId: string, formData: FormData,
-): Promise<void> {
+  opportunityId: string, decisionId: string, _prev: ActionResult, formData: FormData,
+): Promise<ActionResult> {
   const session = await requireDbSession();
   const reason = text(formData.get("reason"));
-  if (!reason) throw new AppError("State why the decision record is being amended.");
-  const patch: Parameters<typeof amendDecision>[2] = { reason };
+  const patch: Parameters<typeof amendDecision>[2] = { reason: reason ?? "" };
   // Only fields the author actually filled in are amended: a blank box means
   // "not amending this", not "blank it out".
   const conditions = text(formData.get("conditions"));
@@ -185,8 +221,14 @@ export async function amendDecisionAction(
   if (conditions) patch.conditions = conditions;
   if (rationale) patch.rationale = rationale;
   if (followUp) patch.followUp = followUp;
-  await amendDecision(session, decisionId, patch);
-  refresh(opportunityId);
+  return runAction("workspace.decision.amend", { opportunityId, decisionId }, async () => {
+    if (!reason) throw new AppError("State why the decision record is being amended.");
+    await amendDecision(session, decisionId, patch);
+    refresh(opportunityId);
+  }, {
+    ruleMessage: "This amendment could not be recorded. An amendment is itself a " +
+      "permanent record — add another rather than altering one.",
+  });
 }
 
 // ---- Documents ------------------------------------------------------------
@@ -203,38 +245,42 @@ export async function amendDecisionAction(
  * the server sees, and a random server-generated path.
  */
 export async function uploadDocumentAction(
-  opportunityId: string, formData: FormData,
-): Promise<void> {
+  opportunityId: string, _prev: ActionResult, formData: FormData,
+): Promise<ActionResult> {
   const session = await requireDbSession();
 
-  const title = text(formData.get("title"));
-  if (!title) throw new AppError("A document needs a title.");
+  return runAction("workspace.document.upload", { opportunityId }, async () => {
+    const title = text(formData.get("title"));
+    if (!title) throw new AppError("A document needs a title.");
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    throw new AppError("Choose a file to upload.");
-  }
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      throw new AppError("Choose a file to upload.");
+    }
 
-  const check = checkUpload(file.type, file.size);
-  if (!check.ok) throw new AppError(check.reason);
+    // Validated before a byte is stored, so a refusal leaves nothing behind.
+    const check = checkUpload(file.type, file.size);
+    if (!check.ok) throw new AppError(check.reason);
 
-  const storagePath = newOpportunityObjectPath(opportunityId, check.mimeType);
-  await putDocumentObject(storagePath, await file.arrayBuffer(), check.mimeType);
+    const storagePath = newOpportunityObjectPath(opportunityId, check.mimeType);
+    await putDocumentObject(storagePath, await file.arrayBuffer(), check.mimeType);
 
-  try {
-    await recordDocument(session, opportunityId, {
-      title, storagePath,
-      category: String(formData.get("category") || "Other"),
-      fileName: safeFileName(file.name),
-      mimeType: check.mimeType,
-      sizeBytes: check.sizeBytes,
-    });
-  } catch (e) {
-    // The row did not land, so the object must not survive it: an object with no
-    // row is unreachable and unaccounted for. Same rule as the portal's upload.
-    await deleteDocumentObject(storagePath);
-    throw e;
-  }
+    try {
+      await recordDocument(session, opportunityId, {
+        title, storagePath,
+        category: String(formData.get("category") || "Other"),
+        fileName: safeFileName(file.name),
+        mimeType: check.mimeType,
+        sizeBytes: check.sizeBytes,
+      });
+    } catch (e) {
+      // The row did not land, so the object must not survive it: an object with
+      // no row is unreachable and unaccounted for. Same rule as the portal's
+      // upload. Cleanup first, then let runAction classify the original failure.
+      await deleteDocumentObject(storagePath);
+      throw e;
+    }
 
-  refresh(opportunityId);
+    refresh(opportunityId);
+  });
 }

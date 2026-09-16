@@ -1,11 +1,15 @@
+"use client";
+
 import type { OpportunityDocument } from "@/lib/data/opportunity-documents";
 import type { DdItemRecord } from "@/lib/data/due-diligence";
 import { DOC_CATEGORY_KEYS } from "@/lib/documents/catalog";
 import { MAX_DOCUMENT_BYTES, UPLOAD_ACCEPT } from "@/lib/documents/constraints";
+import { useFormState } from "react-dom";
 import { uploadDocumentAction } from "@/app/actions/workspace";
+import { ACTION_IDLE } from "@/lib/actions/result";
 import { formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
-import { Section, TableWrap, Th, Td, Empty, Provenance } from "@/components/workspace/primitives";
+import { Section, TableWrap, Th, Td, Empty, Provenance, ActionError } from "@/components/workspace/primitives";
 
 /**
  * Internal opportunity documents.
@@ -31,6 +35,9 @@ export function DocumentsSection({
   ddItems: DdItemRecord[];
   canWrite: boolean;
 }) {
+  const [state, formAction] = useFormState(
+    uploadDocumentAction.bind(null, opportunityId), ACTION_IDLE);
+
   const linkedByDoc = new Map<string, DdItemRecord[]>();
   for (const it of ddItems) {
     if (!it.sourceDocumentId) continue;
@@ -111,8 +118,7 @@ export function DocumentsSection({
             at {Math.round(MAX_DOCUMENT_BYTES / 1024 / 1024)}MB and the type is
             checked against what the server receives.
           </p>
-          <form action={uploadDocumentAction.bind(null, opportunityId)}
-            className="max-w-3xl space-y-3">
+          <form action={formAction} className="max-w-3xl space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="eyebrow">Title</span>
@@ -136,6 +142,9 @@ export function DocumentsSection({
               className="rounded bg-purple px-3.5 py-2 text-xs font-semibold text-surface hover:bg-purple-70">
               Upload document
             </button>
+            {/* The size and type limits are refusals a person can act on, so
+                they belong here rather than on the route error boundary. */}
+            <ActionError message={state.error} />
           </form>
         </Section>
       )}

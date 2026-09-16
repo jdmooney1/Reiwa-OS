@@ -14,7 +14,15 @@ import type { IcOutcome } from "@/lib/data/ic-decisions";
 
 export interface PublicationView {
   publicationId: string;
-  status: string;
+  /**
+   * The publication's real status, or null when the row could not be read.
+   *
+   * Null is NOT "draft". The page used to write `publication?.status ?? "draft"`,
+   * which turned "we could not read this" into a specific, plausible claim about
+   * the investor-facing state of a live opportunity — the one place in the
+   * workspace where being confidently wrong reaches outside the firm.
+   */
+  status: string | null;
   activeVersionNumber: number | null;
   activeVersionTitle: string | null;
   activeVersionStatus: string | null;
@@ -59,9 +67,12 @@ export function PublicationSection({
 
   if (!publication) {
     return (
-      <Section eyebrow="Investors" title="Nothing prepared for investors">
+      <Section eyebrow="Investors" title="Not prepared for investors">
         <Empty
-          title="This opportunity has never been published."
+          // Precise about which of the three states this is: no publication at
+          // all, rather than a draft that has not been published yet. The two
+          // used to be indistinguishable on this screen.
+          title="No publication has been prepared for this opportunity."
           hint="Preparing a draft copies approved fields into a separate investor-facing version. It does not expose the internal record."
         />
         <button
@@ -93,7 +104,9 @@ export function PublicationSection({
         }
       >
         <FactList items={[
-          { k: "Publication status", v: <Badge tone={p.status === "published" ? "positive" : "muted"}>{p.status}</Badge> },
+          { k: "Publication status", v: p.status
+              ? <Badge tone={p.status === "published" ? "positive" : "muted"}>{p.status}</Badge>
+              : <span className="text-ink-muted">Status unavailable</span> },
           { k: "Current version", v: p.activeVersionNumber != null
               ? `v${p.activeVersionNumber}${p.activeVersionTitle ? ` · ${p.activeVersionTitle}` : ""}`
               : "No published version" },

@@ -19,6 +19,7 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { str } from "@/lib/data/coerce";
+import { AppError } from "@/lib/errors";
 import { staffNamesOn, nameOf } from "@/lib/data/directory";
 import type { Recommendation } from "@/types/database";
 
@@ -143,7 +144,7 @@ export async function recordDecision(
   session: Session, opportunityId: string, input: NewIcDecision,
 ): Promise<string> {
   if (input.outcome === "approved_with_conditions" && !input.conditions?.trim()) {
-    throw new Error("State the conditions when approving with conditions.");
+    throw new AppError("State the conditions when approving with conditions.");
   }
   return withSession(session, async (tx) => {
     const opp = await tx.query<{ org_id: string }>(
@@ -211,10 +212,10 @@ export async function amendDecision(
   },
 ): Promise<string> {
   if (!input.reason?.trim()) {
-    throw new Error("State why the decision record is being amended.");
+    throw new AppError("State why the decision record is being amended.");
   }
   if (input.conditions === undefined && input.rationale === undefined && input.followUp === undefined) {
-    throw new Error("An amendment must change something.");
+    throw new AppError("An amendment must change something.");
   }
   return withSession(session, async (tx) => {
     const d = await tx.query<{ org_id: string }>(

@@ -21,7 +21,9 @@ import {
   recordDecision, listDecisions, amendDecision, listAmendments, effectiveDecision,
 } from "@/lib/data/ic-decisions";
 import { recordDocument, listDocuments } from "@/lib/data/opportunity-documents";
-import { createPublicationFromOpportunity, getVersionProvenance, listPublicationVersions } from "@/lib/data/investor-portal";
+import {
+  createPublicationFromOpportunity, getVersionProvenance, listPublicationVersions, getPublication,
+} from "@/lib/data/investor-portal";
 import { getPublicationForOpportunity } from "@/lib/data/admin-portal";
 import { orgIdByName, orgUserSession, viewerSession, profileIdByEmail, adminSession } from "./helpers";
 
@@ -304,6 +306,29 @@ describe("Publication relationship", () => {
     expect(prov!.sourceCaseStatus).toBe("approved");
     expect(prov!.sourceIcDecisionId).toBe(decisionId);
     expect(prov!.sourceDecisionOutcome).toBe("approved");
+  });
+
+  // The three states the Publication section must keep apart. The page used to
+  // write `publication?.status ?? "draft"`, which turned "no publication" and
+  // "unreadable" into a confident claim that a draft existed — on the one
+  // screen whose subject is what investors can see.
+  it("reports no publication as absent, never as a draft", async () => {
+    const opp = await newOpportunity("WS Unpublished");
+
+    // This null is what makes the section take its "Not prepared for
+    // investors" branch. Nothing downstream may turn it into a status.
+    expect(await getPublicationForOpportunity(adminSession, opp)).toBeNull();
+  });
+
+  it("reports a real draft as a draft", async () => {
+    const opp = await newOpportunity("WS Draft State");
+    await createVersion(session, opp, { acquisitionPrice: 9_000_000 });
+    const adminUserId = await profileIdByEmail("admin@reiwa.com");
+    const { publicationId } = await createPublicationFromOpportunity(adminSession, opp, adminUserId);
+
+    const publication = await getPublication(adminSession, publicationId);
+    expect(publication).not.toBeNull();
+    expect(publication!.status).toBe("draft");
   });
 
   it("does not let new underwriting reach a published version", async () => {

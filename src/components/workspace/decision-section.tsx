@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useFormState } from "react-dom";
 import type { IcDecision, IcDecisionAmendment } from "@/lib/data/ic-decisions";
 import type { UnderwritingVersion } from "@/lib/data/underwriting-types";
 import { recordDecisionAction, amendDecisionAction } from "@/app/actions/workspace";
+import { ACTION_IDLE } from "@/lib/actions/result";
 import { formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
-import { Section, FactList, Empty, Provenance } from "@/components/workspace/primitives";
+import { Section, FactList, Empty, Provenance, ActionError } from "@/components/workspace/primitives";
 import { IC_OUTCOME_LABEL, IC_OUTCOME_TONE } from "@/lib/workspace/labels";
 
 export interface DecisionRecord {
@@ -37,6 +39,8 @@ export function DecisionSection({
   canWrite: boolean;
 }) {
   const [recording, setRecording] = useState(false);
+  const [recordState, recordAction] = useFormState(
+    recordDecisionAction.bind(null, opportunityId), ACTION_IDLE);
   const eligible = versions.filter((v) => v.status !== "superseded");
 
   return (
@@ -119,7 +123,7 @@ export function DecisionSection({
           )}
         >
           {recording ? (
-            <form action={recordDecisionAction.bind(null, opportunityId)} className="max-w-3xl space-y-4">
+            <form action={recordAction} className="max-w-3xl space-y-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <label className="block">
                   <span className="eyebrow">Outcome</span>
@@ -180,6 +184,7 @@ export function DecisionSection({
                   This record is permanent. Corrections are recorded as amendments.
                 </span>
               </div>
+              <ActionError message={recordState.error} />
             </form>
           ) : (
             <p className="max-w-2xl text-xs leading-relaxed text-ink-muted">
@@ -214,6 +219,8 @@ function Amended({ label, text }: { label: string; text: string }) {
 
 function AmendForm({ opportunityId, decisionId }: { opportunityId: string; decisionId: string }) {
   const [open, setOpen] = useState(false);
+  const [state, formAction] = useFormState(
+    amendDecisionAction.bind(null, opportunityId, decisionId), ACTION_IDLE);
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)}
@@ -223,7 +230,7 @@ function AmendForm({ opportunityId, decisionId }: { opportunityId: string; decis
     );
   }
   return (
-    <form action={amendDecisionAction.bind(null, opportunityId, decisionId)}
+    <form action={formAction}
       className="mt-5 max-w-2xl space-y-3 border-t border-line pt-4">
       <label className="block">
         <span className="eyebrow">Why this record is being amended</span>
@@ -253,6 +260,7 @@ function AmendForm({ opportunityId, decisionId }: { opportunityId: string; decis
           Cancel
         </button>
       </div>
+      <ActionError message={state.error} />
     </form>
   );
 }

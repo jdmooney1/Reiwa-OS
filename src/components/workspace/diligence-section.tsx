@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useFormState } from "react-dom";
 import { AlertTriangle, ArrowUpRight } from "lucide-react";
 import type { DdItemRecord } from "@/lib/data/due-diligence";
 import { isDdOverdue, type Progress } from "@/lib/dd/progress";
 import { DD_STATUS_ORDER } from "@/lib/domain";
 import { applyDdTemplateAction, updateDdItemAction, promoteFindingAction } from "@/app/actions/workspace";
+import { ACTION_IDLE, type ActionResult } from "@/lib/actions/result";
 import { formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Section, Empty, Provenance } from "@/components/workspace/primitives";
+import { Section, Empty, Provenance, ActionError } from "@/components/workspace/primitives";
 import { DD_STATUS_LABEL, DD_STATUS_TONE } from "@/lib/workspace/labels";
 import type { DdStatus } from "@/types/database";
 
@@ -37,6 +39,12 @@ export function DiligenceSection({
   canWrite: boolean;
 }) {
   const [pending, start] = useTransition();
+  // One message for the section's two button actions — applying a framework and
+  // promoting a finding. Both are single clicks with no form to attach to, so a
+  // refusal ("already applied", "already promoted") has nowhere else to live.
+  const [result, setResult] = useState<ActionResult>(ACTION_IDLE);
+  const run = (action: () => Promise<ActionResult>) =>
+    start(async () => setResult(await action()));
   const promoted = new Set(promotedItemIds);
 
   if (items.length === 0) {
@@ -50,13 +58,14 @@ export function DiligenceSection({
           <div className="mt-4 flex gap-2">
             {(["london", "amsterdam"] as const).map((t) => (
               <button key={t} disabled={pending}
-                onClick={() => start(() => applyDdTemplateAction(opportunityId, t))}
+                onClick={() => run(() => applyDdTemplateAction(opportunityId, t))}
                 className="rounded border border-line px-3 py-2 text-xs font-medium text-ink-muted hover:text-ink disabled:opacity-60">
                 Apply {t === "london" ? "London (UK)" : "Amsterdam (NL)"} framework
               </button>
             ))}
           </div>
         )}
+        <div className="mt-3"><ActionError message={result.error} /></div>
       </Section>
     );
   }
@@ -103,7 +112,7 @@ export function DiligenceSection({
                   <Badge tone={DD_STATUS_TONE[it.status]}>{DD_STATUS_LABEL[it.status]}</Badge>
                   {canWrite && it.finding && !promoted.has(it.ddItemId) && (
                     <button disabled={pending}
-                      onClick={() => start(() => promoteFindingAction(opportunityId, it.ddItemId))}
+                      onClick={() => run(() => promoteFindingAction(opportunityId, it.ddItemId))}
                       title="Create a persistent deal risk from this finding"
                       className="flex items-center gap-1 rounded border border-line px-2 py-1 text-2xs font-medium text-ink-muted hover:text-ink disabled:opacity-60">
                       <ArrowUpRight className="h-3 w-3" /> Raise risk
@@ -117,6 +126,7 @@ export function DiligenceSection({
             ))}
           </ul>
         )}
+        <div className="mt-3"><ActionError message={result.error} /></div>
         {hidden > 0 && (
           <p className="mt-2 text-2xs text-ink-faint">
             {hidden} further open high-priority workstream{hidden === 1 ? "" : "s"} below.
@@ -160,12 +170,13 @@ export function DiligenceSection({
               .filter((t) => !appliedTemplates.includes(t))
               .map((t) => (
                 <button key={t} disabled={pending}
-                  onClick={() => start(() => applyDdTemplateAction(opportunityId, t))}
+                  onClick={() => run(() => applyDdTemplateAction(opportunityId, t))}
                   className="rounded border border-line px-3 py-2 text-xs font-medium text-ink-muted hover:text-ink disabled:opacity-60">
                   Add {t === "london" ? "London (UK)" : "Amsterdam (NL)"} framework
                 </button>
               ))}
           </div>
+          <div className="mt-3"><ActionError message={result.error} /></div>
         </Section>
       )}
     </div>
@@ -195,6 +206,8 @@ function DdRow({
   promoted: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [state, formAction] = useFormState(
+    updateDdItemAction.bind(null, opportunityId, item.ddItemId), ACTION_IDLE);
   const cleared = item.status === "reviewed" || item.status === "resolved";
 
   return (
@@ -235,7 +248,7 @@ function DdRow({
       {open && (
         <div className="mt-3 border-l-2 border-line pl-4">
           {canWrite ? (
-            <form action={updateDdItemAction.bind(null, opportunityId, item.ddItemId)} className="space-y-3">
+            <form action={formAction} className="space-y-3">
               <div className="flex flex-wrap items-end gap-3">
                 <label className="block">
                   <span className="eyebrow">Status</span>
@@ -271,6 +284,7 @@ function DdRow({
                 </button>
                 {promoted && <span className="text-2xs text-ink-faint">A risk has been raised from this finding.</span>}
               </div>
+              <ActionError message={state.error} />
             </form>
           ) : (
             <dl className="space-y-2 text-xs">

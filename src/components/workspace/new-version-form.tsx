@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import type { UnderwritingVersion } from "@/lib/data/underwriting-types";
+import { useFormState } from "react-dom";
 import { createVersionAction } from "@/app/actions/workspace";
+import { ACTION_IDLE } from "@/lib/actions/result";
+import { ActionError } from "@/components/workspace/primitives";
 import { currencySymbol } from "@/lib/format";
 import type { Currency } from "@/types/database";
 
@@ -68,6 +71,8 @@ export function NewVersionForm({
   currency: Currency;
 }) {
   const [open, setOpen] = useState(false);
+  const [state, formAction] = useFormState(
+    createVersionAction.bind(null, opportunityId), ACTION_IDLE);
   const sym = currencySymbol(currency);
 
   if (!open) {
@@ -88,7 +93,7 @@ export function NewVersionForm({
   };
 
   return (
-    <form action={createVersionAction.bind(null, opportunityId)} className="max-w-4xl space-y-6">
+    <form action={formAction} className="max-w-4xl space-y-6">
       <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
         <Field label="Strategy" name="strategy" defaultValue={seed?.strategy ?? ""} />
         <Field
@@ -157,6 +162,7 @@ export function NewVersionForm({
           Total cost is computed from price, costs and capex.
         </span>
       </div>
+      <ActionError message={state.error} />
     </form>
   );
 }

@@ -14,6 +14,7 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { num, str } from "@/lib/data/coerce";
+import { AppError } from "@/lib/errors";
 import { staffNamesOn, nameOf } from "@/lib/data/directory";
 
 export type RiskSeverity = "low" | "medium" | "high" | "critical";
@@ -135,7 +136,7 @@ export async function promoteFindingToRisk(
     const already = await tx.query<{ risk_id: string }>(
       "select risk_id from opportunity_risks where source_dd_item_id = $1", [ddItemId]);
     if (already.rows[0]) {
-      throw new Error("This finding has already been promoted to a risk.");
+      throw new AppError("This finding has already been promoted to a risk.");
     }
 
     const severity: RiskSeverity = overrides.severity

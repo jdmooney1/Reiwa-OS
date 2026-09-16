@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useFormState } from "react-dom";
 import Link from "next/link";
 import type { OpportunityRisk } from "@/lib/data/opportunity-risks";
 import { createRiskAction, updateRiskAction } from "@/app/actions/workspace";
+import { ACTION_IDLE } from "@/lib/actions/result";
 import { formatMoneyCompact, formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Section, TableWrap, Th, Td, Empty, Provenance } from "@/components/workspace/primitives";
+import { Section, TableWrap, Th, Td, Empty, Provenance, ActionError } from "@/components/workspace/primitives";
 import {
   SEVERITY_LABEL, SEVERITY_TONE, RISK_STATUS_LABEL, RISK_STATUS_TONE,
 } from "@/lib/workspace/labels";
@@ -34,6 +36,8 @@ export function RisksSection({
   currency: Currency;
 }) {
   const [adding, setAdding] = useState(false);
+  const [createState, createAction] = useFormState(
+    createRiskAction.bind(null, opportunityId), ACTION_IDLE);
   const open = risks.filter((r) => r.status === "open");
   const settled = risks.filter((r) => r.status !== "open");
 
@@ -50,7 +54,7 @@ export function RisksSection({
         )}
       >
         {adding && canWrite && (
-          <form action={createRiskAction.bind(null, opportunityId)}
+          <form action={createAction}
             className="mb-5 max-w-3xl space-y-3 border border-line p-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="block sm:col-span-2">
@@ -100,6 +104,7 @@ export function RisksSection({
                 Cancel
               </button>
             </div>
+            <ActionError message={createState.error} />
           </form>
         )}
 
@@ -193,21 +198,7 @@ function RiskTable({
               </Td>
               {canWrite && (
                 <Td align="right">
-                  <form action={updateRiskAction.bind(null, opportunityId, r.riskId)}
-                    className="flex items-center justify-end gap-1.5">
-                    <input type="hidden" name="severity" value={r.severity} />
-                    <input type="hidden" name="mitigation" value={r.mitigation ?? ""} />
-                    <select name="status" defaultValue={r.status}
-                      className="h-7 rounded border border-line bg-surface-card px-1.5 text-2xs text-ink focus:border-line-strong focus:outline-none">
-                      {["open", "mitigated", "accepted", "closed"].map((s) => (
-                        <option key={s} value={s}>{RISK_STATUS_LABEL[s]}</option>
-                      ))}
-                    </select>
-                    <button type="submit"
-                      className="rounded border border-line px-2 py-1 text-2xs font-medium text-ink-muted hover:text-ink">
-                      Set
-                    </button>
-                  </form>
+                  <RiskStatusForm opportunityId={opportunityId} risk={r} />
                 </Td>
               )}
             </tr>
@@ -215,6 +206,42 @@ function RiskTable({
         </tbody>
       </table>
     </TableWrap>
+  );
+}
+
+/**
+ * The per-row status control, extracted only because it needs its own form
+ * state: a hook cannot be called inside the table's map, and a single shared
+ * message would report one row's failure against every row.
+ */
+function RiskStatusForm({
+  opportunityId, risk,
+}: {
+  opportunityId: string;
+  risk: OpportunityRisk;
+}) {
+  const [state, formAction] = useFormState(
+    updateRiskAction.bind(null, opportunityId, risk.riskId), ACTION_IDLE);
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <form action={formAction} className="flex items-center justify-end gap-1.5">
+        <input type="hidden" name="severity" value={risk.severity} />
+        <input type="hidden" name="mitigation" value={risk.mitigation ?? ""} />
+        <select name="status" defaultValue={risk.status}
+          aria-label={`Status of ${risk.title}`}
+          className="h-7 rounded border border-line bg-surface-card px-1.5 text-2xs text-ink focus:border-line-strong focus:outline-none">
+          {["open", "mitigated", "accepted", "closed"].map((s) => (
+            <option key={s} value={s}>{RISK_STATUS_LABEL[s]}</option>
+          ))}
+        </select>
+        <button type="submit"
+          className="rounded border border-line px-2 py-1 text-2xs font-medium text-ink-muted hover:text-ink">
+          Set
+        </button>
+      </form>
+      <ActionError message={state.error} />
+    </div>
   );
 }
 

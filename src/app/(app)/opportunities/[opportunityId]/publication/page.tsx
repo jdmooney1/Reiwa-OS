@@ -49,7 +49,9 @@ export default async function PublicationPage({
 
     view = {
       publicationId,
-      status: publication?.status ?? "draft",
+      // Never `?? "draft"`. A publication that could not be read is not a
+      // draft publication; the section says so rather than inventing a state.
+      status: publication?.status ?? null,
       activeVersionNumber: active ? active.versionNumber : null,
       activeVersionTitle: active ? active.title : null,
       activeVersionStatus: active ? active.status : null,
