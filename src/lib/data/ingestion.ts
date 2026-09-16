@@ -602,3 +602,12 @@ export async function promoteMany(
   }
   return { promoted, failed };
 }
+
+/** Items awaiting a decision, for the sidebar badge. */
+export async function countAwaitingReview(session: Session): Promise<number> {
+  return withSession(session, async (tx) => {
+    const { rows } = await tx.query<{ n: string }>(
+      "select count(*) as n from ingestion_items where review_status in ('new','needs_review')");
+    return Number(rows[0]?.n ?? 0);
+  });
+}

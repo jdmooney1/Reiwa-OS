@@ -26,15 +26,19 @@ export function Badge({
   dark = false,
   className,
   dot = false,
+  title,
 }: {
   children: React.ReactNode;
   tone?: Tone;
   dark?: boolean;
   className?: string;
   dot?: boolean;
+  /** Hover explanation — e.g. which status axis produced this label. */
+  title?: string;
 }) {
   return (
     <span
+      title={title}
       className={cn(
         "inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-2xs font-medium",
         (dark ? TONE_CLASS_DARK : TONE_CLASS)[tone],

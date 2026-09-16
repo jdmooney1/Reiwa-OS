@@ -181,6 +181,40 @@ async function main() {
   catch { doublePromoteBlocked = true; }
   check("an item cannot be promoted twice", doublePromoteBlocked, true);
 
+  // ---- 7. The status axes survive a database round-trip -------------------
+  // displayStatus() is unit-tested in isolation; this proves the columns it
+  // reads actually persist and come back through the real mapper.
+  const { listOpportunities, updateOpportunity } = await import("@/lib/data/opportunities");
+  const { displayStatus, canPublish } = await import("@/lib/ingestion/status");
+
+  await updateOpportunity(session, promoted.opportunityId, {
+    marketStatus: "under_offer", reiwaPosition: "bid_submitted",
+  });
+  let listed = (await listOpportunities(session))
+    .find((o) => o.opportunityId === promoted.opportunityId)!;
+  check("market_status round-tripped", listed.marketStatus, "under_offer");
+  check("reiwa_position round-tripped", listed.reiwaPosition, "bid_submitted");
+  check("Reiwa's own position outranks the market's",
+    displayStatus(listed).label, "Bid submitted");
+
+  await updateOpportunity(session, promoted.opportunityId, { reiwaPosition: "none" });
+  listed = (await listOpportunities(session))
+    .find((o) => o.opportunityId === promoted.opportunityId)!;
+  check("a third party under offer reads differently",
+    displayStatus(listed).label.includes("third party"), true);
+
+  // ---- 8. The investor-ready gate ----------------------------------------
+  check("an inbox-stage opportunity cannot be published",
+    canPublish(listed).allowed, false);
+  await updateOpportunity(session, promoted.opportunityId, { stage: "investor_ready" });
+  listed = (await listOpportunities(session))
+    .find((o) => o.opportunityId === promoted.opportunityId)!;
+  check("marking it investor ready opens the gate", canPublish(listed).allowed, true);
+  await updateOpportunity(session, promoted.opportunityId, { status: "watchlist" });
+  listed = (await listOpportunities(session))
+    .find((o) => o.opportunityId === promoted.opportunityId)!;
+  check("watchlisting closes it again", canPublish(listed).allowed, false);
+
   await pool.end();
 
   console.log("");

@@ -10,15 +10,19 @@ import {
 } from "@/app/actions/opportunities";
 import { preparePublicationAction } from "@/app/actions/admin-portal";
 import { ASSET_TYPE_LABEL, STRATEGY_LABEL } from "@/lib/domain";
+import {
+  canPublish, STAGE_LABEL, displayStatus,
+  type OppStage as StatusStage,
+  type OppStatus as StatusDisposition,
+  type MarketStatus,
+  type ReiwaPosition,
+} from "@/lib/ingestion/status";
 import { formatMoneyCompact, formatPct, formatDate } from "@/lib/format";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { AssetType, Strategy, Currency } from "@/types/database";
 
-const STAGE_LABEL: Record<OppStage, string> = {
-  new: "New", screening: "Screening", underwriting: "Underwriting", ic: "IC", approved: "Approved", acquired: "Acquired",
-};
 
 export function OpportunityDetail({
   opp, canWrite, portalAdmin = false, publicationId = null,
@@ -32,6 +36,25 @@ export function OpportunityDetail({
 }) {
   const [pending, start] = useTransition();
   const id = opp.opportunityId;
+  // The single investor-ready gate (docs/17 section 17). Nothing reaches the
+  // Investment Portal before an opportunity is explicitly marked investor ready.
+  const statusInput = {
+    stage: opp.stage as StatusStage,
+    status: opp.status as StatusDisposition,
+    marketStatus: (opp.marketStatus ?? null) as MarketStatus | null,
+    reiwaPosition: (opp.reiwaPosition ?? null) as ReiwaPosition | null,
+    archivedAt: opp.archivedAt,
+    isPublished: !!publicationId,
+  };
+  const display = displayStatus(statusInput);
+  const publishGate = canPublish({
+    stage: opp.stage as StatusStage,
+    status: opp.status as StatusDisposition,
+    marketStatus: (opp.marketStatus ?? null) as MarketStatus | null,
+    reiwaPosition: (opp.reiwaPosition ?? null) as ReiwaPosition | null,
+    archivedAt: opp.archivedAt,
+    isPublished: !!publicationId,
+  });
   const cur = opp.currency as Currency;
   const isActive = opp.status === "active";
   const converted = opp.status === "converted" || !!opp.assetId;
@@ -49,9 +72,7 @@ export function OpportunityDetail({
             <div className="flex items-center gap-2.5">
               <h1 className="font-serif text-2xl text-ink">{opp.name}</h1>
               <Badge tone="neutral">{STAGE_LABEL[opp.stage]}</Badge>
-              {converted
-                ? <Badge tone="gold" dot>Converted</Badge>
-                : isActive ? <Badge tone="positive" dot>Active</Badge> : <Badge tone="negative" dot>{opp.status}</Badge>}
+              <Badge tone={display.tone} dot title={display.detail}>{display.label}</Badge>
             </div>
             <div className="mt-1 text-sm text-ink-muted">
               {opp.city ?? "—"} · {ASSET_TYPE_LABEL[opp.assetType as AssetType] ?? opp.assetType}
@@ -66,13 +87,19 @@ export function OpportunityDetail({
                   <Landmark className="h-3.5 w-3.5" /> View Investor Publication
                 </Link>
               ) : (
-                <button onClick={() => start(() => preparePublicationAction(id))} disabled={pending}
-                  title="Creates a draft investor publication from the approved field whitelist"
-                  className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-semibold text-ink-muted hover:border-gold/40 hover:text-ink disabled:opacity-60">
+                <button onClick={() => start(() => preparePublicationAction(id))}
+                  disabled={pending || !publishGate.allowed}
+                  title={publishGate.allowed
+                    ? "Creates a draft investor publication from the approved field whitelist"
+                    : publishGate.reason}
+                  className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-semibold text-ink-muted hover:border-gold/40 hover:text-ink disabled:opacity-60 disabled:hover:border-line">
                   {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Landmark className="h-3.5 w-3.5" />}
                   Prepare for Investors
                 </button>
               )
+            )}
+            {portalAdmin && !publicationId && !publishGate.allowed && (
+              <span className="max-w-56 text-2xs text-ink-faint">{publishGate.reason}</span>
             )}
             {converted && opp.assetId && (
               <Link href={`/assets/${opp.assetId}`} className="flex items-center gap-1.5 rounded bg-gold px-3.5 py-2 text-xs font-semibold text-navy hover:bg-gold-soft">

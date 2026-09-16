@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { LayoutGrid, Table2 } from "lucide-react";
-import type { Opportunity, OppStage, OppStatus } from "@/lib/data/opportunity-types";
+import type { Opportunity } from "@/lib/data/opportunity-types";
 import { OPP_STAGES } from "@/lib/data/opportunity-types";
+import { displayStatus, STAGE_LABEL } from "@/lib/ingestion/status";
 import { ASSET_TYPE_LABEL, STRATEGY_LABEL } from "@/lib/domain";
 import { formatMoneyCompact, formatPct } from "@/lib/format";
 import { Card } from "@/components/ui/card";
@@ -12,20 +13,30 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { AssetType, Strategy } from "@/types/database";
 
-const STAGE_LABEL: Record<OppStage, string> = {
-  new: "New", screening: "Screening", underwriting: "Underwriting", ic: "IC", approved: "Approved", acquired: "Acquired",
-};
-const STATUS_LABEL: Record<OppStatus, string> = {
-  active: "Active", rejected: "Rejected", withdrawn: "Withdrawn", lost: "Lost", converted: "Converted",
-};
-const STATUS_TONE = {
-  active: "positive", rejected: "negative", withdrawn: "muted", lost: "negative", converted: "gold",
-} as const;
+// Labels and tone come from the shared status module, which derives ONE flat
+// label from the three axes (docs/17 D2). Duplicating them here is how the
+// board and the table drift apart.
+const statusOf = (o: Opportunity) =>
+  displayStatus({
+    stage: o.stage,
+    status: o.status,
+    marketStatus: o.marketStatus,
+    reiwaPosition: o.reiwaPosition,
+    archivedAt: o.archivedAt,
+  });
 
 export function OpportunityPipeline({ opportunities }: { opportunities: Opportunity[] }) {
   const [view, setView] = useState<"board" | "table">("board");
-  const active = useMemo(() => opportunities.filter((o) => o.status === "active" || o.status === "converted"), [opportunities]);
-  const archived = useMemo(() => opportunities.filter((o) => o.status === "rejected" || o.status === "withdrawn" || o.status === "lost"), [opportunities]);
+  const active = useMemo(
+    () => opportunities.filter((o) =>
+      o.status === "active" || o.status === "converted" || o.status === "watchlist"),
+    [opportunities]);
+  const archived = useMemo(
+    () => opportunities.filter((o) =>
+      o.status === "rejected" || o.status === "withdrawn" || o.status === "lost"),
+    [opportunities]);
+  // Watchlist is tracked, not archived: it stays in the live board.
+  void 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -86,7 +97,7 @@ function OppCard({ o }: { o: Opportunity }) {
             <div className="truncate text-sm font-medium text-ink">{o.name}</div>
             <div className="truncate text-2xs text-ink-faint">{o.city ?? "—"} · {ASSET_TYPE_LABEL[o.assetType as AssetType] ?? o.assetType}</div>
           </div>
-          <Badge tone={STATUS_TONE[o.status]} dot>{STATUS_LABEL[o.status]}</Badge>
+          <Badge tone={statusOf(o).tone} dot>{statusOf(o).label}</Badge>
         </div>
         <div className="tabular mt-3 grid grid-cols-3 gap-y-2 border-t border-line pt-3 text-xs">
           <Fig label="Price" v={formatMoneyCompact(o.targetPrice, o.currency as "GBP")} />
@@ -130,7 +141,7 @@ function OppTable({ rows, muted }: { rows: Opportunity[]; muted?: boolean }) {
               <td className="px-3 py-2.5 text-right font-medium text-ink">{formatMoneyCompact(o.targetPrice, o.currency as "GBP")}</td>
               <td className="px-3 py-2.5 text-right text-ink-muted">{formatPct(o.niy, 1)}</td>
               <td className="px-3 py-2.5 text-right text-ink-muted">{formatPct(o.targetIrr, 1)}</td>
-              <td className="px-3 py-2.5"><Badge tone={STATUS_TONE[o.status]} dot>{STATUS_LABEL[o.status]}</Badge></td>
+              <td className="px-3 py-2.5"><Badge tone={statusOf(o).tone} dot>{statusOf(o).label}</Badge></td>
             </tr>
           ))}
           {rows.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-sm text-ink-faint">No opportunities.</td></tr>}

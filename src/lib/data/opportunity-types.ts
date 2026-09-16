@@ -1,9 +1,15 @@
 // Pure types & constants (no server imports) — safe to import from client
 // components. The data layer (opportunities.ts) re-exports these.
-export type OppStage = "new" | "screening" | "underwriting" | "ic" | "approved" | "acquired";
-export type OppStatus = "active" | "rejected" | "withdrawn" | "lost" | "converted";
+//
+// The three status axes live in @/lib/ingestion/status, which owns the labels
+// and the single flat display label derived from them (docs/17 D2). These
+// aliases keep the existing import sites working.
+export type {
+  OppStage, OppStatus, MarketStatus, ReiwaPosition,
+} from "@/lib/ingestion/status";
+export { OPP_STAGES } from "@/lib/ingestion/status";
 
-export const OPP_STAGES: OppStage[] = ["new", "screening", "underwriting", "ic", "approved", "acquired"];
+import type { OppStage, OppStatus, MarketStatus, ReiwaPosition } from "@/lib/ingestion/status";
 
 export interface Opportunity {
   opportunityId: string;
@@ -16,6 +22,12 @@ export interface Opportunity {
   strategy: string | null;
   stage: OppStage;
   status: OppStatus;
+  /** What happened to the ASSET in the market, independent of Reiwa's view. */
+  marketStatus: MarketStatus;
+  /** Reiwa's own position in the process, distinct from the market's. */
+  reiwaPosition: ReiwaPosition;
+  firstSeenAt: string | null;
+  lastSourceAt: string | null;
   currency: string;
   targetPrice: number | null;
   niy: number | null;

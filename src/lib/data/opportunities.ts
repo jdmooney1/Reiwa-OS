@@ -9,13 +9,18 @@ import { num, str } from "@/lib/data/coerce";
 import type { Opportunity, OppStage, OppStatus } from "@/lib/data/opportunity-types";
 
 export { OPP_STAGES } from "@/lib/data/opportunity-types";
-export type { Opportunity, OppStage, OppStatus } from "@/lib/data/opportunity-types";
+export type {
+  Opportunity, OppStage, OppStatus, MarketStatus, ReiwaPosition,
+} from "@/lib/data/opportunity-types";
 
 function mapOpp(r: Record<string, any>): Opportunity {
   return {
     opportunityId: r.opportunity_id, orgId: r.org_id, propertyId: r.property_id ?? null,
     name: r.name, market: str(r.market), submarket: str(r.submarket), assetType: r.asset_type,
     strategy: str(r.strategy), stage: r.stage, status: r.status, currency: r.currency,
+    marketStatus: (r.market_status ?? "unknown") as Opportunity["marketStatus"],
+    reiwaPosition: (r.reiwa_position ?? "none") as Opportunity["reiwaPosition"],
+    firstSeenAt: str(r.first_seen_at), lastSourceAt: str(r.last_source_at),
     targetPrice: num(r.target_price), niy: num(r.niy), reversionaryYield: num(r.reversionary_yield),
     passingRent: num(r.passing_rent), erv: num(r.erv), capexBudget: num(r.capex_budget),
     targetIrr: num(r.target_irr), equityMultiple: num(r.equity_multiple), probability: num(r.probability),
@@ -150,6 +155,10 @@ const EDITABLE: Record<string, string> = {
   capexBudget: "capex_budget", targetIrr: "target_irr", equityMultiple: "equity_multiple",
   probability: "probability", source: "source", brokerName: "broker_name",
   vendorName: "vendor_name", summary: "summary", submarket: "submarket",
+  marketStatus: "market_status", reiwaPosition: "reiwa_position",
+  // Stage and status also have dedicated transitions (setStage/setOutcome);
+  // they are editable here so a reviewer can correct one without an archive.
+  stage: "stage", status: "status",
 };
 
 export async function updateOpportunity(

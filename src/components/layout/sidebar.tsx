@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Boxes, Building2, LogOut, Landmark, Users, FileText , Activity } from "lucide-react";
+import {
+  LayoutGrid, Boxes, Building2, LogOut, Landmark, Users, FileText, Activity, Inbox,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAction } from "@/app/actions/auth";
 
@@ -15,13 +17,25 @@ const ROLE_LABEL: Record<string, string> = {
 export function Sidebar({
   user,
   assets,
+  inboxCount = 0,
 }: {
   user: { name: string; role: string };
   assets: { assetId: string; name: string }[];
+  /** Items awaiting review, shown as a badge. Investors never see this section. */
+  inboxCount?: number;
 }) {
   const pathname = usePathname();
+  const canIngest = user.role !== "investor_viewer";
   const sections = [
-    { heading: "Investment", items: [{ href: "/pipeline", label: "Pipeline", icon: LayoutGrid }] },
+    ...(canIngest
+      ? [{
+          heading: "Opportunities",
+          items: [
+            { href: "/inbox", label: "Deal Inbox", icon: Inbox, badge: inboxCount },
+            { href: "/pipeline", label: "Pipeline", icon: LayoutGrid },
+          ],
+        }]
+      : [{ heading: "Investment", items: [{ href: "/pipeline", label: "Pipeline", icon: LayoutGrid }] }]),
     {
       heading: "Asset Intelligence",
       items: [
@@ -58,7 +72,9 @@ export function Sidebar({
         {sections.map((section) => (
           <div key={section.heading} className="mb-4">
             <div className="eyebrow-light px-3 pb-1.5">{section.heading}</div>
-            {section.items.map(({ href, label, icon: Icon }) => {
+            {section.items.map((item) => {
+              const { href, label, icon: Icon } = item;
+              const badge = "badge" in item ? (item.badge as number) : 0;
               // "/admin" is a hub with siblings below it, so it matches exactly.
               const active = href === "/admin"
                 ? pathname === "/admin"
@@ -75,6 +91,11 @@ export function Sidebar({
                   {active && <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-gold" />}
                   <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
                   <span className="truncate">{label}</span>
+                  {badge > 0 && (
+                    <span className="ml-auto rounded-full bg-gold/20 px-1.5 py-px text-2xs font-semibold tabular text-gold-soft">
+                      {badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
