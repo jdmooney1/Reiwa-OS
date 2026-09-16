@@ -66,5 +66,12 @@ for f in "$ROOT"/supabase/migrations/*.sql; do
   psql -q -d reiwa_verify -v ON_ERROR_STOP=1 -f "$f"
 done
 
-echo "==> Assertions"
+echo "==> SQL assertions"
 psql -q -d reiwa_verify -v ON_ERROR_STOP=1 -f "$ROOT/scripts/local/verify.sql"
+
+echo "==> Data-layer assertions"
+# The real data layer, over a live database, under the same RLS session wrapper
+# the application uses. sslmode=disable because this is a local unix socket, not
+# the Supabase pooler.
+DATABASE_URL="postgresql://postgres@/reiwa_verify?host=$BASE/sock&port=$PORT&sslmode=disable" \
+  npx tsx "$ROOT/scripts/local/verify-data-layer.ts"

@@ -3,6 +3,8 @@
 // Every call runs under withSession, so RLS enforces org isolation + write scope.
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
+import { resolveProperty } from "@/lib/data/properties";
+import { recordEvent } from "@/lib/data/property-events";
 import { num, str } from "@/lib/data/coerce";
 import type { Opportunity, OppStage, OppStatus } from "@/lib/data/opportunity-types";
 
@@ -48,6 +50,9 @@ export async function getOpportunity(session: Session, id: string): Promise<Oppo
 export interface NewOpportunity {
   orgId: string;
   name: string;
+  /** Address and postcode drive property identity; without them nothing dedupes. */
+  address?: string | null;
+  postcode?: string | null;
   city?: string | null;
   country?: string | null;
   market?: string | null;
@@ -67,13 +72,30 @@ export interface NewOpportunity {
   ownerUserId?: string | null;
 }
 
-/** Create a property (neutral identity) + opportunity, atomically. */
+/**
+ * Resolve the property (never blindly create one) and create the opportunity,
+ * atomically.
+ *
+ * This previously inserted a FRESH `properties` row on every call, which meant
+ * the property-centric model documented in docs/10 was not actually true in the
+ * data: the same building recurring in the pipeline produced unrelated records
+ * with no shared history (docs/17 D1). resolveProperty() matches on the
+ * identity key first, so a recurrence joins the property it belongs to.
+ */
 export async function createOpportunity(session: Session, input: NewOpportunity): Promise<string> {
   return withSession(session, async (tx) => {
-    const prop = await tx.query<{ property_id: string }>(
-      `insert into properties(org_id, name, city, country, market, asset_type)
-       values ($1,$2,$3,$4,$5,$6) returning property_id`,
-      [input.orgId, input.name, input.city ?? null, input.country ?? null, input.market ?? null, input.assetType ?? "other"]);
+    const resolved = await resolveProperty(tx, {
+      orgId: input.orgId,
+      name: input.name,
+      address: input.address ?? null,
+      postcode: input.postcode ?? null,
+      city: input.city ?? null,
+      country: input.country ?? null,
+      market: input.market ?? null,
+      submarket: input.submarket ?? null,
+      assetType: input.assetType ?? "other",
+    });
+    const prop = { rows: [{ property_id: resolved.propertyId }] };
     const opp = await tx.query<{ opportunity_id: string }>(
       `insert into opportunities(org_id, property_id, name, market, submarket, asset_type, strategy, currency,
          target_price, source, broker_name, vendor_name, niy, target_irr, capex_budget, probability, summary,
@@ -85,7 +107,40 @@ export async function createOpportunity(session: Session, input: NewOpportunity)
        input.source ?? null, input.brokerName ?? null, input.vendorName ?? null, input.niy ?? null,
        input.targetIrr ?? null, input.capexBudget ?? null, input.probability ?? null, input.summary ?? null,
        input.ownerUserId ?? null]);
-    return opp.rows[0].opportunity_id;
+
+    const opportunityId = opp.rows[0].opportunity_id;
+
+    // The timeline starts here, not at the first import: an opportunity typed in
+    // by hand is as much market intelligence as one that arrived in a
+    // spreadsheet.
+    await recordEvent(tx, {
+      orgId: input.orgId,
+      propertyId: resolved.propertyId,
+      opportunityId,
+      eventType: "first_seen",
+      headline: resolved.created
+        ? "Opportunity created in Reiwa OS"
+        : "New opportunity recorded against an existing property",
+      detail: input.brokerName ? `Marketed by ${input.brokerName}` : null,
+      sourceKind: "reiwa_manual",
+      createdBy: input.ownerUserId ?? null,
+    });
+
+    if (input.targetPrice != null) {
+      await recordEvent(tx, {
+        orgId: input.orgId,
+        propertyId: resolved.propertyId,
+        opportunityId,
+        eventType: "price_quoted",
+        headline: `Guide price recorded`,
+        numericValue: input.targetPrice,
+        currency: input.currency ?? "GBP",
+        sourceKind: "reiwa_manual",
+        createdBy: input.ownerUserId ?? null,
+      });
+    }
+
+    return opportunityId;
   });
 }
 
