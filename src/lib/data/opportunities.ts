@@ -5,6 +5,8 @@
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { num, str } from "@/lib/data/coerce";
 import { staffNamesOn, nameOf } from "@/lib/data/directory";
+import { resolveProperty } from "@/lib/data/properties";
+import { recordEvent, priceChangeEvent } from "@/lib/data/property-events";
 import type {
   Opportunity, OppStage, OppStatus, OppPriority, SourceType,
 } from "@/lib/data/opportunity-types";
@@ -86,6 +88,13 @@ export async function getOpportunity(session: Session, id: string): Promise<Oppo
 export interface NewOpportunity {
   orgId: string;
   name: string;
+  /**
+   * Address and postcode are what give a property its identity. Without at
+   * least one of them the property cannot be keyed, and every recurrence of
+   * this building will open a fresh record instead of joining this one.
+   */
+  address?: string | null;
+  postcode?: string | null;
   city?: string | null;
   country?: string | null;
   market?: string | null;
@@ -106,7 +115,17 @@ export interface NewOpportunity {
 }
 
 /**
- * Create a property (neutral identity) + opportunity, atomically.
+ * Resolve the property (never blindly create one) and open the opportunity,
+ * atomically.
+ *
+ * This previously inserted a FRESH `properties` row on every call, which meant
+ * the property-centric lifecycle in docs/10 was not true in the data: the same
+ * building recurring in the pipeline produced unrelated records with no shared
+ * history, and nothing in the schema could tell they were one asset.
+ * resolveProperty() matches on the identity key first, so a recurrence joins
+ * the property it belongs to. Where there is too little address detail to key,
+ * it still creates — a missed match is a review task, a false match silently
+ * fuses two buildings.
  *
  * Any headline economics supplied at origination open UNDERWRITING VERSION 1
  * rather than being written onto the opportunity row. That is the whole point
@@ -120,17 +139,24 @@ export interface NewOpportunity {
  */
 export async function createOpportunity(session: Session, input: NewOpportunity): Promise<string> {
   return withSession(session, async (tx) => {
-    const prop = await tx.query<{ property_id: string }>(
-      `insert into properties(org_id, name, city, country, market, asset_type)
-       values ($1,$2,$3,$4,$5,$6) returning property_id`,
-      [input.orgId, input.name, input.city ?? null, input.country ?? null, input.market ?? null, input.assetType ?? "other"]);
+    const property = await resolveProperty(tx, {
+      orgId: input.orgId,
+      name: input.name,
+      address: input.address ?? null,
+      postcode: input.postcode ?? null,
+      city: input.city ?? null,
+      country: input.country ?? null,
+      market: input.market ?? null,
+      submarket: input.submarket ?? null,
+      assetType: input.assetType ?? "other",
+    });
     const opp = await tx.query<{ opportunity_id: string }>(
       `insert into opportunities(org_id, property_id, name, market, submarket, asset_type, strategy, currency,
          source, broker_name, vendor_name, probability, summary,
          owner_user_id, created_by, stage, status)
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'new','active')
        returning opportunity_id`,
-      [input.orgId, prop.rows[0].property_id, input.name, input.market ?? null, input.submarket ?? null,
+      [input.orgId, property.propertyId, input.name, input.market ?? null, input.submarket ?? null,
        input.assetType ?? "other", input.strategy ?? null, input.currency ?? "GBP",
        input.source ?? null, input.brokerName ?? null, input.vendorName ?? null,
        input.probability ?? null, input.summary ?? null,
@@ -155,6 +181,39 @@ export async function createOpportunity(session: Session, input: NewOpportunity)
          values ($1,$2,1,'current',$3,$4,${cols.map((_, i) => `$${start + i}`).join(", ")})`,
         [input.orgId, opportunityId, session.userId, input.strategy ?? null, ...vals]);
     }
+
+    // The timeline opens here, not at the first import: an opportunity logged by
+    // hand is as much a market observation as one that arrived in a spreadsheet.
+    await recordEvent(tx, {
+      orgId: input.orgId,
+      propertyId: property.propertyId,
+      opportunityId,
+      eventType: "first_seen",
+      headline: property.created
+        ? "Opportunity logged in Reiwa OS"
+        : "Opportunity logged against a property Reiwa has seen before",
+      detail: input.brokerName ? `Marketed by ${input.brokerName}` : null,
+      sourceKind: "reiwa_manual",
+      createdBy: session.userId,
+    });
+
+    // The quoted price is recorded as an observation as well as opening the
+    // underwriting. The case is what Reiwa believes; the event is what the
+    // market asked, and the two answer different questions later.
+    if (input.targetPrice != null) {
+      await recordEvent(tx, {
+        orgId: input.orgId,
+        propertyId: property.propertyId,
+        opportunityId,
+        eventType: "price_quoted",
+        headline: priceChangeEvent(null, input.targetPrice, input.currency ?? "GBP")!.headline,
+        numericValue: input.targetPrice,
+        currency: input.currency ?? "GBP",
+        sourceKind: "reiwa_manual",
+        createdBy: session.userId,
+      });
+    }
+
     return opportunityId;
   });
 }

@@ -23,6 +23,18 @@ export function NewOpportunityForm({ orgs }: { orgs: { orgId: string; name: stri
 
           <TextField label="Asset / opportunity name" name="name" required placeholder="20 Example Street" />
 
+          {/*
+            Address and postcode are what let Reiwa recognise this building the
+            next time it comes to market. Without them the property cannot be
+            keyed, and a relaunch two years from now opens an unrelated record.
+          */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <TextField label="Address" name="address" placeholder="20 Example Street, Mayfair" />
+            </div>
+            <TextField label="Postcode" name="postcode" placeholder="W1S 2XJ" />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <TextField label="City" name="city" placeholder="London" />
             <SelectField label="Market" name="market" options={MARKETS.map((m) => ({ value: m, label: m }))} />

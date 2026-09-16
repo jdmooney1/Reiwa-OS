@@ -22,6 +22,8 @@ export async function createOpportunityAction(formData: FormData): Promise<void>
   const id = await createOpportunity(session, {
     orgId,
     name: String(formData.get("name") || "").trim(),
+    address: String(formData.get("address") || "").trim() || null,
+    postcode: String(formData.get("postcode") || "").trim() || null,
     city: String(formData.get("city") || "").trim() || null,
     market: String(formData.get("market") || "").trim() || null,
     country: String(formData.get("country") || "").trim() || null,
