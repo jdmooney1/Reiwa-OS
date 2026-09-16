@@ -19,6 +19,8 @@ import {
 } from "@/lib/ingestion/status";
 import { formatMoneyCompact, formatPct, formatDate } from "@/lib/format";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
+import { OpportunityTimeline } from "@/components/opportunities/opportunity-timeline";
+import type { PropertyEvent } from "@/lib/data/property-events";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { AssetType, Strategy, Currency } from "@/types/database";
@@ -26,6 +28,7 @@ import type { AssetType, Strategy, Currency } from "@/types/database";
 
 export function OpportunityDetail({
   opp, canWrite, portalAdmin = false, publicationId = null,
+  opportunityEvents = [], propertyEvents = [],
 }: {
   opp: Opportunity;
   canWrite: boolean;
@@ -33,6 +36,10 @@ export function OpportunityDetail({
   portalAdmin?: boolean;
   /** The existing investor publication for this opportunity, if any. */
   publicationId?: string | null;
+  /** Events for this marketing campaign. */
+  opportunityEvents?: PropertyEvent[];
+  /** Every event for the property, across all campaigns. */
+  propertyEvents?: PropertyEvent[];
 }) {
   const [pending, start] = useTransition();
   const id = opp.opportunityId;
@@ -200,6 +207,11 @@ export function OpportunityDetail({
               </CardBody>
             </Card>
           )}
+
+          <OpportunityTimeline
+            opportunityEvents={opportunityEvents}
+            propertyEvents={propertyEvents}
+          />
         </div>
 
         {/* Read summary */}
@@ -214,7 +226,7 @@ export function OpportunityDetail({
                 <Row k="Capex budget" v={formatMoneyCompact(opp.capexBudget, cur)} />
                 <Row k="Probability" v={opp.probability != null ? `${opp.probability}%` : "—"} />
                 <Row k="Source" v={opp.source ?? "—"} />
-                <Row k="Created" v={formatDate(opp.createdAt)} />
+                <Row k="First seen" v={formatDate(opp.firstSeenAt ?? opp.createdAt)} />
                 <Row k="Updated" v={formatDate(opp.updatedAt)} />
               </dl>
             </CardBody>

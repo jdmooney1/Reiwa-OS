@@ -1,10 +1,13 @@
 # 17 · Deal Input / Opportunity Ingestion System
 
-> **Status: proposal. No schema or application changes have been made.**
-> This document answers the six questions required before implementation
-> (existing state, gaps, data model, ingestion architecture, UI, phasing) and
-> flags the schema decisions that would create technical debt if taken
-> carelessly. Nothing below is built yet.
+> **Status: Phase 1 delivered. Phases 2-6 remain proposals.**
+> This document is both the analysis that preceded implementation and the
+> record of what was built. See **§J Phase 1 as built** at the foot for what
+> now exists; everything above it is the original proposal, left unedited so
+> the decisions behind the build stay legible.
+>
+> Decisions taken: **D2 three axes**, **deterministic extraction first**, and
+> **the split test suite** (§H).
 
 The objective: turn messy broker material (spreadsheets, emails, brochures)
 into a structured, deduplicated, provenance-tracked Opportunity Intelligence
@@ -744,3 +747,80 @@ seeded property. Built before anything touches the real 500-row dataset.
    spreadsheets and brochures, anonymised if you prefer. The synonym dictionary
    and the extractors are only as good as the inputs they were built against,
    and guessing at header names is how importers end up rigid.
+
+
+---
+
+## J · Phase 1 as built
+
+Delivered on `claude/reiwa-deal-ingestion-n8ut39`. Everything above this section
+is the original proposal and has not been rewritten.
+
+### Schema
+
+| Migration | Contents |
+| --- | --- |
+| `0007_property_identity.sql` | `properties` gains postcode, submarket, country_code, address_normalised, identity_key, first/last seen. Partial unique index on `(org_id, identity_key)`. `pg_trgm` for fuzzy lookup. `property_events` table. Status axes: `stage` gains `inbox` and `investor_ready`, `status` gains `watchlist`, `market_status` and `reiwa_position` added. Backfills existing rows and opens a timeline for every existing opportunity. |
+| `0008_deal_ingestion.sql` | `ingestion_batches`, `ingestion_items`, `match_candidates`, `import_mapping_templates`. `raw_payload` frozen by trigger. `channel` seam for the future inbound address. |
+
+Both follow the 0002/0005 posture exactly: org-scoped RLS, **no investor policy
+of any kind**, `anon`/`PUBLIC` revoked, trigger functions not granted.
+
+### Modules
+
+```
+src/lib/ingestion/
+  fields.ts        canonical field vocabulary + column projection
+  parse-values.ts  money / percent / area / date, each with confidence + notes
+  normalise.ts     postcode, address, name, identity key, similarity
+  synonyms.ts      header dictionary, incl. flagged near-synonyms
+  mapping.ts       four-pass header mapping, templates, summaries
+  rows.ts          raw row + mapping -> typed draft, issues, missing fields
+  match.ts         weighted signal scoring, banding, disposition
+  status.ts        three axes -> one display label; the publish gate
+  spreadsheet.ts   xlsx/csv parsing and header-row detection (server only)
+
+src/lib/data/
+  properties.ts       resolveProperty (the D1 fix), candidate lookup
+  property-events.ts  the longitudinal spine
+  ingestion.ts        batches, items, candidates, promotion, bulk actions
+```
+
+### Screens
+
+`/inbox` (queue, filters, search, bulk actions) · `/inbox/import` (upload,
+mapping, preview, save template) · `/inbox/[itemId]` (review with per-value
+provenance and match candidates) · Quick Opportunity (`N` from anywhere) ·
+the timeline on `/opportunities/[id]` with its **this campaign / whole
+property** toggle · the investor-ready gate in front of the existing portal
+flow.
+
+### Decisions taken during the build
+
+- **exceljs, not `xlsx`.** The npm build of `xlsx` carries two high-severity
+  advisories with no fix available on npm (prototype pollution, ReDoS), both of
+  which apply directly to parsing untrusted input. `uuid` is pinned forward with
+  an override rather than accepting npm's suggested major downgrade of exceljs.
+  The ingestion dependency path reports no advisories.
+- **`npm run db:verify`.** Applies the whole migration chain to a throwaway
+  local PostgreSQL cluster and asserts 53 claims - RLS isolation, investor
+  denial, no `anon` privileges, identity uniqueness, raw-payload immutability,
+  status constraints, event survival, the D1 fix, promotion, attach-fills-blanks,
+  and the publish gate. Needs no Supabase credentials, so it runs on a fresh
+  clone and in CI. It complements `tests/integration`, which still exercises the
+  real Supabase runtime and Supabase Auth.
+
+### Verification
+
+`168 unit tests` · `53 live-database assertions` · `tsc --noEmit` ·
+`next lint` · `next build` - all clean.
+
+### Carried into later phases
+
+- Field provenance is currently per-item (`ingestion_items.extracted` carries
+  value, confidence, notes, excerpt and source column). The
+  `field_observations` / `field_state` / `field_conflicts` ledger in §C.1 lands
+  in Phase 2 with document extraction, and **D5 applies from that point**: every
+  write must route through the ledger or the audit trail has holes.
+- Pipeline filtering and cross-entity search (§16) beyond the inbox.
+- Counterparty entities (§C.6), tenancy (§C.5), documents and storage (§19).
