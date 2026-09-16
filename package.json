@@ -14,6 +14,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:storage": "tsx scripts/storage.ts",
+    "db:storage:test": "tsx scripts/storage-test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

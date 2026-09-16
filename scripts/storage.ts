@@ -1,6 +1,13 @@
 // Provision the private document bucket on the configured Supabase project.
 // Idempotent — safe to run before every deployment.
 //   npm run db:storage
+//
+// This is the OPERATOR path and it targets NEXT_PUBLIC_SUPABASE_URL — the
+// application project. It deliberately has no test-awareness: an operator who
+// types the command they have always typed must get the project they meant.
+// Automated tests provision their own bucket on the dedicated test project,
+// inside the isolation gate (tests/global-setup.ts); to do that by hand, use
+//   npm run db:storage:test
 import { requireEnv } from "./env";
 import { ensureDocumentBucket, DOCUMENT_BUCKET } from "@/lib/documents/storage";
 

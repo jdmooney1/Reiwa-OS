@@ -18,7 +18,8 @@
 // normal case, not the exception.
 // ============================================================================
 import { defineConfig, devices } from "@playwright/test";
-import { checkTestDatabaseEnv } from "./src/lib/db/test-database";
+import { useTestEnvironment } from "./tests/test-environment";
+import { NEVER_DISCOVER } from "./playwright.discovery";
 
 const PORT = Number(process.env.UAT_PORT ?? 3100);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -32,18 +33,32 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined;
 
 /**
- * The browser drives the real application, which reads and writes real rows, so
- * these specs need the dedicated test database for the same reason the
- * integration suite does — a UAT run that signs in, uploads a document and
- * mints one-time codes must not do any of that to a development or production
- * project.
+ * Arm the dedicated test environment for THIS process, and refuse to define a
+ * configuration at all if it is not available.
+ *
+ * Two processes matter here and both used to be wrong in a way that was easy to
+ * miss, because the one that was handled looked like the only one.
+ *
+ *   The SERVER under test is started below, and its DATABASE_URL was already
+ *   overridden. That part was right.
+ *
+ *   The RUNNER — this process, where the specs themselves execute — was not
+ *   touched at all. e2e/helpers.ts mints one-time codes through the Auth Admin
+ *   API, and e2e/investor-session.spec.ts creates Auth users, investor
+ *   organisations and contacts directly. Both loaded .env.local and used the
+ *   APPLICATION's project and the APPLICATION's database, so every UAT run wrote
+ *   fixture identities into reiwa-dev.
+ *
+ * Playwright loads this config in the runner AND in each worker, so arming it at
+ * module scope covers every process that executes a spec. The gate refuses
+ * before any of it if the four test variables are missing or disagree.
  *
  * The reset opt-in is deliberately NOT required: Playwright never resets. It
  * expects a database the integration suite has already seeded. Demanding
- * ALLOW_TEST_DATABASE_RESET here would train everybody to export the
- * destructive flag permanently, which is the habit the gate exists to prevent.
+ * ALLOW_TEST_DATABASE_RESET here would train everybody to export the destructive
+ * flag permanently, which is the habit the gate exists to prevent.
  */
-const testDatabaseUrl = checkTestDatabaseEnv(process.env, { purpose: "connect" });
+const testEnvironment = useTestEnvironment("connect");
 
 const viewports = {
   desktop: { width: 1440, height: 900 },
@@ -53,6 +68,9 @@ const viewports = {
 
 export default defineConfig({
   testDir: "./e2e",
+  // Spread: the shared constant is readonly so nothing can append to the rule,
+  // and Playwright's option type is a mutable array.
+  testIgnore: [...NEVER_DISCOVER],
   // One shared database and one signed-in session per project.
   fullyParallel: false,
   workers: 1,
@@ -74,19 +92,41 @@ export default defineConfig({
     // project viewport does not apply to it. Running it once is the point:
     // repeating it per viewport would prove nothing new and would race three
     // browsers on one fixture contact.
-    ...(name === "desktop" ? {} : { testIgnore: /investor-session\.spec\.ts$/ }),
+    //
+    // A project-level testIgnore replaces the top-level one for that project, so
+    // the never-discover patterns are repeated rather than assumed.
+    testIgnore: name === "desktop"
+      ? [...NEVER_DISCOVER]
+      : [...NEVER_DISCOVER, /investor-session\.spec\.ts$/],
   })),
   webServer: {
     // A production build, not `next dev`: dev serves unminified bundles, an
     // error overlay and no route headers, none of which ship.
     command: `npx next start -p ${PORT}`,
     url: BASE_URL,
-    // The server under test talks to the TEST database, not the one in
-    // .env.local. Next loads .env.local itself, so this override is what stops
-    // a UAT run writing to a development project.
-    env: { ...process.env, DATABASE_URL: testDatabaseUrl } as Record<string, string>,
-    // A server already running on this port was started by somebody else and
-    // may be pointed anywhere, so it is never reused: correctness of the target
+    env: {
+      ...process.env,
+      // The server under test talks to the TEST database and the TEST Supabase
+      // project, not the ones in .env.local. Next loads .env.local itself, but
+      // variables already present in a child's environment win over a .env file,
+      // so these overrides are what stop a UAT run writing rows to a development
+      // database or creating Auth users and Storage objects in a development
+      // project.
+      //
+      // This is the one place the application's own variable NAMES carry test
+      // values, and it is not the same thing as a test rewriting the developer's
+      // environment: this is the environment of a server process the harness is
+      // starting, which exists only for the duration of the run and is a test
+      // instance by construction. Nothing in .env.local is touched, and the
+      // parent process keeps reading the application's values, which is what
+      // lets the gate compare the two.
+      DATABASE_URL: testEnvironment.databaseUrl,
+      NEXT_PUBLIC_SUPABASE_URL: testEnvironment.supabase.url,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: testEnvironment.supabase.publishableKey,
+      SUPABASE_SECRET_KEY: testEnvironment.supabase.secretKey,
+    } as Record<string, string>,
+    // A server already running on this port was started by somebody else and may
+    // be pointed anywhere, so it is never reused: correctness of the target
     // database outranks a few seconds of start-up.
     reuseExistingServer: false,
     timeout: 120_000,

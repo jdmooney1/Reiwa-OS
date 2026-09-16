@@ -34,3 +34,6 @@ yarn-error.log*
 /.scratch
 test-results/
 playwright-report/
+
+# manual production-smoke findings (screenshots, JSON) — never committed
+/.smoke/

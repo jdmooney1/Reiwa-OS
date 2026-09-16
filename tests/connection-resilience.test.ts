@@ -32,7 +32,7 @@ import {
 import { dropSchema, resetDatabase } from "@/lib/db/reset";
 // Resetting deliberately, inside the suite that already runs against the
 // dedicated test database: the gate is re-run rather than bypassed.
-import { authorizeReset } from "./test-database-env";
+import { authorizeReset } from "./test-environment";
 import { adminSession } from "./helpers";
 
 /** A pool that records every statement and can be told to fail on connect. */

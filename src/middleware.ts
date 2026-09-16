@@ -9,15 +9,21 @@
 // ============================================================================
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { optionalSupabaseSessionConfig } from "@/lib/supabase/env";
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return response;
+  // Resolved through the shared accessor rather than read statically here:
+  // Next inlines a statically-named NEXT_PUBLIC_ variable into the edge bundle
+  // at BUILD time, which would pin this middleware to whichever project the
+  // build was made against even when the process has been pointed at another
+  // one. The session cookie this refreshes has to belong to the same project
+  // the server actions authenticate against, or nobody stays signed in.
+  const config = optionalSupabaseSessionConfig();
+  if (!config) return response;
 
-  const supabase = createServerClient(url, key, {
+  const supabase = createServerClient(config.url, config.key, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

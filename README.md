@@ -66,19 +66,42 @@ npm run build
 npm run test:unit
 ```
 
-The integration and end-to-end suites need a **separate, disposable** test
-database, and they refuse to run without one — `npm test` drops every
-application table on every run.
+The integration and end-to-end suites need a **separate, disposable Supabase
+project**, and they refuse to run without one. `npm test` drops every application
+table on every run — and the suites also create and delete Auth users, and
+create, upload to and delete from a Storage bucket.
+
+Both halves are configured, and neither falls back to the application's values:
+
+| Normal application | Automated tests |
+|---|---|
+| `DATABASE_URL` | `TEST_DATABASE_URL` |
+| `NEXT_PUBLIC_SUPABASE_URL` | `TEST_SUPABASE_URL` |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `TEST_SUPABASE_PUBLISHABLE_KEY` |
+| `SUPABASE_SECRET_KEY` | `TEST_SUPABASE_SECRET_KEY` |
+
+All four test variables must name the same project, and the gate refuses if they
+disagree or if any of them names the application's project.
 
 ```bash
-ALLOW_TEST_DATABASE_RESET=true npm test   # drops and reseeds TEST_DATABASE_URL
-npm run test:e2e                          # reads/writes only; never reset
+ALLOW_TEST_DATABASE_RESET=true npm test   # drops and reseeds the test project
+npm run test:e2e                          # reads/writes only; never resets
+npm run db:storage:test                   # bucket on the test project, by hand
 ```
+
+**Automated tests must never provision Auth users or Storage resources in
+`reiwa-dev`.** `npm run db:storage` remains the operator command and still
+targets `NEXT_PUBLIC_SUPABASE_URL`.
 
 `npm run db:reset -- --yes` is gated the same way: `--yes` alone is not enough,
 and the target must carry `app.destructive_reset_allowed = 'true'`.
 
 Read [docs/19-test-database-safety.md](docs/19-test-database-safety.md) before
-the first run. Never point `TEST_DATABASE_URL` at `reiwa-dev`, staging or
+the first run. Never point the test variables at `reiwa-dev`, staging or
 production, and never mark `reiwa-dev` destroyable while it backs a live-facing
 deployment.
+
+Manual production smoke tooling lives in
+[`scripts/manual-production-smoke/`](scripts/manual-production-smoke/README.md).
+It is never part of `npm run test:e2e`, has no default target, and requires an
+explicit opt-in.
