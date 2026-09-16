@@ -28,6 +28,7 @@ yet. See the documents below before any implementation begins.
 | [`docs/10-persistence-gate.md`](docs/10-persistence-gate.md) | Property-centric lifecycle model, immutability rules |
 | [`docs/11-supabase-p0.md`](docs/11-supabase-p0.md) | P0: Supabase runtime, Supabase Auth, RLS claims seam |
 | [`docs/12-investor-portal-p1.md`](docs/12-investor-portal-p1.md) | P1: Investment Portal data foundation, publication boundary, investor RLS |
+| [`docs/17-deal-ingestion.md`](docs/17-deal-ingestion.md) | Deal Input / Opportunity Ingestion: existing state, gaps, proposed schema, phasing (proposal) |
 | [`supabase/schema.sql`](supabase/schema.sql) | Concrete proposed Postgres schema (enums, tables, RLS) |
 
 ---
