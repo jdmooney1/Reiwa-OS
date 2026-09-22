@@ -3,7 +3,7 @@ import { scoreTone, pillarTone, type Tone } from "@/lib/domain";
 
 const RING_STROKE: Record<Tone, string> = {
   positive: "#3E7C5A",
-  gold: "#C2A14E",
+  emphasis: "#C2A14E",
   caution: "#B98427",
   negative: "#A6483D",
   neutral: "#C2A14E",

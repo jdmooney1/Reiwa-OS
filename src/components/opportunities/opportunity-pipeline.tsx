@@ -19,7 +19,7 @@ const STATUS_LABEL: Record<OppStatus, string> = {
   active: "Active", rejected: "Rejected", withdrawn: "Withdrawn", lost: "Lost", converted: "Converted",
 };
 const STATUS_TONE = {
-  active: "positive", rejected: "negative", withdrawn: "muted", lost: "negative", converted: "gold",
+  active: "positive", rejected: "negative", withdrawn: "muted", lost: "negative", converted: "emphasis",
 } as const;
 
 export function OpportunityPipeline({ opportunities }: { opportunities: Opportunity[] }) {

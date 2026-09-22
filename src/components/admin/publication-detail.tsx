@@ -665,9 +665,9 @@ function AccessTab({
                         {INVESTOR_ORG_STATUS_LABEL[e.investorOrgStatus]}
                       </Badge>
                       {e.isVisible
-                        ? <Badge tone={e.placement === "featured" ? "gold" : "neutral"} dot>{PLACEMENT_LABEL[e.placement]}</Badge>
+                        ? <Badge tone={e.placement === "featured" ? "emphasis" : "neutral"} dot>{PLACEMENT_LABEL[e.placement]}</Badge>
                         : <Badge tone="muted" dot>Hidden</Badge>}
-                      <Badge tone={e.documentAccessLevel === "diligence" ? "gold" : "neutral"}>
+                      <Badge tone={e.documentAccessLevel === "diligence" ? "emphasis" : "neutral"}>
                         {e.documentAccessLevel === "diligence" ? "Diligence docs" : "Standard docs"}
                       </Badge>
                     </div>

@@ -18,11 +18,11 @@ export const EVENT_LABEL: Record<ActivityEventType, string> = {
 export const EVENT_TONE: Record<ActivityEventType, Tone> = {
   login: "muted",
   opportunity_viewed: "neutral",
-  saved: "gold",
+  saved: "emphasis",
   unsaved: "muted",
   compared: "neutral",
   document_viewed: "neutral",
-  document_downloaded: "gold",
+  document_downloaded: "emphasis",
   information_requested: "positive",
 };
 
@@ -43,7 +43,7 @@ export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {
 export const REQUEST_STATUS_TONE: Record<RequestStatus, Tone> = {
   new: "caution",
   acknowledged: "neutral",
-  in_progress: "gold",
+  in_progress: "emphasis",
   closed: "muted",
 };
 

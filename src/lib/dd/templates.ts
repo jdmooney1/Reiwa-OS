@@ -1,28 +1,31 @@
 // ============================================================================
 // Reiwa Capital — Due Diligence frameworks (London & Amsterdam)
 // ----------------------------------------------------------------------------
-// A DD template is the firm's standing investment risk-control checklist. It is
-// instantiated onto a deal (see applyTemplate) where each line becomes a live,
-// owned, status-tracked workstream. Questions and jurisdiction differ by market;
-// the section spine is shared so every deal file reads consistently.
+// A DD framework is the firm's standing investment risk-control checklist. It is
+// instantiated onto an opportunity (see applyDdTemplate in the data layer),
+// where each line becomes a live, owned, status-tracked workstream. Questions
+// and jurisdiction differ by market; the section spine is shared so every deal
+// file reads consistently.
 // ============================================================================
 import type {
-  DueDiligenceItem, DdSection, DdJurisdiction, PriorityLevel, RiskLevel, Market,
-} from "@/types/database";
+  DdSection, DdJurisdiction, DdPriority, DdRiskLevel,
+} from "@/lib/data/deal-file-types";
+
+export type DdTemplateId = "london" | "amsterdam";
 
 export interface DdTemplateItem {
   section: DdSection;
   item: string;
   question: string;
   jurisdiction: DdJurisdiction;
-  priority: PriorityLevel;
-  risk_level: RiskLevel;
+  priority: DdPriority;
+  riskLevel: DdRiskLevel;
 }
 
 export interface DdTemplate {
-  id: "london" | "amsterdam";
+  id: DdTemplateId;
   name: string;
-  market: Market;
+  market: "London" | "Amsterdam";
   description: string;
   items: DdTemplateItem[];
 }
@@ -31,8 +34,8 @@ type Mk = (
   section: DdSection,
   item: string,
   question: string,
-  priority: PriorityLevel,
-  risk_level: RiskLevel,
+  priority: DdPriority,
+  riskLevel: DdRiskLevel,
   jurisdiction?: DdJurisdiction,
 ) => DdTemplateItem;
 
@@ -44,8 +47,8 @@ type Mk = (
 function buildTemplate(market: "London" | "Amsterdam"): DdTemplateItem[] {
   const local: DdJurisdiction = market === "London" ? "UK" : "Netherlands";
   const isLondon = market === "London";
-  const mk: Mk = (section, item, question, priority, risk_level, jurisdiction = local) =>
-    ({ section, item, question, jurisdiction, priority, risk_level });
+  const mk: Mk = (section, item, question, priority, riskLevel, jurisdiction = local) =>
+    ({ section, item, question, jurisdiction, priority, riskLevel });
 
   return [
     // 1. Executive Summary
@@ -181,40 +184,12 @@ export const AMSTERDAM_DD_TEMPLATE: DdTemplate = {
   items: buildTemplate("Amsterdam"),
 };
 
-export const DD_TEMPLATES: Record<DdTemplate["id"], DdTemplate> = {
+export const DD_TEMPLATES: Record<DdTemplateId, DdTemplate> = {
   london: LONDON_DD_TEMPLATE,
   amsterdam: AMSTERDAM_DD_TEMPLATE,
 };
 
-/** Pick the default template for a deal's market. */
-export function defaultTemplateId(market: Market | null): DdTemplate["id"] {
+/** Pick the default framework for an opportunity's market. */
+export function defaultTemplateId(market: string | null): DdTemplateId {
   return market === "Amsterdam" ? "amsterdam" : "london";
-}
-
-/**
- * Instantiate a template onto a deal: each template line becomes a live DD item,
- * Not Started, unowned, with no linked documents yet.
- */
-export function applyTemplate(
-  templateId: DdTemplate["id"],
-  dealId: string,
-  now: string = new Date().toISOString(),
-): DueDiligenceItem[] {
-  return DD_TEMPLATES[templateId].items.map((t, i) => ({
-    item_id: `${templateId}-${dealId}-${i}`,
-    deal_id: dealId,
-    section: t.section,
-    item: t.item,
-    question: t.question,
-    jurisdiction: t.jurisdiction,
-    priority: t.priority,
-    status: "not_started",
-    owner: null,
-    due_date: null,
-    risk_level: t.risk_level,
-    notes: null,
-    linked_documents: [],
-    created_at: now,
-    updated_at: now,
-  }));
 }

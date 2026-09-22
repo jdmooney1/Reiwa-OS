@@ -215,7 +215,7 @@ function ProvenanceDot({ p, className }: { p: keyof typeof PROVENANCE_TONE; clas
     <span
       title={PROVENANCE_LABEL[p]}
       className={cn("h-1.5 w-1.5 shrink-0 rounded-full",
-        tone === "gold" && "bg-gold", tone === "caution" && "bg-caution",
+        tone === "emphasis" && "bg-gold", tone === "caution" && "bg-caution",
         tone === "positive" && "bg-positive", tone === "neutral" && "bg-ink-faint",
         tone === "muted" && "bg-line", tone === "negative" && "bg-negative", className)}
     />

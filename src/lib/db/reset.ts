@@ -26,6 +26,11 @@ const TABLES = [
   "investor_publications",
   "investor_contacts",
   "investor_organizations",
+  // Internal Reiwa OS — deal file (0007)
+  "decision_log",
+  "deal_documents",
+  "deal_contacts",
+  "dd_items",
   // Internal Reiwa OS
   "valuations",
   "asset_decisions",

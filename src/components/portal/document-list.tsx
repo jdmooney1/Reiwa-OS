@@ -52,7 +52,7 @@ export function DocumentList({
               </div>
             </div>
             {d.accessLevel === "diligence" && (
-              <Badge tone="gold">{DOC_LEVEL_LABEL.diligence}</Badge>
+              <Badge tone="emphasis">{DOC_LEVEL_LABEL.diligence}</Badge>
             )}
             <span className="inline-flex items-center gap-1.5 text-2xs text-ink-faint">
               <Lock className="h-3 w-3" strokeWidth={1.75} />

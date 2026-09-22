@@ -22,7 +22,7 @@ export function AssetHeader({ file, portfolioName }: { file: AssetFile; portfoli
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="font-serif text-2xl text-surface">{a.name}</h1>
             <Badge tone={LIFECYCLE_TONE[a.lifecycle_stage]} dark dot>{LIFECYCLE_LABEL[a.lifecycle_stage]}</Badge>
-            {a.is_demo && <Badge tone="gold" dark>Demo data</Badge>}
+            {a.is_demo && <Badge tone="emphasis" dark>Demo data</Badge>}
           </div>
           <div className="mt-1.5 flex items-center gap-1.5 text-sm text-surface/60">
             <MapPin className="h-3.5 w-3.5 text-gold/70" strokeWidth={1.75} />

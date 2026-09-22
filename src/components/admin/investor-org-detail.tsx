@@ -302,7 +302,7 @@ function AssignmentRow({
             <Badge tone={WORKFLOW_TONE[a.publication.status]} dot>
               {WORKFLOW_LABEL[a.publication.status]}
             </Badge>
-            <Badge tone={e.documentAccessLevel === "diligence" ? "gold" : "neutral"}>
+            <Badge tone={e.documentAccessLevel === "diligence" ? "emphasis" : "neutral"}>
               {e.documentAccessLevel === "diligence" ? "Diligence docs" : "Standard docs"}
             </Badge>
           </div>
@@ -527,7 +527,7 @@ function ContactAccess({
   }
 
   const stateBadge = invite && (
-    invite.state === "active" ? <Badge tone="gold" dot>Invite active until {formatDate(invite.expiresAt)}</Badge>
+    invite.state === "active" ? <Badge tone="emphasis" dot>Invite active until {formatDate(invite.expiresAt)}</Badge>
     : invite.state === "accepted" ? <Badge tone="positive" dot>Invite accepted {formatDate(invite.acceptedAt)}</Badge>
     : invite.state === "expired" ? <Badge tone="caution" dot>Invite expired {formatDate(invite.expiresAt)}</Badge>
     : <Badge tone="muted" dot>Invite revoked</Badge>

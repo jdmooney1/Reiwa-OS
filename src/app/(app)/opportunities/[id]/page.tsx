@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireAuth, toDbSession } from "@/lib/auth/session";
 import { getOpportunity } from "@/lib/data/opportunities";
+import { getDealFile } from "@/lib/data/deal-file";
 import { getPublicationForOpportunity } from "@/lib/data/admin-portal";
 import { isPortalAdmin } from "@/lib/auth/admin";
 import { OpportunityDetail } from "@/components/opportunities/opportunity-detail";
@@ -13,6 +14,10 @@ export default async function OpportunityPage({ params }: { params: { id: string
   const opp = await getOpportunity(session, params.id);
   if (!opp) notFound();
 
+  // Due diligence, contacts, documents and decisions all hang off this one
+  // record — there is no separate deal.
+  const file = await getDealFile(session, opp.opportunityId);
+
   // Only Reiwa admins run the Investment Portal; for them, surface whether this
   // opportunity already has an investor publication.
   const portalAdmin = isPortalAdmin(auth);
@@ -23,6 +28,7 @@ export default async function OpportunityPage({ params }: { params: { id: string
   return (
     <OpportunityDetail
       opp={opp}
+      file={file}
       canWrite={auth.role !== "investor_viewer"}
       portalAdmin={portalAdmin}
       publicationId={publicationId}

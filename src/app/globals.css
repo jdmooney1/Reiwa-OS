@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Georgia", serif;
+  /* DM Sans is injected by next/font in src/app/layout.tsx. */
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -14,7 +14,6 @@
   }
   body {
     @apply bg-surface text-ink;
-    font-feature-settings: "ss01", "cv01";
   }
   /* Tabular figures everywhere numbers matter */
   .tabular {
@@ -24,12 +23,17 @@
 }
 
 @layer components {
-  /* Small uppercase field label used throughout the institutional UI */
+  /* Editorial display type: DM Sans, normal weight, tightened tracking. */
+  .display {
+    @apply font-display tracking-display;
+  }
+  /* Small uppercase field label used throughout. Uses `muted`, not `faint` —
+     these labels carry information and must stay legible on cream. */
   .eyebrow {
-    @apply text-2xs font-medium uppercase tracking-label text-ink-faint;
+    @apply text-2xs font-medium uppercase tracking-label text-ink-muted;
   }
   .eyebrow-light {
-    @apply text-2xs font-medium uppercase tracking-label text-gold-soft/70;
+    @apply text-2xs font-medium uppercase tracking-label text-surface/60;
   }
   .hairline {
     @apply border-line;

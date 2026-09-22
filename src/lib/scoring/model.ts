@@ -1,6 +1,11 @@
 // ============================================================================
-// Reiwa Capital — Investment Score model
+// Reiwa Capital — Investment Score model (RETIRED — REFERENCE ONLY)
 // ----------------------------------------------------------------------------
+// Superseded by the Five Tests scorecard (Phase 1). No screen renders this and
+// nothing should import it into a new feature. It is kept so the weightings and
+// the reasoning behind them are not lost when the Five Tests methodology is
+// calibrated. Delete it once Five Tests is settled.
+//
 // Every deal is scored out of 100 across 11 weighted criteria. Each category is
 // scored 1–10; its weighted contribution is weight × score / 10. Weights sum to
 // 100, so the overall is directly out of 100. This module is the single source
