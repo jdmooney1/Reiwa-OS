@@ -47,12 +47,12 @@ export function ActivityFeed({
             <tr key={r.eventId} className="border-b border-line last:border-b-0 align-top">
               <td className="px-3 py-2.5 text-2xs text-ink-muted">
                 <div className="tabular-nums text-ink">{timeAgo(r.occurredAt)}</div>
-                <div className="tabular-nums text-ink-faint">{stamp(r.occurredAt)}</div>
+                <div className="tabular-nums text-ink-muted">{stamp(r.occurredAt)}</div>
               </td>
               <td className="px-3 py-2.5">
                 <Badge tone={EVENT_TONE[r.eventType]}>{EVENT_LABEL[r.eventType]}</Badge>
                 {r.eventType === "compared" && r.comparedCount != null && (
-                  <span className="ml-1.5 text-2xs text-ink-faint">
+                  <span className="ml-1.5 text-2xs text-ink-muted">
                     {r.comparedCount} opportunities
                   </span>
                 )}
@@ -61,7 +61,7 @@ export function ActivityFeed({
                 <td className="px-3 py-2.5">
                   <Link
                     href={`/admin/investors/${r.investorOrgId}`}
-                    className="text-sm text-ink hover:text-gold-deep"
+                    className="text-sm text-ink hover:text-plum"
                   >
                     {r.investorOrgName}
                   </Link>
@@ -70,22 +70,22 @@ export function ActivityFeed({
               {showContact && (
                 <td className="px-3 py-2.5">
                   <div className="text-sm text-ink">{r.contactName}</div>
-                  <div className="text-2xs text-ink-faint">{r.contactEmail}</div>
+                  <div className="text-2xs text-ink-muted">{r.contactEmail}</div>
                 </td>
               )}
               <td className="px-3 py-2.5">
                 {r.publicationId && r.publicationTitle ? (
                   <Link
                     href={`/admin/publications/${r.publicationId}`}
-                    className="text-sm text-ink hover:text-gold-deep"
+                    className="text-sm text-ink hover:text-plum"
                   >
                     {r.publicationTitle}
                   </Link>
                 ) : (
-                  <span className="text-sm text-ink-faint">—</span>
+                  <span className="text-sm text-ink-muted">—</span>
                 )}
                 {r.documentTitle && (
-                  <div className="text-2xs text-ink-faint">{r.documentTitle}</div>
+                  <div className="text-2xs text-ink-muted">{r.documentTitle}</div>
                 )}
               </td>
             </tr>
@@ -98,7 +98,7 @@ export function ActivityFeed({
 
 function Th({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className={`px-3 pb-2 text-left text-2xs font-semibold uppercase tracking-label text-ink-faint ${className ?? ""}`}>
+    <th className={`px-3 pb-2 text-left text-2xs font-semibold uppercase tracking-label text-ink-muted ${className ?? ""}`}>
       {children}
     </th>
   );
@@ -118,10 +118,10 @@ export function ActivityCounts({
     <dl className="flex flex-wrap gap-x-8 gap-y-3">
       {shown.map(([type, n]) => (
         <div key={type}>
-          <dt className="text-2xs uppercase tracking-label text-ink-faint">
+          <dt className="text-2xs uppercase tracking-label text-ink-muted">
             {EVENT_LABEL[type as keyof typeof EVENT_LABEL] ?? type}
           </dt>
-          <dd className="font-serif text-lg tabular-nums text-ink">{n}</dd>
+          <dd className="display text-lg tabular-nums text-ink">{n}</dd>
         </div>
       ))}
     </dl>

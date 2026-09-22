@@ -48,12 +48,12 @@ export function TabsTrigger({
       onClick={() => ctx.setValue(value)}
       className={cn(
         "relative whitespace-nowrap px-3 py-3 text-sm font-medium transition-colors",
-        active ? "text-ink" : "text-ink-faint hover:text-ink-muted",
+        active ? "text-ink" : "text-ink-muted hover:text-ink-muted",
       )}
     >
       {children}
       {active && (
-        <span className="absolute inset-x-2 -bottom-px h-0.5 bg-gold" />
+        <span className="absolute inset-x-2 -bottom-px h-0.5 bg-plum" />
       )}
     </button>
   );

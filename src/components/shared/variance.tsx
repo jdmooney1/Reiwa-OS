@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 const TEXT: Record<Tone, string> = {
   positive: "text-positive", negative: "text-negative", caution: "text-caution",
-  emphasis: "text-gold-deep", neutral: "text-ink-muted", muted: "text-ink-faint",
+  emphasis: "text-plum", neutral: "text-ink-muted", muted: "text-ink-muted",
 };
 
 /**
@@ -25,7 +25,7 @@ export function VarianceValue({
   showAbs?: boolean;
   className?: string;
 }) {
-  if (v.abs == null) return <span className="text-ink-faint">—</span>;
+  if (v.abs == null) return <span className="text-ink-muted">—</span>;
   const Arrow = v.abs > 0 ? ArrowUp : v.abs < 0 ? ArrowDown : Minus;
   const sign = v.abs > 0 ? "+" : "";
 

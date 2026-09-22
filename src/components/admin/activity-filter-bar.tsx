@@ -6,7 +6,7 @@ import type { ActivityFilterOptions } from "@/lib/data/admin-activity";
 import { EVENT_LABEL } from "@/lib/activity-labels";
 
 const FIELD =
-  "rounded border border-line bg-surface-card px-2.5 py-1.5 text-xs text-ink focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/30";
+  "rounded border border-line bg-surface-card px-2.5 py-1.5 text-xs text-ink focus:border-plum/50 focus:outline-none focus:ring-1 focus:ring-plum/20";
 
 /**
  * The filters, held entirely in the URL so the page stays a server render and
@@ -99,7 +99,7 @@ export function ActivityFilterBar({ options }: { options: ActivityFilterOptions 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-2xs uppercase tracking-label text-ink-faint">{label}</span>
+      <span className="text-2xs uppercase tracking-label text-ink-muted">{label}</span>
       {children}
     </label>
   );

@@ -3,11 +3,11 @@
 // nothing with the internal (app) shell — no sidebar, no internal navigation.
 export function AccessFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col bg-navy">
+    <div className="flex min-h-screen flex-col bg-plum">
       <header className="border-b border-line-dark px-8 py-5">
         <div className="mx-auto flex w-full max-w-3xl items-baseline justify-between">
-          <div className="font-serif text-lg tracking-wide text-surface">
-            REIWA<span className="text-gold"> CAPITAL</span>
+          <div className="display text-lg tracking-wide text-surface">
+            REIWA<span className="text-surface/50"> CAPITAL</span>
           </div>
           <div className="eyebrow-light">Investment Portal</div>
         </div>

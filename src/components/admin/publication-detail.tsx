@@ -58,7 +58,7 @@ export function PublicationDetail({
   return (
     <div className="min-h-full">
       {/* ---- Header: this is the INVESTOR side of the boundary ---- */}
-      <div className="border-b border-line-dark bg-navy px-8 py-5 text-surface">
+      <div className="border-b border-line-dark bg-plum px-8 py-5 text-surface">
         <Link href="/admin/publications"
           className="mb-2 inline-flex items-center gap-1 text-2xs text-surface/50 hover:text-surface">
           <ChevronLeft className="h-3 w-3" /> Publications
@@ -67,7 +67,7 @@ export function PublicationDetail({
           <div>
             <div className="eyebrow-light mb-1">Investor Publication</div>
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="font-serif text-2xl">{display?.title ?? "Untitled publication"}</h1>
+              <h1 className="display text-2xl">{display?.title ?? "Untitled publication"}</h1>
               <Badge dark tone={WORKFLOW_TONE[state]} dot>{WORKFLOW_LABEL[state]}</Badge>
               {active && (
                 <span className="text-2xs text-surface/50">
@@ -169,7 +169,7 @@ export function PublicationDetail({
               )}
               {!working && (
                 <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-card px-4 py-3 text-xs text-ink-muted">
-                  <Lock className="h-3.5 w-3.5 text-ink-faint" />
+                  <Lock className="h-3.5 w-3.5 text-ink-muted" />
                   {publication.status === "published"
                     ? `Version ${display.versionNumber} is published and immutable. Editing creates a new draft version; investors keep seeing v${display.versionNumber} until the new version is published.`
                     : "This publication is withdrawn — investors see nothing. Start a new draft to re-publish."}
@@ -214,7 +214,7 @@ export function PublicationDetail({
             {!working && !active && (
               <EmptyState text="No version to attach documents to." />
             )}
-            <p className="text-2xs text-ink-faint">
+            <p className="text-2xs text-ink-muted">
               File storage is not wired in this phase: entries reserve a private storage path and
               carry the metadata investors will see. Uploads and signed downloads arrive with the
               investor-facing portal build.
@@ -255,12 +255,12 @@ function DraftEditor({ version, publicationId }: { version: PublicationVersion; 
           <label className="block">
             <span className="eyebrow">Overview</span>
             <textarea name="overview" rows={5} defaultValue={version.overview ?? ""}
-              className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+              className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-plum focus:outline-none focus:ring-1 focus:ring-plum/20" />
           </label>
           <label className="block">
             <span className="eyebrow">Highlights — one per line</span>
             <textarea name="highlights" rows={3} defaultValue={version.highlights.join("\n")}
-              className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+              className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-plum focus:outline-none focus:ring-1 focus:ring-plum/20" />
           </label>
         </CardBody>
       </Card>
@@ -297,11 +297,11 @@ function DraftEditor({ version, publicationId }: { version: PublicationVersion; 
       </Card>
 
       <div className="flex items-center justify-between">
-        <span className="text-2xs text-ink-faint">
+        <span className="text-2xs text-ink-muted">
           Investors never see drafts — this version goes live only when it is reviewed and published.
         </span>
         <button type="submit"
-          className="rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
+          className="rounded bg-plum px-4 py-2 text-xs font-semibold text-surface hover:bg-plum-50">
           Save Draft
         </button>
       </div>
@@ -319,7 +319,7 @@ function VersionContent({ version: v }: { version: PublicationVersion }) {
         <CardHeader eyebrow={`Version ${v.versionNumber} — investor view`} title={v.title}
           action={<Badge tone={VERSION_STATUS_TONE[v.status]} dot>{VERSION_STATUS_LABEL[v.status]}</Badge>} />
         <CardBody className="space-y-4">
-          {v.headline && <p className="font-serif text-lg text-ink">{v.headline}</p>}
+          {v.headline && <p className="display text-lg text-ink">{v.headline}</p>}
           <div className="text-sm text-ink-muted">
             {[v.city ?? v.market,
               v.assetType ? (ASSET_TYPE_LABEL[v.assetType as AssetType] ?? v.assetType) : null,
@@ -331,7 +331,7 @@ function VersionContent({ version: v }: { version: PublicationVersion }) {
             <ul className="space-y-1.5">
               {v.highlights.map((h, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-ink/90">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" /> {h}
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-plum" /> {h}
                 </li>
               ))}
             </ul>
@@ -382,7 +382,7 @@ function SourceTab({
             <SourceRow k="Internal opportunity"
               v={
                 <Link href={`/opportunities/${source.opportunityId}`}
-                  className="text-sm font-medium text-gold-deep hover:underline">
+                  className="text-sm font-medium text-plum hover:underline">
                   {source.opportunityName ?? "View opportunity"}
                 </Link>
               } />
@@ -412,14 +412,14 @@ function SourceTab({
             data across is always an explicit step that creates a new draft for review.
           </p>
           {working ? (
-            <p className="text-2xs text-ink-faint">
+            <p className="text-2xs text-ink-muted">
               Finish or discard the open v{working.versionNumber} {VERSION_STATUS_LABEL[working.status].toLowerCase()} first —
               refreshing starts a new draft, and this publication already has one open.
             </p>
           ) : (
             <button disabled={pending}
               onClick={() => start(() => startDraftFromSourceAction(publicationId))}
-              className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-medium text-ink-muted hover:border-gold/40 hover:text-ink disabled:opacity-60">
+              className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-medium text-ink-muted hover:border-plum/40 hover:text-ink disabled:opacity-60">
               {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Start New Draft From Current Internal Data
             </button>
@@ -452,10 +452,10 @@ function DocumentsCard({
       <CardHeader eyebrow="Documents" title={title}
         action={editable ? (
           <button onClick={() => setAdding((v) => !v)}
-            className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-gold/40 hover:text-ink">
+            className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-plum/40 hover:text-ink">
             {adding ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {adding ? "Cancel" : "Add document"}
           </button>
-        ) : <Lock className="h-3.5 w-3.5 text-ink-faint" />} />
+        ) : <Lock className="h-3.5 w-3.5 text-ink-muted" />} />
       <CardBody className="p-0">
         {adding && editable && (
           <form action={async (fd) => {
@@ -465,23 +465,23 @@ function DocumentsCard({
             <label className="block md:col-span-2">
               <span className="eyebrow">Title</span>
               <input name="title" required
-                className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+                className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-plum focus:outline-none" />
             </label>
             <DocSelects />
             <label className="block md:col-span-3">
               <span className="eyebrow">File name (optional)</span>
               <input name="fileName" placeholder="e.g. teaser.pdf"
-                className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+                className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-plum focus:outline-none" />
             </label>
             <div className="flex items-end justify-end">
-              <button type="submit" className="rounded bg-navy px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-navy-50">
+              <button type="submit" className="rounded bg-plum px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-plum-50">
                 Add Document
               </button>
             </div>
           </form>
         )}
         {documents.length === 0 ? (
-          <div className="px-5 py-8 text-center text-xs text-ink-faint">
+          <div className="px-5 py-8 text-center text-xs text-ink-muted">
             {editable ? "No documents attached to this version yet." : "This version has no documents."}
           </div>
         ) : (
@@ -496,13 +496,13 @@ function DocumentsCard({
                     <label className="block md:col-span-2">
                       <span className="eyebrow">Title</span>
                       <input name="title" required defaultValue={d.title}
-                        className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+                        className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-plum focus:outline-none" />
                     </label>
                     <DocSelects category={d.category} accessLevel={d.accessLevel} />
                     <div className="flex items-end justify-end gap-2 md:col-span-4">
                       <button type="button" onClick={() => setEditingId(null)}
-                        className="text-2xs text-ink-faint hover:text-ink">Cancel</button>
-                      <button type="submit" className="rounded bg-navy px-3 py-1.5 text-2xs font-semibold text-surface">Save</button>
+                        className="text-2xs text-ink-muted hover:text-ink">Cancel</button>
+                      <button type="submit" className="rounded bg-plum px-3 py-1.5 text-2xs font-semibold text-surface">Save</button>
                     </div>
                   </form>
                 ) : (
@@ -516,14 +516,14 @@ function DocumentsCard({
                           {d.accessLevel === "internal" && " — never investor-visible"}
                         </Badge>
                       </div>
-                      <div className="mt-0.5 truncate text-2xs text-ink-faint">
+                      <div className="mt-0.5 truncate text-2xs text-ink-muted">
                         {d.fileName ?? d.storagePath}
                       </div>
                     </div>
                     {editable && (
                       <div className="flex shrink-0 items-center gap-1">
                         <button onClick={() => setEditingId(d.documentId)}
-                          className="rounded border border-line p-1.5 text-ink-muted hover:border-gold/40 hover:text-ink">
+                          className="rounded border border-line p-1.5 text-ink-muted hover:border-plum/40 hover:text-ink">
                           <Pencil className="h-3 w-3" />
                         </button>
                         <button disabled={pending}
@@ -539,7 +539,7 @@ function DocumentsCard({
             ))}
           </ul>
         )}
-        <div className="border-t border-line px-5 py-2.5 text-2xs text-ink-faint">{note}</div>
+        <div className="border-t border-line px-5 py-2.5 text-2xs text-ink-muted">{note}</div>
       </CardBody>
     </Card>
   );
@@ -551,7 +551,7 @@ function DocSelects({ category, accessLevel }: { category?: string; accessLevel?
       <label className="block">
         <span className="eyebrow">Category</span>
         <select name="category" defaultValue={category ?? "other"}
-          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-gold focus:outline-none">
+          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-plum focus:outline-none">
           {Object.entries(DOC_CATEGORY_LABEL).map(([value, label]) => (
             <option key={value} value={value}>{label}</option>
           ))}
@@ -560,7 +560,7 @@ function DocSelects({ category, accessLevel }: { category?: string; accessLevel?
       <label className="block">
         <span className="eyebrow">Access tier</span>
         <select name="accessLevel" defaultValue={accessLevel ?? "standard"}
-          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-gold focus:outline-none">
+          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-plum focus:outline-none">
           <option value="standard">Standard</option>
           <option value="diligence">Diligence</option>
           <option value="internal">Internal (never investor-visible)</option>
@@ -591,7 +591,7 @@ function AccessTab({
     <div className="mx-auto max-w-4xl space-y-6">
       {!live && (
         <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-card px-4 py-3 text-xs text-ink-muted">
-          <AlertTriangle className="h-3.5 w-3.5 text-ink-faint" />
+          <AlertTriangle className="h-3.5 w-3.5 text-ink-muted" />
           This publication is not live — entitlements can be prepared now, but investors see nothing
           until a version is published.
         </div>
@@ -600,7 +600,7 @@ function AccessTab({
         <CardHeader eyebrow="Entitlements" title="Investor Organisations"
           action={grantable.length > 0 ? (
             <button onClick={() => setGranting((v) => !v)}
-              className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-gold/40 hover:text-ink">
+              className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-plum/40 hover:text-ink">
               {granting ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {granting ? "Cancel" : "Grant access"}
             </button>
           ) : undefined} />
@@ -613,7 +613,7 @@ function AccessTab({
               <label className="block md:col-span-2">
                 <span className="eyebrow">Investor organisation</span>
                 <select name="investorOrgId" required defaultValue=""
-                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-gold focus:outline-none">
+                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-plum focus:outline-none">
                   <option value="" disabled>Choose an organisation…</option>
                   {grantable.map((o) => (
                     <option key={o.investorOrgId} value={o.investorOrgId}>{o.name}</option>
@@ -623,7 +623,7 @@ function AccessTab({
               <label className="block">
                 <span className="eyebrow">Placement</span>
                 <select name="placement" defaultValue="secondary"
-                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-gold focus:outline-none">
+                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-plum focus:outline-none">
                   <option value="secondary">Also Available</option>
                   <option value="featured">Featured (replaces current)</option>
                 </select>
@@ -631,24 +631,24 @@ function AccessTab({
               <label className="block">
                 <span className="eyebrow">Document access</span>
                 <select name="documentAccessLevel" defaultValue="standard"
-                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-gold focus:outline-none">
+                  className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2 text-xs text-ink focus:border-plum focus:outline-none">
                   <option value="standard">Standard</option>
                   <option value="diligence">Diligence</option>
                 </select>
               </label>
               <label className="flex items-center gap-2 text-xs text-ink md:col-span-2">
-                <input type="checkbox" name="isVisible" defaultChecked className="accent-gold" />
+                <input type="checkbox" name="isVisible" defaultChecked className="accent-plum" />
                 Visible immediately
               </label>
               <div className="flex items-end justify-end md:col-span-2">
-                <button type="submit" className="rounded bg-navy px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-navy-50">
+                <button type="submit" className="rounded bg-plum px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-plum-50">
                   Grant Access
                 </button>
               </div>
             </form>
           )}
           {entitlements.length === 0 ? (
-            <div className="px-5 py-8 text-center text-xs text-ink-faint">
+            <div className="px-5 py-8 text-center text-xs text-ink-muted">
               No investor organisation has access to this publication yet.
             </div>
           ) : (
@@ -658,7 +658,7 @@ function AccessTab({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link href={`/admin/investors/${e.investorOrgId}`}
-                        className="text-sm font-medium text-ink hover:text-gold-deep">
+                        className="text-sm font-medium text-ink hover:text-plum">
                         {e.investorOrgName}
                       </Link>
                       <Badge tone={INVESTOR_ORG_STATUS_TONE[e.investorOrgStatus]}>
@@ -730,7 +730,7 @@ function VersionsTab({
     <div className="mx-auto max-w-4xl">
       <Card>
         <CardHeader eyebrow="History" title="Versions"
-          action={<span className="text-2xs text-ink-faint">Published versions are immutable; publishing a new one supersedes the old</span>} />
+          action={<span className="text-2xs text-ink-muted">Published versions are immutable; publishing a new one supersedes the old</span>} />
         <CardBody className="p-0">
           <table className="w-full text-sm">
             <thead>
@@ -749,9 +749,9 @@ function VersionsTab({
                 const d = driftMap.get(v.versionId);
                 const isLive = publication.activeVersionId === v.versionId;
                 return (
-                  <tr key={v.versionId} className={cn(isLive && "bg-gold/5")}>
+                  <tr key={v.versionId} className={cn(isLive && "bg-plum/5")}>
                     <td className="tabular px-5 py-3 font-medium text-ink">
-                      v{v.versionNumber}{isLive && <span className="ml-1.5 text-2xs font-semibold text-gold-deep">LIVE</span>}
+                      v{v.versionNumber}{isLive && <span className="ml-1.5 text-2xs font-semibold text-plum">LIVE</span>}
                     </td>
                     <td className="px-5 py-3">
                       <Badge tone={VERSION_STATUS_TONE[v.status]} dot>{VERSION_STATUS_LABEL[v.status]}</Badge>
@@ -762,7 +762,7 @@ function VersionsTab({
                     <td className="px-5 py-3">
                       {d?.changed
                         ? <span className="flex items-center gap-1 text-2xs font-medium text-caution"><AlertTriangle className="h-3 w-3" /> Changed</span>
-                        : <span className="text-2xs text-ink-faint">In step</span>}
+                        : <span className="text-2xs text-ink-muted">In step</span>}
                     </td>
                     <td className="px-5 py-3 text-right">
                       {v.status === "draft" && (
@@ -815,9 +815,9 @@ function HeaderBtn({
     <button type="button" onClick={onClick} disabled={disabled}
       className={cn(
         "flex items-center gap-1.5 rounded px-3.5 py-2 text-xs font-semibold transition-colors disabled:opacity-60",
-        primary && "bg-gold text-navy hover:bg-gold-soft",
-        !primary && !danger && "border border-white/20 text-surface/80 hover:bg-white/5 hover:text-surface",
-        danger && "border border-negative/40 text-rose-200 hover:bg-negative/20",
+        primary && "bg-plum text-surface hover:bg-plum-50",
+        !primary && !danger && "border border-surface/20 text-surface/80 hover:bg-surface/5 hover:text-surface",
+        danger && "border border-negative/40 text-surface hover:bg-negative/20",
       )}>
       {children}
     </button>
@@ -835,7 +835,7 @@ function Field({
       <span className="eyebrow">{label}</span>
       <input name={name} type={type} step={step} required={required}
         defaultValue={defaultValue} placeholder={placeholder}
-        className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+        className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink placeholder:text-ink-faint focus:border-plum focus:outline-none focus:ring-1 focus:ring-plum/20" />
     </label>
   );
 }
@@ -852,7 +852,7 @@ function Figure({ k, v }: { k: string; v: string }) {
 function SourceRow({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 px-5 py-3">
-      <dt className="text-2xs uppercase tracking-label text-ink-faint">{k}</dt>
+      <dt className="text-2xs uppercase tracking-label text-ink-muted">{k}</dt>
       <dd className="text-right">{v}</dd>
     </div>
   );
@@ -860,7 +860,7 @@ function SourceRow({ k, v }: { k: string; v: React.ReactNode }) {
 
 function Vth({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className={cn("px-5 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint", className)}>
+    <th className={cn("px-5 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-muted", className)}>
       {children}
     </th>
   );
@@ -879,7 +879,7 @@ function MiniBtn({
     <button type="button" onClick={onClick} disabled={disabled} title={title}
       className={cn(
         "rounded border border-line px-2 py-1 text-2xs font-medium text-ink-muted transition-colors disabled:opacity-50",
-        tone === "negative" ? "hover:border-negative/40 hover:text-negative" : "hover:border-gold/40 hover:text-ink",
+        tone === "negative" ? "hover:border-negative/40 hover:text-negative" : "hover:border-plum/40 hover:text-ink",
       )}>
       {children}
     </button>

@@ -41,12 +41,12 @@ export function PortalNav() {
           >
             {item.label}
             {item.label === "Compare" && compareCount > 0 && (
-              <span className="ml-1.5 rounded-sm bg-gold/20 px-1.5 py-0.5 text-2xs font-semibold text-gold-soft">
+              <span className="ml-1.5 rounded-sm bg-plum/20 px-1.5 py-0.5 text-2xs font-semibold text-surface">
                 {compareCount}
               </span>
             )}
             {active && (
-              <span className="absolute inset-x-3 -bottom-px h-px bg-gold" aria-hidden="true" />
+              <span className="absolute inset-x-3 -bottom-px h-px bg-plum" aria-hidden="true" />
             )}
           </Link>
         );

@@ -67,7 +67,7 @@ export default async function PortalOpportunityPage({
 
       <header className="mt-4 border-b border-line pb-6">
         <div className="eyebrow mb-2">Prepared for {investor.investorOrgName}</div>
-        <h1 className="max-w-3xl font-serif text-3xl leading-tight text-ink">{o.title}</h1>
+        <h1 className="max-w-3xl display text-3xl leading-tight text-ink">{o.title}</h1>
         <p className="mt-2 text-sm text-ink-muted">
           {locationLabel(o)}
           <span className="px-2 text-line">|</span>
@@ -76,7 +76,7 @@ export default async function PortalOpportunityPage({
           {strategyLabel(o.strategy)}
         </p>
         {o.headline && (
-          <p className="mt-4 max-w-3xl font-serif text-lg leading-relaxed text-ink">{o.headline}</p>
+          <p className="mt-4 max-w-3xl display text-lg leading-relaxed text-ink">{o.headline}</p>
         )}
         <div className="mt-5 flex flex-wrap items-center gap-2.5">
           <SaveButton
@@ -103,7 +103,7 @@ export default async function PortalOpportunityPage({
               <ul className="space-y-3">
                 {o.highlights.map((h) => (
                   <li key={h} className="flex gap-3 text-sm leading-relaxed text-ink">
-                    <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                    <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-plum" />
                     {h}
                   </li>
                 ))}
@@ -122,18 +122,18 @@ export default async function PortalOpportunityPage({
 
         <aside className="space-y-8 lg:sticky lg:top-8 lg:self-start">
           <section>
-            <h2 className="mb-3 border-b border-line pb-2 font-serif text-base text-ink">
+            <h2 className="mb-3 border-b border-line pb-2 display text-base text-ink">
               Investment snapshot
             </h2>
             <dl className="divide-y divide-line rounded border border-line bg-surface-card">
               {metrics.map((m) => (
                 <div key={m.key} className="flex items-baseline justify-between gap-4 px-4 py-3">
-                  <dt className="text-2xs uppercase tracking-label text-ink-faint">{m.label}</dt>
-                  <dd className="font-serif text-base tabular-nums text-ink">{m.value}</dd>
+                  <dt className="text-2xs uppercase tracking-label text-ink-muted">{m.label}</dt>
+                  <dd className="display text-base tabular-nums text-ink">{m.value}</dd>
                 </div>
               ))}
             </dl>
-            <p className="mt-2.5 text-2xs leading-relaxed text-ink-faint">
+            <p className="mt-2.5 text-2xs leading-relaxed text-ink-muted">
               Targets are estimates prepared by Reiwa Capital on the assumptions set out in the
               investment materials. They are not forecasts or guarantees, and capital is at risk.
             </p>
@@ -146,7 +146,7 @@ export default async function PortalOpportunityPage({
           )}
 
           {o.publishedAt && (
-            <p className="text-2xs text-ink-faint">
+            <p className="text-2xs text-ink-muted">
               Published {formatDate(o.publishedAt)}.
             </p>
           )}
@@ -171,7 +171,7 @@ function BackLink() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="mb-4 border-b border-line pb-2 font-serif text-lg text-ink">{title}</h2>
+      <h2 className="mb-4 border-b border-line pb-2 display text-lg text-ink">{title}</h2>
       {children}
     </section>
   );

@@ -47,7 +47,7 @@ export function AssetOverview({ file }: { file: AssetFile }) {
         <div className="grid grid-cols-2 divide-x divide-line sm:grid-cols-4 lg:grid-cols-11">
           {snapshot.map((m, i) => (
             <div key={m.label} className={cn("px-3.5 py-3", i >= 4 && "border-t border-line lg:border-t-0")}>
-              <div className="text-[10px] uppercase tracking-label text-ink-faint">{m.label}</div>
+              <div className="text-[10px] uppercase tracking-label text-ink-muted">{m.label}</div>
               <div className="tabular mt-1 text-sm font-semibold text-ink">{m.value}</div>
             </div>
           ))}
@@ -55,9 +55,9 @@ export function AssetOverview({ file }: { file: AssetFile }) {
       </Card>
 
       {/* AI intelligence brief (interpretive layer — provenance-tagged) */}
-      <Card className="border-navy/15">
+      <Card className="border-plum/15">
         <CardHeader eyebrow="Asset Intelligence" title="Executive Brief"
-          action={<span className="text-2xs text-ink-faint">Generated from structured data</span>} />
+          action={<span className="text-2xs text-ink-muted">Generated from structured data</span>} />
         <CardBody className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
           <BriefColumn heading="What changed" statements={brief.whatChanged} />
           <BriefColumn heading="Why it matters" statements={brief.whyItMatters} />
@@ -65,28 +65,28 @@ export function AssetOverview({ file }: { file: AssetFile }) {
           <BriefColumn heading="What's next" statements={brief.whatsNext} />
         </CardBody>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-5 py-2.5">
-          <span className="text-[10px] uppercase tracking-label text-ink-faint">Provenance</span>
+          <span className="text-[10px] uppercase tracking-label text-ink-muted">Provenance</span>
           {(["fact", "calculation", "forecast", "assumption", "commentary"] as const).map((p) => (
             <span key={p} className="flex items-center gap-1 text-[10px] text-ink-muted">
               <ProvenanceDot p={p} /> {PROVENANCE_LABEL[p]}
             </span>
           ))}
-          <span className="ml-auto text-[10px] italic text-ink-faint">AI inference is never presented as source data.</span>
+          <span className="ml-auto text-[10px] italic text-ink-muted">AI inference is never presented as source data.</span>
         </div>
       </Card>
 
       {/* Performance vs underwriting (three-way) */}
       <Card>
         <CardHeader eyebrow="Performance" title="Original Underwriting · Current Forecast · Actual"
-          action={<span className="text-2xs text-ink-faint">Δ = forecast vs underwriting</span>} />
+          action={<span className="text-2xs text-ink-muted">Δ = forecast vs underwriting</span>} />
         <CardBody className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left">
-                  <th className="px-5 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint">Metric</th>
+                  <th className="px-5 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-muted">Metric</th>
                   {["Underwriting", "Current Forecast", "Actual", "Δ vs UW"].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-right text-2xs font-medium uppercase tracking-label text-ink-faint">{h}</th>
+                    <th key={h} className="px-4 py-2.5 text-right text-2xs font-medium uppercase tracking-label text-ink-muted">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -128,7 +128,7 @@ export function AssetOverview({ file }: { file: AssetFile }) {
                       <Badge tone={DECISION_STATUS_TONE[d.status]}>{DECISION_STATUS_LABEL[d.status]}</Badge>
                     </div>
                     {d.recommendation && <p className="mt-1 text-2xs text-ink-muted">{d.recommendation}</p>}
-                    <div className="mt-1 flex items-center gap-2 text-2xs text-ink-faint">
+                    <div className="mt-1 flex items-center gap-2 text-2xs text-ink-muted">
                       {d.deadline && <span>Due {formatDate(d.deadline)}</span>}
                       {d.financial_impact != null && <span>· Impact {formatMoneyCompact(d.financial_impact, cur)}</span>}
                     </div>
@@ -149,7 +149,7 @@ export function AssetOverview({ file }: { file: AssetFile }) {
                   <li key={r.risk_id} className="flex items-start justify-between gap-3 px-5 py-2.5">
                     <div className="min-w-0">
                       <div className="text-xs font-medium text-ink">{r.title}</div>
-                      <div className="text-2xs capitalize text-ink-faint">{r.category}
+                      <div className="text-2xs capitalize text-ink-muted">{r.category}
                         {r.financial_impact != null && ` · ${formatMoneyCompact(r.financial_impact, cur)}`}</div>
                     </div>
                     {r.severity && <Badge tone={SEVERITY_TONE[r.severity]} dot>{SEVERITY_LABEL[r.severity]}</Badge>}
@@ -163,16 +163,16 @@ export function AssetOverview({ file }: { file: AssetFile }) {
         {/* Upcoming events */}
         <Card>
           <CardHeader eyebrow="Timeline" title="Upcoming Events"
-            action={<span className="text-2xs text-ink-faint">next 120 days</span>} />
+            action={<span className="text-2xs text-ink-muted">next 120 days</span>} />
           <CardBody className="p-0">
             {events.length === 0 ? <Empty text="No events in the window." /> : (
               <ul className="divide-y divide-line">
                 {events.map((e) => (
                   <li key={e.event_id} className="flex items-start gap-3 px-5 py-2.5">
-                    <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={1.75} />
+                    <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-muted" strokeWidth={1.75} />
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-medium text-ink">{e.title}</div>
-                      <div className="text-2xs text-ink-faint">{EVENT_TYPE_LABEL[e.type]}</div>
+                      <div className="text-2xs text-ink-muted">{EVENT_TYPE_LABEL[e.type]}</div>
                     </div>
                     <span className="tabular shrink-0 text-2xs text-ink-muted">{formatDate(e.event_date)}</span>
                   </li>
@@ -191,7 +191,7 @@ function BriefColumn({ heading, statements }: { heading: string; statements: Int
     <div>
       <div className="mb-2 text-2xs font-semibold uppercase tracking-label text-ink">{heading}</div>
       {statements.length === 0 ? (
-        <p className="text-xs italic text-ink-faint">Nothing material.</p>
+        <p className="text-xs italic text-ink-muted">Nothing material.</p>
       ) : (
         <ul className="space-y-2">
           {statements.map((st, i) => (
@@ -215,7 +215,7 @@ function ProvenanceDot({ p, className }: { p: keyof typeof PROVENANCE_TONE; clas
     <span
       title={PROVENANCE_LABEL[p]}
       className={cn("h-1.5 w-1.5 shrink-0 rounded-full",
-        tone === "emphasis" && "bg-gold", tone === "caution" && "bg-caution",
+        tone === "emphasis" && "bg-plum", tone === "caution" && "bg-caution",
         tone === "positive" && "bg-positive", tone === "neutral" && "bg-ink-faint",
         tone === "muted" && "bg-line", tone === "negative" && "bg-negative", className)}
     />
@@ -223,5 +223,5 @@ function ProvenanceDot({ p, className }: { p: keyof typeof PROVENANCE_TONE; clas
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="px-5 py-4 text-xs italic text-ink-faint">{text}</p>;
+  return <p className="px-5 py-4 text-xs italic text-ink-muted">{text}</p>;
 }

@@ -34,7 +34,7 @@ export default async function PortalSavedPage() {
           action={
             <Link
               href="/portal"
-              className="rounded bg-navy px-5 py-2.5 text-xs font-semibold text-surface hover:bg-navy-50"
+              className="rounded bg-plum px-5 py-2.5 text-xs font-semibold text-surface hover:bg-plum-50"
             >
               Browse opportunities
             </Link>

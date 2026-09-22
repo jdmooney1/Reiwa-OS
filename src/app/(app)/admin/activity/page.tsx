@@ -57,7 +57,7 @@ export default async function AdminActivityPage({
     <div className="mx-auto w-full max-w-6xl px-6 py-8">
       <header className="mb-7 border-b border-line pb-5">
         <div className="eyebrow mb-1.5">Investment Portal</div>
-        <h1 className="font-serif text-2xl text-ink">Investor Activity</h1>
+        <h1 className="display text-2xl text-ink">Investor Activity</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">
           Every action recorded in the investor portal, as it was recorded. Counts and timestamps
           only — no engagement scores, rankings or inferred intent.
@@ -72,7 +72,7 @@ export default async function AdminActivityPage({
           />
           <RequestList requests={openRequests.slice(0, 6)} />
           {openRequests.length > 6 && (
-            <p className="mt-2 text-2xs text-ink-faint">
+            <p className="mt-2 text-2xs text-ink-muted">
               Showing the 6 most recent of {openRequests.length}. The rest are on each investor&rsquo;s page.
             </p>
           )}
@@ -101,7 +101,7 @@ export default async function AdminActivityPage({
             <PageLink params={searchParams} page={page - 1} disabled={page <= 1}>
               ← Newer
             </PageLink>
-            <span className="text-2xs text-ink-faint">Page {page}</span>
+            <span className="text-2xs text-ink-muted">Page {page}</span>
             <PageLink params={searchParams} page={page + 1} disabled={!hasMore}>
               Older →
             </PageLink>
@@ -125,7 +125,7 @@ function PageLink({
   children: React.ReactNode;
 }) {
   if (disabled) {
-    return <span className="text-2xs text-ink-faint opacity-50">{children}</span>;
+    return <span className="text-2xs text-ink-muted opacity-50">{children}</span>;
   }
   const next = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v && k !== "page") next.set(k, v);
@@ -133,7 +133,7 @@ function PageLink({
   return (
     <Link
       href={`/admin/activity${next.toString() ? `?${next}` : ""}`}
-      className="text-2xs font-medium text-ink-muted hover:text-gold-deep"
+      className="text-2xs font-medium text-ink-muted hover:text-plum"
     >
       {children}
     </Link>
@@ -143,8 +143,8 @@ function PageLink({
 function SectionHeading({ title, note }: { title: string; note?: string }) {
   return (
     <div className="mb-4 flex items-baseline justify-between gap-4 border-b border-line pb-2">
-      <h2 className="font-serif text-lg text-ink">{title}</h2>
-      {note && <span className="text-2xs uppercase tracking-label text-ink-faint">{note}</span>}
+      <h2 className="display text-lg text-ink">{title}</h2>
+      {note && <span className="text-2xs uppercase tracking-label text-ink-muted">{note}</span>}
     </div>
   );
 }

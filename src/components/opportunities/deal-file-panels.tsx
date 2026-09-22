@@ -46,7 +46,7 @@ function DeleteButton({ onDelete, label }: { onDelete: () => Promise<void>; labe
       aria-label={label}
       disabled={pending}
       onClick={() => start(() => { void onDelete(); })}
-      className="shrink-0 rounded p-1.5 text-ink-faint transition-colors hover:bg-surface-sunken hover:text-flag disabled:opacity-50"
+      className="shrink-0 rounded p-1.5 text-ink-muted transition-colors hover:bg-surface-sunken hover:text-flag disabled:opacity-50"
     >
       <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
     </button>
@@ -78,7 +78,7 @@ export function ContactsPanel({
               {contacts.map((c) => (
                 <li key={c.contactId} className="flex items-start justify-between gap-4 px-5 py-3">
                   <div className="flex min-w-0 gap-3">
-                    <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
+                    <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" strokeWidth={1.75} />
                     <div className="min-w-0">
                       <div className="text-sm text-ink">{c.name}</div>
                       <div className="mt-0.5 text-2xs text-ink-muted">
@@ -150,8 +150,8 @@ export function DocumentsPanel({
     <div className="space-y-5">
       <div className="rounded-lg border border-line bg-surface-sunken px-5 py-3 text-xs leading-relaxed text-ink-muted">
         This is a register of what Reiwa holds, not a file store. Uploading the
-        document itself, and extracting data from it, arrives in a later phase —
-        until then nothing here is read, parsed or inferred.
+        document itself, and extracting data from it, arrives in a later phase.
+        Until then nothing here is read, parsed or inferred.
       </div>
 
       <Card>
@@ -164,7 +164,7 @@ export function DocumentsPanel({
               {documents.map((d) => (
                 <li key={d.documentId} className="flex items-start justify-between gap-4 px-5 py-3">
                   <div className="flex min-w-0 gap-3">
-                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
+                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" strokeWidth={1.75} />
                     <div className="min-w-0">
                       <div className="truncate text-sm text-ink">{d.fileName}</div>
                       <div className="mt-0.5 text-2xs text-ink-muted">

@@ -30,7 +30,7 @@ export function VerifyForm(props:
       {invite ? (
         <>
           <div className="eyebrow mb-2">Invitation · {props.orgName}</div>
-          <h1 className="font-serif text-xl text-ink">Enter your access code</h1>
+          <h1 className="display text-xl text-ink">Enter your access code</h1>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">
             We have emailed a one-time code to <span className="font-medium text-ink">{props.maskedEmail}</span>.
             Enter it below to confirm your identity.
@@ -39,7 +39,7 @@ export function VerifyForm(props:
       ) : (
         <>
           <div className="eyebrow mb-2">Investor sign-in</div>
-          <h1 className="font-serif text-xl text-ink">
+          <h1 className="display text-xl text-ink">
             {codeStage ? "Enter your access code" : "Sign in to the portal"}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">
@@ -55,7 +55,7 @@ export function VerifyForm(props:
           <label className="block">
             <span className="eyebrow">Email address</span>
             <input name="email" type="email" required autoFocus
-              className="mt-1 h-10 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+              className="mt-1 h-10 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-plum focus:outline-none focus:ring-1 focus:ring-plum/20" />
           </label>
           {requestState.error && <FormError text={requestState.error} />}
           <SubmitButton label="Email me a secure access code" />
@@ -71,18 +71,18 @@ export function VerifyForm(props:
             <span className="eyebrow">Access code</span>
             <input name="code" inputMode="numeric" autoComplete="one-time-code" required autoFocus
               placeholder="6-digit code"
-              className="mt-1 h-11 w-full rounded border border-line bg-surface px-3 text-center font-serif text-xl tracking-[0.4em] text-ink placeholder:tracking-normal placeholder:font-sans placeholder:text-sm focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+              className="mt-1 h-11 w-full rounded border border-line bg-surface px-3 text-center display text-xl tracking-[0.4em] text-ink placeholder:tracking-normal placeholder:font-sans placeholder:text-sm focus:border-plum focus:outline-none focus:ring-1 focus:ring-plum/20" />
           </label>
           {verifyState.error && <FormError text={verifyState.error} />}
           <SubmitButton label="Verify and enter the portal" />
           {invite ? (
-            <p className="text-center text-2xs text-ink-faint">
+            <p className="text-center text-2xs text-ink-muted">
               Code not arriving? Return to your invitation link to request a new one.
             </p>
           ) : (
-            <p className="text-center text-2xs text-ink-faint">
+            <p className="text-center text-2xs text-ink-muted">
               Wrong address or no code?{" "}
-              <a href="/portal/verify" className="text-gold-deep hover:underline">Start again</a>.
+              <a href="/portal/verify" className="text-plum hover:underline">Start again</a>.
             </p>
           )}
         </form>
@@ -95,7 +95,7 @@ function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
     <button type="submit" disabled={pending}
-      className="w-full rounded bg-gold px-4 py-2.5 text-sm font-semibold text-navy hover:bg-gold-soft disabled:opacity-60">
+      className="w-full rounded bg-plum px-4 py-2.5 text-sm font-semibold text-surface hover:bg-plum-50 disabled:opacity-60">
       {pending ? "One moment…" : label}
     </button>
   );

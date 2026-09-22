@@ -25,7 +25,7 @@ export default async function PortalHomePage() {
     <PortalShell investor={investor}>
       <header className="mb-8 border-b border-line pb-5">
         <div className="eyebrow mb-1.5">Prepared for {investor.investorOrgName}</div>
-        <h1 className="font-serif text-2xl leading-tight text-ink">
+        <h1 className="display text-2xl leading-tight text-ink">
           Reiwa Capital Investment Portal
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">
@@ -82,8 +82,8 @@ export default async function PortalHomePage() {
 function SectionHeading({ title, note }: { title: string; note?: string }) {
   return (
     <div className="mb-5 flex items-baseline justify-between gap-4 border-b border-line pb-2.5">
-      <h2 className="font-serif text-lg text-ink">{title}</h2>
-      {note && <span className="text-2xs uppercase tracking-label text-ink-faint">{note}</span>}
+      <h2 className="display text-lg text-ink">{title}</h2>
+      {note && <span className="text-2xs uppercase tracking-label text-ink-muted">{note}</span>}
     </div>
   );
 }

@@ -2,22 +2,23 @@ import { cn } from "@/lib/utils";
 import type { Tone } from "@/lib/domain";
 
 const TONE_CLASS: Record<Tone, string> = {
-  neutral: "bg-navy/5 text-ink border-line",
-  emphasis: "bg-gold/10 text-gold-deep border-gold/30",
+  neutral: "bg-plum/5 text-ink border-line",
+  emphasis: "bg-plum/10 text-plum border-plum/30",
   positive: "bg-positive/10 text-positive border-positive/25",
   caution: "bg-caution/10 text-caution border-caution/25",
   negative: "bg-negative/10 text-negative border-negative/25",
   muted: "bg-ink/[0.04] text-ink-muted border-line",
 };
 
-// Same tones, tuned for the dark navy header.
+// Same tones on a plum surface. The functional signals keep their own hue at a
+// low tint; everything else reads as cream on plum.
 const TONE_CLASS_DARK: Record<Tone, string> = {
-  neutral: "bg-white/10 text-surface border-white/15",
-  emphasis: "bg-gold/15 text-gold-soft border-gold/40",
-  positive: "bg-positive/20 text-emerald-200 border-positive/40",
-  caution: "bg-caution/20 text-amber-200 border-caution/40",
-  negative: "bg-negative/20 text-rose-200 border-negative/40",
-  muted: "bg-white/5 text-surface/70 border-white/10",
+  neutral: "bg-surface/10 text-surface border-surface/20",
+  emphasis: "bg-surface/15 text-surface border-surface/30",
+  positive: "bg-positive/25 text-surface border-positive/50",
+  caution: "bg-caution/25 text-surface border-caution/50",
+  negative: "bg-negative/25 text-surface border-negative/50",
+  muted: "bg-surface/5 text-surface/70 border-surface/15",
 };
 
 export function Badge({
@@ -48,7 +49,7 @@ export function Badge({
             tone === "positive" && "bg-positive",
             tone === "caution" && "bg-caution",
             tone === "negative" && "bg-negative",
-            tone === "emphasis" && "bg-gold",
+            tone === "emphasis" && "bg-plum",
             (tone === "neutral" || tone === "muted") && "bg-ink-faint",
           )}
         />

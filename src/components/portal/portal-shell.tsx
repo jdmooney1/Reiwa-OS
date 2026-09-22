@@ -16,12 +16,12 @@ export function PortalShell({
 }) {
   return (
     <div className="flex min-h-screen flex-col bg-surface">
-      <header className="bg-navy">
+      <header className="bg-plum">
         <div className="mx-auto w-full max-w-6xl px-6">
           <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 py-4">
             <Link href="/portal" className="group flex items-baseline gap-3">
-              <span className="font-serif text-lg tracking-wide text-surface">
-                REIWA<span className="text-gold"> CAPITAL</span>
+              <span className="display text-lg tracking-wide text-surface">
+                REIWA<span className="text-surface/50"> CAPITAL</span>
               </span>
               <span className="hidden text-2xs uppercase tracking-label text-surface/40 sm:inline">
                 Investment Portal
@@ -36,7 +36,7 @@ export function PortalShell({
               <form action={portalSignOutAction}>
                 <button
                   type="submit"
-                  className="rounded border border-white/15 px-3 py-1.5 text-2xs font-medium text-surface/70 transition-colors hover:border-gold/40 hover:text-surface"
+                  className="rounded border border-surface/15 px-3 py-1.5 text-2xs font-medium text-surface/70 transition-colors hover:border-plum/40 hover:text-surface"
                 >
                   Sign out
                 </button>
@@ -53,7 +53,7 @@ export function PortalShell({
 
       <footer className="border-t border-line">
         <div className="mx-auto w-full max-w-6xl px-6 py-6">
-          <p className="max-w-3xl text-2xs leading-relaxed text-ink-faint">
+          <p className="max-w-3xl text-2xs leading-relaxed text-ink-muted">
             Private &amp; confidential — prepared for {investor.investorOrgName}. The information in
             this portal is provided for evaluation by the named recipient only and does not
             constitute an offer, an invitation to invest, or investment advice. Targets and
@@ -78,7 +78,7 @@ export function PortalPageHeader({
     <header className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
       <div>
         {eyebrow && <div className="eyebrow mb-1.5">{eyebrow}</div>}
-        <h1 className="font-serif text-2xl leading-tight text-ink">{title}</h1>
+        <h1 className="display text-2xl leading-tight text-ink">{title}</h1>
         {lede && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">{lede}</p>}
       </div>
       {aside}

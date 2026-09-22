@@ -19,7 +19,7 @@ export function MetricTile({
       <div
         className={cn(
           "text-2xs font-medium uppercase tracking-label",
-          dark ? "text-gold-soft/70" : "text-ink-faint",
+          dark ? "text-surface/60" : "text-ink-muted",
         )}
       >
         {label}
@@ -36,7 +36,7 @@ export function MetricTile({
         <div
           className={cn(
             "tabular text-xs",
-            dark ? "text-surface/50" : "text-ink-faint",
+            dark ? "text-surface/50" : "text-ink-muted",
           )}
         >
           {sub}

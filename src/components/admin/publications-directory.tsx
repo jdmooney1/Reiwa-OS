@@ -50,7 +50,7 @@ export function PublicationsDirectory({
             <button key={f.key} onClick={() => setFilter(f.key)}
               className={cn(
                 "rounded px-3 py-1.5 text-xs font-medium transition-colors",
-                filter === f.key ? "bg-navy text-surface" : "text-ink-muted hover:text-ink",
+                filter === f.key ? "bg-plum text-surface" : "text-ink-muted hover:text-ink",
               )}>
               {f.label}
               {f.key === "source_changed" && publications.some((p) => p.sourceChanged) && (
@@ -60,7 +60,7 @@ export function PublicationsDirectory({
           ))}
         </div>
         <button onClick={() => setCreating((v) => !v)}
-          className="flex items-center gap-1.5 rounded bg-navy px-3.5 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
+          className="flex items-center gap-1.5 rounded bg-plum px-3.5 py-2 text-xs font-semibold text-surface hover:bg-plum-50">
           {creating ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
           {creating ? "Cancel" : "New Publication"}
         </button>
@@ -68,7 +68,7 @@ export function PublicationsDirectory({
 
       {/* Create from an eligible internal opportunity */}
       {creating && (
-        <div className="mb-5 rounded-lg border border-gold/30 bg-surface-card">
+        <div className="mb-5 rounded-lg border border-plum/30 bg-surface-card">
           <div className="border-b border-line px-5 py-3.5">
             <div className="eyebrow mb-1">Create publication</div>
             <p className="text-xs text-ink-muted">
@@ -78,7 +78,7 @@ export function PublicationsDirectory({
             </p>
           </div>
           {eligible.length === 0 ? (
-            <div className="px-5 py-8 text-center text-xs text-ink-faint">
+            <div className="px-5 py-8 text-center text-xs text-ink-muted">
               Every active internal opportunity already has a publication.
             </div>
           ) : (
@@ -87,14 +87,14 @@ export function PublicationsDirectory({
                 <li key={o.opportunityId} className="flex items-center justify-between gap-3 px-5 py-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-ink">{o.name}</div>
-                    <div className="mt-0.5 text-2xs text-ink-faint">
+                    <div className="mt-0.5 text-2xs text-ink-muted">
                       {[o.city ?? o.market, ASSET_TYPE_LABEL[o.assetType as AssetType] ?? o.assetType, o.strategy]
                         .filter(Boolean).join(" · ")}
                     </div>
                   </div>
                   <button disabled={pending}
                     onClick={() => start(() => preparePublicationAction(o.opportunityId))}
-                    className="flex shrink-0 items-center gap-1.5 rounded bg-gold px-3 py-1.5 text-2xs font-semibold text-navy hover:bg-gold-soft disabled:opacity-60">
+                    className="flex shrink-0 items-center gap-1.5 rounded bg-plum px-3 py-1.5 text-2xs font-semibold text-surface hover:bg-plum-50 disabled:opacity-60">
                     {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                     Prepare for Investors
                   </button>
@@ -114,7 +114,7 @@ export function PublicationsDirectory({
               : `Nothing is ${FILTERS.find((f) => f.key === filter)?.label.toLowerCase()}.`}
           </div>
           {publications.length === 0 && (
-            <div className="mt-1 text-2xs text-ink-faint">
+            <div className="mt-1 text-2xs text-ink-muted">
               Create one from an internal opportunity to start the investor workflow.
             </div>
           )}
@@ -139,11 +139,11 @@ export function PublicationsDirectory({
                 <tr key={p.publicationId} className="group hover:bg-surface-sunken/60">
                   <td className="px-5 py-3">
                     <Link href={`/admin/publications/${p.publicationId}`}
-                      className="font-medium text-ink group-hover:text-gold-deep">
+                      className="font-medium text-ink group-hover:text-plum">
                       {p.title}
                     </Link>
                     {p.opportunityName && p.opportunityName !== p.title && (
-                      <div className="mt-0.5 text-2xs text-ink-faint">from {p.opportunityName}</div>
+                      <div className="mt-0.5 text-2xs text-ink-muted">from {p.opportunityName}</div>
                     )}
                   </td>
                   <td className="px-5 py-3 text-ink-muted">{p.market ?? "—"}</td>
@@ -165,16 +165,16 @@ export function PublicationsDirectory({
                         <AlertTriangle className="h-3 w-3" /> Source changed
                       </span>
                     ) : (
-                      <span className="text-2xs text-ink-faint">In step</span>
+                      <span className="text-2xs text-ink-muted">In step</span>
                     )}
                   </td>
                   <td className="tabular px-5 py-3 text-right text-ink">
                     {p.visibleOrgs}
                     {p.assignedOrgs > p.visibleOrgs && (
-                      <span className="text-ink-faint"> / {p.assignedOrgs}</span>
+                      <span className="text-ink-muted"> / {p.assignedOrgs}</span>
                     )}
                   </td>
-                  <td className="tabular px-5 py-3 text-right text-2xs text-ink-faint">
+                  <td className="tabular px-5 py-3 text-right text-2xs text-ink-muted">
                     {p.lastPublishedAt ? formatDate(p.lastPublishedAt) : "—"}
                   </td>
                 </tr>
@@ -189,7 +189,7 @@ export function PublicationsDirectory({
 
 function Th({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className={cn("px-5 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint", className)}>
+    <th className={cn("px-5 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-muted", className)}>
       {children}
     </th>
   );

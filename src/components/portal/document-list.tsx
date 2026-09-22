@@ -43,10 +43,10 @@ export function DocumentList({
       <ul className="divide-y divide-line rounded border border-line">
         {documents.map((d) => (
           <li key={d.documentId} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5">
-            <FileText className="h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
+            <FileText className="h-4 w-4 shrink-0 text-ink-muted" strokeWidth={1.75} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-ink">{d.title}</div>
-              <div className="mt-0.5 text-2xs text-ink-faint">
+              <div className="mt-0.5 text-2xs text-ink-muted">
                 {DOC_CATEGORY_LABEL[d.category]}
                 {fileSize(d.sizeBytes) && <span> · {fileSize(d.sizeBytes)}</span>}
               </div>
@@ -54,14 +54,14 @@ export function DocumentList({
             {d.accessLevel === "diligence" && (
               <Badge tone="emphasis">{DOC_LEVEL_LABEL.diligence}</Badge>
             )}
-            <span className="inline-flex items-center gap-1.5 text-2xs text-ink-faint">
+            <span className="inline-flex items-center gap-1.5 text-2xs text-ink-muted">
               <Lock className="h-3 w-3" strokeWidth={1.75} />
               Secure delivery pending
             </span>
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-2xs leading-relaxed text-ink-faint">
+      <p className="mt-3 text-2xs leading-relaxed text-ink-muted">
         Documents are held in Reiwa Capital&rsquo;s private document store. Secure, time-limited
         download is being finalised — until then, please ask your Reiwa contact for any document
         listed here.

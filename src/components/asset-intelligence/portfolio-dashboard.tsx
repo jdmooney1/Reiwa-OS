@@ -26,7 +26,7 @@ export function PortfolioDashboard({
   return (
     <div className="space-y-6 px-8 py-6">
       {fxNote && (
-        <div className="text-2xs text-ink-faint">
+        <div className="text-2xs text-ink-muted">
           Reporting currency GBP · {fxNote}
         </div>
       )}
@@ -63,7 +63,7 @@ export function PortfolioDashboard({
             <Row label="Portfolio risk level">
               {agg.worstSeverity ? (
                 <Badge tone={SEVERITY_TONE[agg.worstSeverity]} dot>{SEVERITY_LABEL[agg.worstSeverity]}</Badge>
-              ) : <span className="text-xs text-ink-faint">—</span>}
+              ) : <span className="text-xs text-ink-muted">—</span>}
             </Row>
             <Row label="Performance vs underwriting">
               <span className={cn("text-xs font-medium", (agg.projectedIrr ?? 0) >= 0 ? "text-ink" : "text-negative")}>
@@ -84,14 +84,14 @@ export function PortfolioDashboard({
       {/* Asset table */}
       <Card>
         <CardHeader eyebrow="Portfolio" title="Assets"
-          action={<span className="text-2xs text-ink-faint">Aggregated from asset records</span>} />
+          action={<span className="text-2xs text-ink-muted">Aggregated from asset records</span>} />
         <CardBody className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1100px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left">
                   {["Asset", "Location", "Strategy", "Acq. Cost", "Current Value", "NOI", "Occ.", "LTV", "Forecast IRR", "vs Underwriting", "Risk", "Decisions"].map((h, i) => (
-                    <th key={h} className={cn("px-3 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint",
+                    <th key={h} className={cn("px-3 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-muted",
                       i >= 3 && i <= 8 && "text-right", (i === 9 || i === 11) && "text-center")}>{h}</th>
                   ))}
                 </tr>
@@ -103,9 +103,9 @@ export function PortfolioDashboard({
                   const tone = s.irr_delta_ppt == null ? "muted" : s.irr_delta_ppt >= 0 ? "positive" : "negative";
                   const perfLabel = s.irr_delta_ppt == null ? "—" : s.irr_delta_ppt >= 0.3 ? "Ahead" : s.irr_delta_ppt <= -0.3 ? "Behind" : "On track";
                   return (
-                    <tr key={f.asset.asset_id} className="hover:bg-gold/[0.04]">
+                    <tr key={f.asset.asset_id} className="hover:bg-plum/[0.04]">
                       <td className="px-3 py-2.5">
-                        <Link href={`/assets/${f.asset.asset_id}`} className="font-medium text-ink hover:text-gold-deep">
+                        <Link href={`/assets/${f.asset.asset_id}`} className="font-medium text-ink hover:text-plum">
                           {f.asset.name}
                         </Link>
                         <div className="mt-0.5">
@@ -123,21 +123,21 @@ export function PortfolioDashboard({
                       <td className="px-3 py-2.5 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <span className={cn("text-2xs font-medium",
-                            tone === "positive" && "text-positive", tone === "negative" && "text-negative", tone === "muted" && "text-ink-faint")}>{perfLabel}</span>
+                            tone === "positive" && "text-positive", tone === "negative" && "text-negative", tone === "muted" && "text-ink-muted")}>{perfLabel}</span>
                           <VarianceValue v={irrVar} tone={tone} unit="ppt" showAbs />
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         {s.risk_severity
                           ? <Badge tone={SEVERITY_TONE[s.risk_severity]} dot>{SEVERITY_LABEL[s.risk_severity]}</Badge>
-                          : <span className="text-2xs text-ink-faint">—</span>}
+                          : <span className="text-2xs text-ink-muted">—</span>}
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         {s.decisions_required > 0 ? (
                           <span className="inline-flex items-center gap-1 text-2xs font-medium text-negative">
                             <AlertTriangle className="h-3 w-3" /> {s.decisions_required}
                           </span>
-                        ) : <span className="text-2xs text-ink-faint">0</span>}
+                        ) : <span className="text-2xs text-ink-muted">0</span>}
                       </td>
                     </tr>
                   );
@@ -156,14 +156,14 @@ function Kpi({ label, value, sub, tone, extra }: {
 }) {
   return (
     <div className="px-4 py-3">
-      <div className="text-[10px] uppercase tracking-label text-ink-faint">{label}</div>
+      <div className="text-[10px] uppercase tracking-label text-ink-muted">{label}</div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className={cn("tabular text-lg font-semibold",
           tone === "negative" && "text-negative", tone === "caution" && "text-caution",
           tone === "positive" && "text-positive", !tone && "text-ink")}>{value}</span>
         {extra}
       </div>
-      {sub && <div className="text-[10px] text-ink-faint">{sub}</div>}
+      {sub && <div className="text-[10px] text-ink-muted">{sub}</div>}
     </div>
   );
 }
@@ -182,12 +182,12 @@ function ExposureCard({ title, rows, total }: { title: string; rows: { label: st
                 <span className="tabular text-ink-muted">{formatMoneyCompact(r.value, "GBP")} · {pct.toFixed(0)}%</span>
               </div>
               <div className="mt-1 h-1.5 rounded-full bg-surface-sunken">
-                <div className="h-full rounded-full bg-gold" style={{ width: `${pct}%` }} />
+                <div className="h-full rounded-full bg-plum" style={{ width: `${pct}%` }} />
               </div>
             </div>
           );
         })}
-        {rows.length === 0 && <div className="text-xs italic text-ink-faint">No data.</div>}
+        {rows.length === 0 && <div className="text-xs italic text-ink-muted">No data.</div>}
       </CardBody>
     </Card>
   );

@@ -14,16 +14,16 @@ export default function SignInPage() {
   return (
     <div className="w-full max-w-sm">
       <div className="mb-6 text-center">
-        <div className="font-serif text-xl tracking-wide text-surface">
-          REIWA<span className="text-gold"> OS</span>
+        <div className="display text-xl tracking-wide text-surface">
+          REIWA<span className="text-surface/50"> OS</span>
         </div>
         <div className="eyebrow-light mt-1">Deal &amp; Asset Intelligence</div>
       </div>
 
-      <form action={action} className="space-y-3 rounded-lg border border-line-dark bg-navy-100 p-6">
+      <form action={action} className="space-y-3 rounded-lg border border-line-dark bg-plum-100 p-6">
         <Field label="Email" name="email" type="email" placeholder="analyst@meiji.com" defaultValue="analyst@meiji.com" />
         <Field label="Password" name="password" type="password" placeholder="••••••••" defaultValue="reiwa2026" />
-        {state.error && <p className="text-2xs text-rose-300">{state.error}</p>}
+        {state.error && <p className="text-2xs text-negative">{state.error}</p>}
         <SubmitButton />
       </form>
 
@@ -49,7 +49,7 @@ function Field({ label, name, type, placeholder, defaultValue }: {
       <span className="eyebrow-light">{label}</span>
       <input
         name={name} type={type} placeholder={placeholder} defaultValue={defaultValue} required
-        className="mt-1 h-9 w-full rounded border border-line-dark bg-navy px-3 text-sm text-surface placeholder:text-surface/30 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30"
+        className="mt-1 h-9 w-full rounded border border-line-dark bg-plum px-3 text-sm text-surface placeholder:text-surface/30 focus:border-surface/40 focus:outline-none focus:ring-1 focus:ring-surface/20"
       />
     </label>
   );
@@ -60,7 +60,7 @@ function SubmitButton() {
   return (
     <button
       type="submit" disabled={pending}
-      className="mt-1 w-full rounded bg-gold px-3 py-2 text-xs font-semibold text-navy transition-colors hover:bg-gold-soft disabled:opacity-60"
+      className="mt-1 w-full rounded bg-surface px-3 py-2 text-xs font-semibold text-plum transition-colors hover:bg-surface-sunken disabled:opacity-60"
     >
       {pending ? "Signing in…" : "Sign in"}
     </button>

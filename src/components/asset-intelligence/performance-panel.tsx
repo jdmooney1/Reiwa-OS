@@ -21,14 +21,14 @@ export function PerformancePanel({ file, canWrite }: { file: AssetFile; canWrite
       {/* Three-way vs underwriting */}
       <Card>
         <CardHeader eyebrow="Performance" title="Underwriting · Forecast · Latest Actual"
-          action={<span className="text-2xs text-ink-faint">Δ = forecast vs underwriting</span>} />
+          action={<span className="text-2xs text-ink-muted">Δ = forecast vs underwriting</span>} />
         <CardBody className="p-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left">
-                <th className="px-5 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint">Metric</th>
+                <th className="px-5 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-muted">Metric</th>
                 {["Underwriting", "Forecast", "Actual", "Δ vs UW"].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-right text-2xs font-medium uppercase tracking-label text-ink-faint">{h}</th>
+                  <th key={h} className="px-4 py-2.5 text-right text-2xs font-medium uppercase tracking-label text-ink-muted">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -59,7 +59,7 @@ export function PerformancePanel({ file, canWrite }: { file: AssetFile; canWrite
             <thead>
               <tr className="border-b border-line text-left">
                 {["Period", "Ending", "NOI", "Occupancy", "Valuation", "Debt", "LTV"].map((h, i) => (
-                  <th key={h} className={`px-4 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint ${i >= 2 ? "text-right" : ""}`}>{h}</th>
+                  <th key={h} className={`px-4 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-muted ${i >= 2 ? "text-right" : ""}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -75,7 +75,7 @@ export function PerformancePanel({ file, canWrite }: { file: AssetFile; canWrite
                   <td className="px-4 py-2.5 text-right text-ink-muted">{formatPct(p.ltv_pct, 1)}</td>
                 </tr>
               ))}
-              {periods.length === 0 && <tr><td colSpan={7} className="px-4 py-6 text-center text-xs italic text-ink-faint">No performance periods recorded yet.</td></tr>}
+              {periods.length === 0 && <tr><td colSpan={7} className="px-4 py-6 text-center text-xs italic text-ink-muted">No performance periods recorded yet.</td></tr>}
             </tbody>
           </table>
         </CardBody>
@@ -85,7 +85,7 @@ export function PerformancePanel({ file, canWrite }: { file: AssetFile; canWrite
       {canWrite && (
         <Card>
           <CardHeader eyebrow="Update" title="Record Performance Period"
-            action={<span className="text-2xs text-ink-faint">Appended immutably; variance recalculates</span>} />
+            action={<span className="text-2xs text-ink-muted">Appended immutably; variance recalculates</span>} />
           <CardBody>
             <form action={addPerformancePeriodAction.bind(null, file.asset.asset_id)} className="space-y-4">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -116,7 +116,7 @@ function F({ label, name, type = "text", placeholder, step, required }: {
     <label className="block">
       <span className="eyebrow">{label}</span>
       <input name={name} type={type} placeholder={placeholder} step={step} required={required}
-        className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+        className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink placeholder:text-ink-faint focus:border-plum focus:outline-none focus:ring-1 focus:ring-plum/20" />
     </label>
   );
 }
@@ -125,7 +125,7 @@ function Submit() {
   const { pending } = useFormStatus();
   return (
     <button type="submit" disabled={pending}
-      className="rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50 disabled:opacity-60">
+      className="rounded bg-plum px-4 py-2 text-xs font-semibold text-surface hover:bg-plum-50 disabled:opacity-60">
       {pending ? "Recording…" : "Record Period"}
     </button>
   );

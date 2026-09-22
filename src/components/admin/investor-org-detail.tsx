@@ -71,11 +71,11 @@ export function InvestorOrgDetail({
       {/* Header */}
       <div className="border-b border-line bg-surface-card px-8 py-5">
         <Link href="/admin/investors"
-          className="mb-2 inline-flex items-center gap-1 text-2xs text-ink-faint hover:text-ink">
+          className="mb-2 inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-ink">
           <ChevronLeft className="h-3 w-3" /> Investor Organisations
         </Link>
         <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="font-serif text-2xl text-ink">{org.name}</h1>
+          <h1 className="display text-2xl text-ink">{org.name}</h1>
           <Badge tone={INVESTOR_ORG_STATUS_TONE[org.status]} dot>
             {INVESTOR_ORG_STATUS_LABEL[org.status]}
           </Badge>
@@ -94,18 +94,18 @@ export function InvestorOrgDetail({
             <CardHeader
               eyebrow="Investor Portal"
               title="Assigned Opportunities"
-              action={<span className="text-2xs text-ink-faint">What this organisation sees, in order</span>}
+              action={<span className="text-2xs text-ink-muted">What this organisation sees, in order</span>}
             />
             <CardBody className="space-y-5">
               {/* Featured slot */}
               <div>
                 <div className="mb-2 flex items-center gap-1.5">
-                  <Star className="h-3.5 w-3.5 text-gold-deep" strokeWidth={1.75} />
+                  <Star className="h-3.5 w-3.5 text-plum" strokeWidth={1.75} />
                   <span className="eyebrow">Featured</span>
-                  <span className="text-2xs text-ink-faint">— one visible featured opportunity per organisation</span>
+                  <span className="text-2xs text-ink-muted">— one visible featured opportunity per organisation</span>
                 </div>
                 {featured.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-line py-5 text-center text-2xs text-ink-faint">
+                  <div className="rounded-lg border border-dashed border-line py-5 text-center text-2xs text-ink-muted">
                     No featured opportunity. Promote one below — featuring another later replaces it automatically.
                   </div>
                 ) : featured.map((a) => (
@@ -119,10 +119,10 @@ export function InvestorOrgDetail({
               <div>
                 <div className="mb-2 flex items-center gap-1.5">
                   <span className="eyebrow">Also Available</span>
-                  <span className="text-2xs text-ink-faint">— shown after the featured opportunity</span>
+                  <span className="text-2xs text-ink-muted">— shown after the featured opportunity</span>
                 </div>
                 {secondary.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-line py-5 text-center text-2xs text-ink-faint">
+                  <div className="rounded-lg border border-dashed border-line py-5 text-center text-2xs text-ink-muted">
                     Nothing else is visible to this organisation.
                   </div>
                 ) : (
@@ -142,9 +142,9 @@ export function InvestorOrgDetail({
               {hidden.length > 0 && (
                 <div>
                   <div className="mb-2 flex items-center gap-1.5">
-                    <EyeOff className="h-3.5 w-3.5 text-ink-faint" strokeWidth={1.75} />
+                    <EyeOff className="h-3.5 w-3.5 text-ink-muted" strokeWidth={1.75} />
                     <span className="eyebrow">Hidden / Revoked</span>
-                    <span className="text-2xs text-ink-faint">— the record is kept, the investor sees nothing</span>
+                    <span className="text-2xs text-ink-muted">— the record is kept, the investor sees nothing</span>
                   </div>
                   <div className="space-y-2">
                     {hidden.map((a) => (
@@ -163,10 +163,10 @@ export function InvestorOrgDetail({
             <CardHeader eyebrow="Assignment" title="Assign a Publication" />
             <CardBody>
               {assignable.length === 0 ? (
-                <p className="text-xs text-ink-faint">
+                <p className="text-xs text-ink-muted">
                   Every existing publication is already assigned to this organisation.
                   Create publications from internal opportunities under{" "}
-                  <Link href="/admin/publications" className="text-gold-deep hover:underline">Publications</Link>.
+                  <Link href="/admin/publications" className="text-plum hover:underline">Publications</Link>.
                 </p>
               ) : (
                 <form action={assignPublicationAction.bind(null, org.investorOrgId)}
@@ -174,7 +174,7 @@ export function InvestorOrgDetail({
                   <label className="block md:col-span-2">
                     <span className="eyebrow">Publication</span>
                     <select name="publicationId" required defaultValue=""
-                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-gold focus:outline-none">
+                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-plum focus:outline-none">
                       <option value="" disabled>Choose a publication…</option>
                       {assignable.map((o) => (
                         <option key={o.publicationId} value={o.publicationId}>
@@ -186,7 +186,7 @@ export function InvestorOrgDetail({
                   <label className="block">
                     <span className="eyebrow">Placement</span>
                     <select name="placement" defaultValue="secondary"
-                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-gold focus:outline-none">
+                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-plum focus:outline-none">
                       <option value="secondary">Also Available</option>
                       <option value="featured">Featured (replaces current)</option>
                     </select>
@@ -194,7 +194,7 @@ export function InvestorOrgDetail({
                   <label className="block">
                     <span className="eyebrow">Document access</span>
                     <select name="documentAccessLevel" defaultValue="standard"
-                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-gold focus:outline-none">
+                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-plum focus:outline-none">
                       <option value="standard">Standard</option>
                       <option value="diligence">Diligence</option>
                     </select>
@@ -202,15 +202,15 @@ export function InvestorOrgDetail({
                   <label className="block md:col-span-2 xl:col-span-3">
                     <span className="eyebrow">Investor note (optional)</span>
                     <input name="investorNote" placeholder="A line the investor sees against this opportunity"
-                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+                      className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-faint focus:border-plum focus:outline-none focus:ring-1 focus:ring-plum/20" />
                   </label>
                   <div className="flex items-end justify-between gap-3 md:col-span-2 xl:col-span-1">
                     <label className="flex items-center gap-2 pb-2 text-xs text-ink">
-                      <input type="checkbox" name="isVisible" defaultChecked className="accent-gold" />
+                      <input type="checkbox" name="isVisible" defaultChecked className="accent-plum" />
                       Visible immediately
                     </label>
                     <button type="submit"
-                      className="rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
+                      className="rounded bg-plum px-4 py-2 text-xs font-semibold text-surface hover:bg-plum-50">
                       Assign
                     </button>
                   </div>
@@ -229,12 +229,12 @@ export function InvestorOrgDetail({
                 <label className="block">
                   <span className="eyebrow">Name</span>
                   <input name="name" defaultValue={org.name} required
-                    className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+                    className="mt-1 h-9 w-full rounded border border-line bg-surface px-3 text-sm text-ink focus:border-plum focus:outline-none focus:ring-1 focus:ring-plum/20" />
                 </label>
                 <label className="block">
                   <span className="eyebrow">Status</span>
                   <select name="status" defaultValue={org.status}
-                    className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-gold focus:outline-none">
+                    className="mt-1 h-9 w-full rounded border border-line bg-surface px-2.5 text-sm text-ink focus:border-plum focus:outline-none">
                     <option value="active">Active</option>
                     <option value="suspended">Suspended — portal access paused</option>
                     <option value="closed">Closed</option>
@@ -243,12 +243,12 @@ export function InvestorOrgDetail({
                 <label className="block">
                   <span className="eyebrow">Notes (internal)</span>
                   <textarea name="notes" rows={3} defaultValue={org.notes ?? ""}
-                    className="mt-1 w-full rounded border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30" />
+                    className="mt-1 w-full rounded border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-plum focus:outline-none focus:ring-1 focus:ring-plum/20" />
                 </label>
                 <div className="flex items-center justify-between">
-                  <span className="text-2xs text-ink-faint">Created {formatDate(org.createdAt)}</span>
+                  <span className="text-2xs text-ink-muted">Created {formatDate(org.createdAt)}</span>
                   <button type="submit"
-                    className="rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
+                    className="rounded bg-plum px-4 py-2 text-xs font-semibold text-surface hover:bg-plum-50">
                     Save
                   </button>
                 </div>
@@ -289,14 +289,14 @@ function AssignmentRow({
   return (
     <div className={cn(
       "rounded-lg border px-4 py-3",
-      featured ? "border-gold/40 bg-gold/5" : "border-line bg-surface",
+      featured ? "border-plum/40 bg-plum/5" : "border-line bg-surface",
       hidden && "opacity-70",
     )}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Link href={`/admin/publications/${a.publication.publicationId}`}
-              className="truncate text-sm font-medium text-ink hover:text-gold-deep">
+              className="truncate text-sm font-medium text-ink hover:text-plum">
               {title}
             </Link>
             <Badge tone={WORKFLOW_TONE[a.publication.status]} dot>
@@ -306,7 +306,7 @@ function AssignmentRow({
               {e.documentAccessLevel === "diligence" ? "Diligence docs" : "Standard docs"}
             </Badge>
           </div>
-          <div className="mt-0.5 text-2xs text-ink-faint">
+          <div className="mt-0.5 text-2xs text-ink-muted">
             {[v?.city ?? v?.market, v?.strategy, v?.assetType].filter(Boolean).join(" · ") || "No published content yet"}
           </div>
           {!live && !hidden && (
@@ -327,15 +327,15 @@ function AssignmentRow({
             >
               <input name="investorNote" defaultValue={e.investorNote ?? ""} autoFocus
                 placeholder="A line the investor sees against this opportunity"
-                className="h-8 w-72 rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
-              <button type="submit" className="rounded bg-navy px-2.5 py-1.5 text-2xs font-semibold text-surface">Save</button>
-              <button type="button" onClick={() => setEditingNote(false)} className="text-2xs text-ink-faint hover:text-ink">Cancel</button>
+                className="h-8 w-72 rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-plum focus:outline-none" />
+              <button type="submit" className="rounded bg-plum px-2.5 py-1.5 text-2xs font-semibold text-surface">Save</button>
+              <button type="button" onClick={() => setEditingNote(false)} className="text-2xs text-ink-muted hover:text-ink">Cancel</button>
             </form>
           )}
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          {pending && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-faint" />}
+          {pending && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-muted" />}
           {onMoveUp && <IconBtn label="Move up" onClick={onMoveUp} disabled={pending}><ArrowUp className="h-3.5 w-3.5" /></IconBtn>}
           {onMoveDown && <IconBtn label="Move down" onClick={onMoveDown} disabled={pending}><ArrowDown className="h-3.5 w-3.5" /></IconBtn>}
           {!hidden && (
@@ -407,7 +407,7 @@ function ContactsCard({
         title="Contacts"
         action={
           <button onClick={() => setAdding((v) => !v)}
-            className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-gold/40 hover:text-ink">
+            className="flex items-center gap-1 rounded border border-line px-2.5 py-1.5 text-2xs font-medium text-ink-muted hover:border-plum/40 hover:text-ink">
             {adding ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {adding ? "Cancel" : "Add contact"}
           </button>
         }
@@ -420,14 +420,14 @@ function ContactsCard({
           }} className="space-y-3 border-b border-line bg-surface-sunken/50 px-5 py-4">
             <ContactFields />
             <div className="flex justify-end">
-              <button type="submit" className="rounded bg-navy px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-navy-50">
+              <button type="submit" className="rounded bg-plum px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-plum-50">
                 Add Contact
               </button>
             </div>
           </form>
         )}
         {contacts.length === 0 && !adding ? (
-          <div className="px-5 py-8 text-center text-xs text-ink-faint">
+          <div className="px-5 py-8 text-center text-xs text-ink-muted">
             No contacts yet. Add the people who will use this organisation’s portal.
           </div>
         ) : (
@@ -442,8 +442,8 @@ function ContactsCard({
                     <ContactFields contact={c} />
                     <div className="flex justify-end gap-2">
                       <button type="button" onClick={() => setEditingId(null)}
-                        className="text-2xs text-ink-faint hover:text-ink">Cancel</button>
-                      <button type="submit" className="rounded bg-navy px-3 py-1.5 text-2xs font-semibold text-surface">Save</button>
+                        className="text-2xs text-ink-muted hover:text-ink">Cancel</button>
+                      <button type="submit" className="rounded bg-plum px-3 py-1.5 text-2xs font-semibold text-surface">Save</button>
                     </div>
                   </form>
                 ) : (
@@ -454,7 +454,7 @@ function ContactsCard({
                           <span className="text-sm font-medium text-ink">{c.name}</span>
                           {!c.isActive && <Badge tone="muted">Inactive</Badge>}
                         </div>
-                        <div className="mt-0.5 truncate text-2xs text-ink-faint">
+                        <div className="mt-0.5 truncate text-2xs text-ink-muted">
                           {c.email}{c.title ? ` · ${c.title}` : ""}
                         </div>
                         <div className="mt-1">
@@ -515,7 +515,7 @@ function ContactAccess({
   if (!contact.authUserId) {
     return (
       <div className="mt-2 flex items-center justify-between gap-3 rounded border border-dashed border-line px-3 py-2">
-        <span className="text-2xs text-ink-faint">
+        <span className="text-2xs text-ink-muted">
           Provision the sign-in to enable invitations. The account is OTP-only — no password exists.
         </span>
         <SmallBtn disabled={pending}
@@ -537,7 +537,7 @@ function ContactAccess({
     <div className="mt-2 rounded border border-line bg-surface px-3 py-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          {stateBadge ?? <span className="text-2xs text-ink-faint">No invitation issued yet.</span>}
+          {stateBadge ?? <span className="text-2xs text-ink-muted">No invitation issued yet.</span>}
         </div>
         <div className="flex items-center gap-1">
           {invite?.state === "active" && (
@@ -560,13 +560,13 @@ function ContactAccess({
         </div>
       </div>
       {issued && (
-        <div className="mt-2 rounded border border-gold/40 bg-gold/5 px-3 py-2">
+        <div className="mt-2 rounded border border-plum/40 bg-plum/5 px-3 py-2">
           <div className="eyebrow mb-1">Invitation link — shown once, copy it now</div>
           <input readOnly
             value={typeof window !== "undefined" ? `${window.location.origin}${issued.path}` : issued.path}
             onFocus={(e) => e.currentTarget.select()}
             className="w-full rounded border border-line bg-surface-card px-2 py-1.5 font-mono text-2xs text-ink" />
-          <div className="mt-1 text-2xs text-ink-faint">
+          <div className="mt-1 text-2xs text-ink-muted">
             Valid until {formatDate(issued.expiresAt)}. Only the link identifies the invitation — the
             server keeps a hash, so it cannot be recovered later.
           </div>
@@ -582,17 +582,17 @@ function ContactFields({ contact }: { contact?: InvestorContact }) {
       <label className="block">
         <span className="eyebrow">Name</span>
         <input name="name" required defaultValue={contact?.name ?? ""}
-          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-plum focus:outline-none" />
       </label>
       <label className="block">
         <span className="eyebrow">Title</span>
         <input name="title" defaultValue={contact?.title ?? ""}
-          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-plum focus:outline-none" />
       </label>
       <label className="block md:col-span-2">
         <span className="eyebrow">Email</span>
         <input name="email" type="email" required defaultValue={contact?.email ?? ""}
-          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-gold focus:outline-none" />
+          className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-plum focus:outline-none" />
       </label>
     </div>
   );
@@ -612,7 +612,7 @@ function SmallBtn({
     <button type="button" onClick={onClick} disabled={disabled} title={title}
       className={cn(
         "flex items-center gap-1 rounded border border-line px-2 py-1 text-2xs font-medium text-ink-muted transition-colors disabled:opacity-50",
-        tone === "negative" ? "hover:border-negative/40 hover:text-negative" : "hover:border-gold/40 hover:text-ink",
+        tone === "negative" ? "hover:border-negative/40 hover:text-negative" : "hover:border-plum/40 hover:text-ink",
       )}>
       {children}
     </button>
@@ -629,7 +629,7 @@ function IconBtn({
 }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled} aria-label={label} title={label}
-      className="rounded border border-line p-1 text-ink-muted hover:border-gold/40 hover:text-ink disabled:opacity-50">
+      className="rounded border border-line p-1 text-ink-muted hover:border-plum/40 hover:text-ink disabled:opacity-50">
       {children}
     </button>
   );

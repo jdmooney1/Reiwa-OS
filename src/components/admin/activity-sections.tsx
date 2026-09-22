@@ -14,8 +14,8 @@ function Section({
   return (
     <section className="mt-10">
       <div className="mb-4 flex items-baseline justify-between gap-4 border-b border-line pb-2">
-        <h2 className="font-serif text-lg text-ink">{title}</h2>
-        {note && <span className="text-2xs uppercase tracking-label text-ink-faint">{note}</span>}
+        <h2 className="display text-lg text-ink">{title}</h2>
+        {note && <span className="text-2xs uppercase tracking-label text-ink-muted">{note}</span>}
       </div>
       {children}
     </section>
@@ -25,7 +25,7 @@ function Section({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-2xs uppercase tracking-label text-ink-faint">{label}</dt>
+      <dt className="text-2xs uppercase tracking-label text-ink-muted">{label}</dt>
       <dd className="mt-0.5 text-sm text-ink">{value}</dd>
     </div>
   );
@@ -80,16 +80,16 @@ export function OrgActivitySection({
 
         {summary.contacts.length > 0 && (
           <div className="mt-5">
-            <h3 className="mb-2 text-2xs uppercase tracking-label text-ink-faint">By contact</h3>
+            <h3 className="mb-2 text-2xs uppercase tracking-label text-ink-muted">By contact</h3>
             <ul className="divide-y divide-line rounded border border-line">
               {summary.contacts.map((c) => (
                 <li key={c.investorContactId} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-4 py-2.5">
                   <div>
                     <span className="text-sm text-ink">{c.name}</span>
                     {!c.isActive && (
-                      <span className="ml-2 text-2xs text-ink-faint">(deactivated)</span>
+                      <span className="ml-2 text-2xs text-ink-muted">(deactivated)</span>
                     )}
-                    <span className="ml-2 text-2xs text-ink-faint">{c.email}</span>
+                    <span className="ml-2 text-2xs text-ink-muted">{c.email}</span>
                   </div>
                   <div className="flex gap-6 text-2xs text-ink-muted">
                     <span>
@@ -108,7 +108,7 @@ export function OrgActivitySection({
 
         {summary.opportunitiesViewed.length > 0 && (
           <div className="mt-5">
-            <h3 className="mb-2 text-2xs uppercase tracking-label text-ink-faint">
+            <h3 className="mb-2 text-2xs uppercase tracking-label text-ink-muted">
               Opportunities opened
             </h3>
             <ul className="divide-y divide-line rounded border border-line">
@@ -116,7 +116,7 @@ export function OrgActivitySection({
                 <li key={o.publicationId} className="flex items-baseline justify-between gap-4 px-4 py-2.5">
                   <Link
                     href={`/admin/publications/${o.publicationId}`}
-                    className="text-sm text-ink hover:text-gold-deep"
+                    className="text-sm text-ink hover:text-plum"
                   >
                     {o.title}
                   </Link>
@@ -130,16 +130,16 @@ export function OrgActivitySection({
         )}
 
         <div className="mt-5">
-          <h3 className="mb-2 text-2xs uppercase tracking-label text-ink-faint">Event record</h3>
+          <h3 className="mb-2 text-2xs uppercase tracking-label text-ink-muted">Event record</h3>
           <ActivityFeed
             rows={summary.recent}
             showOrganisation={false}
             emptyMessage="No activity has been recorded for this investor yet."
           />
           {summary.recent.length >= 40 && (
-            <p className="mt-2 text-2xs text-ink-faint">
+            <p className="mt-2 text-2xs text-ink-muted">
               Showing the 40 most recent events.{" "}
-              <Link href={`/admin/activity?org=${investorOrgId}`} className="hover:text-gold-deep">
+              <Link href={`/admin/activity?org=${investorOrgId}`} className="hover:text-plum">
                 See the full record →
               </Link>
             </p>
@@ -166,7 +166,7 @@ export function PublicationActivitySection({
         title="Investor activity"
         note={anything ? `${activity.byOrganisation.length} investor(s) active` : "no activity"}
       >
-        <p className="mb-4 max-w-2xl text-2xs leading-relaxed text-ink-faint">
+        <p className="mb-4 max-w-2xl text-2xs leading-relaxed text-ink-muted">
           Internal only. Investors never see another organisation&rsquo;s activity, or their own
           record.
         </p>
@@ -182,7 +182,7 @@ export function PublicationActivitySection({
                 <tr className="border-b border-line">
                   {["Investor", "Opened", "Saved", "Compared", "Requests", "Last activity"].map((h, i) => (
                     <th key={h}
-                      className={`px-3 pb-2 text-2xs font-semibold uppercase tracking-label text-ink-faint ${i === 0 ? "text-left" : "text-right"}`}>
+                      className={`px-3 pb-2 text-2xs font-semibold uppercase tracking-label text-ink-muted ${i === 0 ? "text-left" : "text-right"}`}>
                       {h}
                     </th>
                   ))}
@@ -193,7 +193,7 @@ export function PublicationActivitySection({
                   <tr key={o.investorOrgId} className="border-b border-line last:border-b-0">
                     <td className="px-3 py-2.5">
                       <Link href={`/admin/investors/${o.investorOrgId}`}
-                        className="text-ink hover:text-gold-deep">
+                        className="text-ink hover:text-plum">
                         {o.name}
                       </Link>
                     </td>
@@ -212,15 +212,15 @@ export function PublicationActivitySection({
         )}
 
         <div className="mt-5">
-          <h3 className="mb-2 text-2xs uppercase tracking-label text-ink-faint">Event record</h3>
+          <h3 className="mb-2 text-2xs uppercase tracking-label text-ink-muted">Event record</h3>
           <ActivityFeed
             rows={activity.recent}
             emptyMessage="No investor activity has been recorded against this opportunity."
           />
           {activity.recent.length >= 30 && (
-            <p className="mt-2 text-2xs text-ink-faint">
+            <p className="mt-2 text-2xs text-ink-muted">
               Showing the 30 most recent events.{" "}
-              <Link href={`/admin/activity?publication=${publicationId}`} className="hover:text-gold-deep">
+              <Link href={`/admin/activity?publication=${publicationId}`} className="hover:text-plum">
                 See the full record →
               </Link>
             </p>

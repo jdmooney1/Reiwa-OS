@@ -34,12 +34,12 @@ export function OpportunityPipeline({ opportunities }: { opportunities: Opportun
           {([["board", "Board", LayoutGrid], ["table", "Table", Table2]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => setView(k)}
               className={cn("flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-colors",
-                view === k ? "bg-navy text-surface" : "text-ink-muted hover:text-ink")}>
+                view === k ? "bg-plum text-surface" : "text-ink-muted hover:text-ink")}>
               <Icon className="h-3.5 w-3.5" strokeWidth={1.75} /> {label}
             </button>
           ))}
         </div>
-        <span className="tabular text-2xs text-ink-faint">{active.length} active · {archived.length} archived</span>
+        <span className="tabular text-2xs text-ink-muted">{active.length} active · {archived.length} archived</span>
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -51,11 +51,11 @@ export function OpportunityPipeline({ opportunities }: { opportunities: Opportun
                 <div key={stage} className="flex w-72 shrink-0 flex-col">
                   <div className="mb-3 flex items-center gap-2 border-b border-line pb-2">
                     <span className="text-xs font-semibold uppercase tracking-label text-ink">{STAGE_LABEL[stage]}</span>
-                    <span className="tabular rounded bg-navy/5 px-1.5 py-0.5 text-2xs font-medium text-ink-muted">{col.length}</span>
+                    <span className="tabular rounded bg-plum/5 px-1.5 py-0.5 text-2xs font-medium text-ink-muted">{col.length}</span>
                   </div>
                   <div className="flex flex-1 flex-col gap-2.5">
                     {col.map((o) => <OppCard key={o.opportunityId} o={o} />)}
-                    {col.length === 0 && <div className="rounded-lg border border-dashed border-line py-6 text-center text-2xs text-ink-faint">—</div>}
+                    {col.length === 0 && <div className="rounded-lg border border-dashed border-line py-6 text-center text-2xs text-ink-muted">—</div>}
                   </div>
                 </div>
               );
@@ -80,11 +80,11 @@ export function OpportunityPipeline({ opportunities }: { opportunities: Opportun
 function OppCard({ o }: { o: Opportunity }) {
   return (
     <Link href={`/opportunities/${o.opportunityId}`}>
-      <Card className="p-3.5 transition-colors hover:border-gold/40">
+      <Card className="p-3.5 transition-colors hover:border-plum/40">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-ink">{o.name}</div>
-            <div className="truncate text-2xs text-ink-faint">{o.city ?? "—"} · {ASSET_TYPE_LABEL[o.assetType as AssetType] ?? o.assetType}</div>
+            <div className="truncate text-2xs text-ink-muted">{o.city ?? "—"} · {ASSET_TYPE_LABEL[o.assetType as AssetType] ?? o.assetType}</div>
           </div>
           <Badge tone={STATUS_TONE[o.status]} dot>{STATUS_LABEL[o.status]}</Badge>
         </div>
@@ -102,7 +102,7 @@ function OppCard({ o }: { o: Opportunity }) {
 function Fig({ label, v }: { label: string; v: string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-label text-ink-faint">{label}</div>
+      <div className="text-[10px] uppercase tracking-label text-ink-muted">{label}</div>
       <div className="mt-0.5 font-medium text-ink">{v}</div>
     </div>
   );
@@ -115,14 +115,14 @@ function OppTable({ rows, muted }: { rows: Opportunity[]; muted?: boolean }) {
         <thead>
           <tr className="border-b border-line bg-surface-sunken/50 text-left">
             {["Opportunity", "Location", "Type", "Strategy", "Stage", "Price", "NIY", "IRR", "Status"].map((h, i) => (
-              <th key={h} className={cn("px-3 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint", i >= 5 && i <= 7 && "text-right")}>{h}</th>
+              <th key={h} className={cn("px-3 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-muted", i >= 5 && i <= 7 && "text-right")}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody className="tabular divide-y divide-line">
           {rows.map((o) => (
-            <tr key={o.opportunityId} className="hover:bg-gold/[0.04]">
-              <td className="px-3 py-2.5"><Link href={`/opportunities/${o.opportunityId}`} className="font-medium text-ink hover:text-gold-deep">{o.name}</Link></td>
+            <tr key={o.opportunityId} className="hover:bg-plum/[0.04]">
+              <td className="px-3 py-2.5"><Link href={`/opportunities/${o.opportunityId}`} className="font-medium text-ink hover:text-plum">{o.name}</Link></td>
               <td className="px-3 py-2.5 text-ink-muted">{o.city ?? "—"}</td>
               <td className="px-3 py-2.5 text-ink-muted">{ASSET_TYPE_LABEL[o.assetType as AssetType] ?? o.assetType}</td>
               <td className="px-3 py-2.5 text-ink-muted">{o.strategy ? (STRATEGY_LABEL[o.strategy as Strategy] ?? o.strategy) : "—"}</td>
@@ -133,7 +133,7 @@ function OppTable({ rows, muted }: { rows: Opportunity[]; muted?: boolean }) {
               <td className="px-3 py-2.5"><Badge tone={STATUS_TONE[o.status]} dot>{STATUS_LABEL[o.status]}</Badge></td>
             </tr>
           ))}
-          {rows.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-sm text-ink-faint">No opportunities.</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-sm text-ink-muted">No opportunities.</td></tr>}
         </tbody>
       </table>
     </div>

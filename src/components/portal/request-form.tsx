@@ -48,14 +48,14 @@ export function RequestForm({
   return (
     <form action={formAction} className="rounded border border-line bg-surface-sunken/40 px-5 py-5">
       {submittedCount > 0 && (
-        <p className="mb-4 text-2xs text-ink-faint">
+        <p className="mb-4 text-2xs text-ink-muted">
           You have previously submitted {submittedCount}{" "}
           {submittedCount === 1 ? "request" : "requests"} on this opportunity.
         </p>
       )}
 
       <fieldset>
-        <legend className="text-2xs uppercase tracking-label text-ink-faint">
+        <legend className="text-2xs uppercase tracking-label text-ink-muted">
           How can we help?
         </legend>
         <div className="mt-3 space-y-2.5">
@@ -66,7 +66,7 @@ export function RequestForm({
                 name="requestType"
                 value={o.value}
                 defaultChecked={i === 0}
-                className="mt-1 accent-navy"
+                className="mt-1 accent-plum"
               />
               <span>
                 <span className="block text-sm font-medium text-ink">{o.label}</span>
@@ -78,7 +78,7 @@ export function RequestForm({
       </fieldset>
 
       <label className="mt-4 block">
-        <span className="text-2xs uppercase tracking-label text-ink-faint">
+        <span className="text-2xs uppercase tracking-label text-ink-muted">
           Message <span className="normal-case tracking-normal">(optional)</span>
         </span>
         <textarea
@@ -86,7 +86,7 @@ export function RequestForm({
           rows={3}
           maxLength={2000}
           placeholder="Anything specific you would like us to cover."
-          className="mt-1.5 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/30"
+          className="mt-1.5 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-plum/50 focus:outline-none focus:ring-1 focus:ring-plum/20"
         />
       </label>
 
@@ -105,7 +105,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="mt-4 rounded bg-navy px-5 py-2.5 text-xs font-semibold text-surface transition-colors hover:bg-navy-50 disabled:opacity-60"
+      className="mt-4 rounded bg-plum px-5 py-2.5 text-xs font-semibold text-surface transition-colors hover:bg-plum-50 disabled:opacity-60"
     >
       {pending ? "Sending…" : "Send request"}
     </button>

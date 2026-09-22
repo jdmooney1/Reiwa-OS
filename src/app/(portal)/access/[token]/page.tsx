@@ -48,11 +48,11 @@ export default async function AccessPage({ params }: { params: { token: string }
     const c = copy[invite.reason] ?? copy.not_found;
     return (
       <PortalCard>
-        <h1 className="font-serif text-xl text-ink">{c.title}</h1>
+        <h1 className="display text-xl text-ink">{c.title}</h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">{c.body}</p>
         {invite.reason === "accepted" && (
           <Link href="/portal/verify"
-            className="mt-5 inline-block rounded bg-navy px-4 py-2 text-xs font-semibold text-surface hover:bg-navy-50">
+            className="mt-5 inline-block rounded bg-plum px-4 py-2 text-xs font-semibold text-surface hover:bg-plum-50">
             Continue to sign in
           </Link>
         )}
@@ -63,7 +63,7 @@ export default async function AccessPage({ params }: { params: { token: string }
   return (
     <PortalCard>
       <div className="eyebrow mb-2">Invitation · {invite.investorOrgName}</div>
-      <h1 className="font-serif text-xl text-ink">Welcome, {invite.contactName}</h1>
+      <h1 className="display text-xl text-ink">Welcome, {invite.contactName}</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-muted">
         Reiwa Capital has invited you to its private investment portal. To continue,
         we will email a one-time access code to your authorised address:
@@ -73,11 +73,11 @@ export default async function AccessPage({ params }: { params: { token: string }
       </div>
       <form action={requestOtpForInviteAction.bind(null, token)} className="mt-5">
         <button type="submit"
-          className="w-full rounded bg-gold px-4 py-2.5 text-sm font-semibold text-navy hover:bg-gold-soft">
+          className="w-full rounded bg-plum px-4 py-2.5 text-sm font-semibold text-surface hover:bg-plum-50">
           Email me a secure access code
         </button>
       </form>
-      <p className="mt-4 text-2xs text-ink-faint">
+      <p className="mt-4 text-2xs text-ink-muted">
         This invitation is valid until {formatDate(invite.expiresAt)} and does not itself grant
         access — only the code sent to the authorised address can sign you in.
       </p>

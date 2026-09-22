@@ -21,8 +21,8 @@ export function Select({
         onChange={(e) => onChange(e.target.value)}
         className={cn(
           "h-8 appearance-none rounded border border-line bg-surface-card pl-2.5 pr-7 text-xs text-ink",
-          "focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/30",
-          value === "" && "text-ink-faint",
+          "focus:border-plum focus:outline-none focus:ring-1 focus:ring-plum/20",
+          value === "" && "text-ink-muted",
         )}
       >
         {placeholder && <option value="">{placeholder}</option>}
@@ -33,7 +33,7 @@ export function Select({
         ))}
       </select>
       <svg
-        className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-faint"
+        className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-muted"
         viewBox="0 0 12 12" fill="none"
       >
         <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
