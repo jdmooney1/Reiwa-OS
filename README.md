@@ -1,54 +1,104 @@
 # Reiwa OS
 
-**Private real estate deal intelligence platform for Reiwa Capital.**
+**The internal investment and asset intelligence platform for Reiwa Capital.**
 
-Reiwa OS turns every UK and European property opportunity into a structured digital
-deal file — from sourcing and screening through underwriting, due diligence, risk
-assessment, scoring, and investment-committee memo. It is built for Reiwa Capital's
-internal team (Founder, Analyst) and, later, vetted external advisers, with Japanese
-investor–grade rigour and presentation.
+Reiwa Capital is a Tokyo-based, principal-aligned firm investing Japanese
+corporate, family-office and institutional capital into UK and European real
+estate, mainly London and Amsterdam.
 
-This is **not** a generic CRM or dashboard. It is a deal screening, underwriting,
-due diligence, and investment memo system.
+Reiwa Capital is the firm. Reiwa OS is the system the firm runs on.
+
+One record carries a deal from first sight to exit: screening, due diligence,
+investment committee, acquisition, and then the operating life of the asset.
+It is internal infrastructure for one firm, not a SaaS product, a marketplace
+or a broker network.
 
 ---
 
 ## Status
 
-🟡 **Phase 0 — Architecture & data model proposal.**
+Phase 0 complete. The system runs on Supabase with row-level security, and
+holds one deal record that spans the whole lifecycle.
 
-This commit contains design documentation only. No application code has been built
-yet. See the documents below before any implementation begins.
+**Working today**
 
-| Document | Purpose |
-| --- | --- |
-| [`docs/01-architecture.md`](docs/01-architecture.md) | Tech stack, folder structure, navigation, auth, storage |
-| [`docs/02-data-model.md`](docs/02-data-model.md) | Domain model, entity relationships, schema rationale |
-| [`docs/03-mvp-screens.md`](docs/03-mvp-screens.md) | MVP screen list, layouts, component inventory |
-| [`docs/10-persistence-gate.md`](docs/10-persistence-gate.md) | Property-centric lifecycle model, immutability rules |
-| [`docs/11-supabase-p0.md`](docs/11-supabase-p0.md) | P0: Supabase runtime, Supabase Auth, RLS claims seam |
-| [`docs/12-investor-portal-p1.md`](docs/12-investor-portal-p1.md) | P1: Investment Portal data foundation, publication boundary, investor RLS |
-| [`supabase/schema.sql`](supabase/schema.sql) | Concrete proposed Postgres schema (enums, tables, RLS) |
+- **Pipeline** — opportunities across six stages, with outcomes and archiving
+- **Deal file** — due diligence tracker on the Reiwa London and Amsterdam
+  frameworks, contacts, a document register and a decision log
+- **Conversion** — approved case to transaction to asset, atomic and immutable,
+  so original underwriting can always be reconstructed
+- **Asset Intelligence** — portfolio and per-asset view: underwriting versus
+  forecast versus actual, performance periods, valuations, risks, decisions
+- **Investment Portal** — a curated investor-facing surface with versioned
+  publications, entitlements and one-time-code access. Complete, and **frozen
+  for V1**: bug fixes only, off the main navigation, reachable at `/admin`
+
+**Not built yet** — document upload and extraction, the Five Tests scorecard,
+the Japanese structuring overlay, the pass log and the IC memo. See the build
+order in [`CLAUDE.md`](CLAUDE.md).
+
+There is no AI in the system today. The previous simulated extraction and memo
+generation were removed in the Phase 0 reset: they produced prose that read
+like findings but was derived from nothing.
 
 ---
 
-## Tech stack
+## Quick start
 
-- **Framework:** Next.js (App Router) + TypeScript
-- **Styling:** Tailwind CSS + shadcn/ui
-- **Auth:** Supabase Auth (email + password; staff accounts)
-- **Database:** Supabase (Postgres + Row Level Security)
-- **File storage:** Supabase Storage (Document Vault)
-- **Hosting (proposed):** Vercel
+```bash
+npm ci
+cp .env.example .env.local        # see the local stack block at the foot of the file
 
-## Design language
+npm run db:local                  # Supabase in Docker, works offline
+npm run db:local:status           # prints the keys to paste into .env.local
+npm run db:reset -- --yes         # drop, migrate, seed
 
-Premium institutional finance. Minimal, calm, confident. Dark navy base, warm white
-surfaces, a single muted gold accent. Not startup SaaS, not playful, not a generic
-dashboard. Typography and spacing carry the weight; colour is used sparingly.
+npm run dev
+```
 
-## Initial scope
+Seeding creates Reiwa Capital and the firm's four reference deals — 58 Queen's
+Gate, 28 Pavilion Road, Queens Hotel Brighton and Dyke Road Avenue Brighton.
+**Every figure on them is deliberately absent and marked TBC.** Reiwa OS never
+shows a number the firm did not enter.
 
-- **Markets:** London, Amsterdam
-- **Currencies:** GBP, EUR
-- **Users:** Founder, Analyst (external advisers added in a later phase)
+| Command | Does |
+| --- | --- |
+| `npm test` | Unit tests: pure logic, no database. Sub-second |
+| `npm run test:integration` | Postgres tests: RLS, isolation, lifecycle |
+| `npm run typecheck` / `npm run lint` | Types and lint |
+| `npm run db:migrate` | Apply pending migrations |
+| `npm run db:seed -- --demo` | Load the fictional multi-tenant test fixtures |
+
+---
+
+## Stack
+
+- **Next.js 14** (App Router) and TypeScript
+- **Supabase** — Postgres with row-level security, Supabase Auth, Storage
+- **Tailwind CSS** on the Reiwa Capital brand tokens
+- **Vitest** — unit and integration suites
+
+Security is enforced at the database. `src/lib/db/client.ts` is the only module
+that speaks Postgres, and every application query runs inside an RLS-gated
+transaction.
+
+---
+
+## Design
+
+Deep plum `#271430` on warm cream `#FCFAF1`, the two brand greys, set in DM
+Sans. Plum is the emphasis colour; there is no accent. Colour appears only on
+verdicts, red flags and status, in four desaturated functional tones.
+
+Institutional, restrained, editorial. British English throughout.
+
+---
+
+## Documentation
+
+[`CLAUDE.md`](CLAUDE.md) is the working reference: data model, conventions,
+design tokens, how to run and test, and the agreed build order. Read it first.
+
+`docs/05` and `docs/09` describe the due diligence framework and Asset
+Intelligence. `docs/10`–`docs/16` are a phase-by-phase record of how the
+persistence, portal and access layers were built.

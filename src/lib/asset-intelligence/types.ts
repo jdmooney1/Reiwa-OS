@@ -1,6 +1,6 @@
 // ============================================================================
-// Asset Intelligence — domain types (mirror supabase/asset-intelligence.sql)
-// Reuses shared enums from the deal schema where they carry over.
+// Asset Intelligence — domain types (mirror supabase/migrations/0003_asset_intelligence.sql)
+// Reuses the shared enums in src/types/database.ts where they carry over.
 // ============================================================================
 import type {
   Currency, Market, AssetType, Strategy, RiskStatus,

@@ -29,14 +29,16 @@ Organisation (Meiji Shipping) → Portfolio (UK / Netherlands) → Asset → …
 asset-scoped table denormalises `org_id`; **org-scoped RLS** (`user_orgs()` helper) means
 an organisation sees only its own assets. Built into the new tables from day one.
 
-## Schema (supabase/asset-intelligence.sql — additive)
+## Schema (supabase/migrations/0003_asset_intelligence.sql)
 
-`organizations`, `organization_members`, `portfolios`, `assets`, `business_plans`
-(versioned/immutable), `performance_periods` (append-only), `tenants`, `leases`,
-`capex_items`, `development_projects`, `milestones`, `valuations`, `loans`, `asset_risks`,
-`asset_decisions`, `advisers`, `asset_actions`, `asset_events`, `reporting_periods`. Two
-non-destructive `ALTER`s add nullable `deals.asset_id` and `documents.asset_id`. Nothing in
-`schema.sql` is rewritten.
+> **Note (Phase 0 reset).** This document describes the module as originally
+> designed. What is actually persisted is the subset in migration 0003:
+> `assets`, `business_plans` (versioned, the underwriting baseline immutable),
+> `performance_periods` (append-only), `valuations`, `asset_risks` and
+> `asset_decisions`. Leases, loans, capex items, development projects and the
+> adviser/event tables were never built. The `deals.asset_id` link it mentions
+> no longer applies: an asset hangs off the one opportunity record, via
+> `assets.opportunity_id`.
 
 **History preservation.** `business_plans` carry `(plan_type, version)` and no update path;
 `performance_periods` are immutable once `closed`. We can reconstruct what management
