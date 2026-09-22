@@ -29,3 +29,7 @@ yarn-error.log*
 
 # Local scratch
 /.data
+
+# Supabase CLI local stack
+/supabase/.branches
+/supabase/.temp

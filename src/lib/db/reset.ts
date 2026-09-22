@@ -8,7 +8,8 @@
 // ============================================================================
 import type { Pool } from "pg";
 import { getPool, runMigrations } from "@/lib/db/client";
-import { seedIfEmpty } from "@/lib/db/seed";
+import { seedDemoFixtures } from "@/lib/db/seed";
+import { seedReiwaFixtures } from "@/lib/db/fixtures";
 
 /** Application tables in dependency order (children first). */
 const TABLES = [
@@ -68,10 +69,37 @@ export async function dropSchema(pool: Pool = getPool()): Promise<void> {
   }
 }
 
+/**
+ * Which fixtures a freshly reset database is loaded with.
+ *   "reiwa" — the firm's own four reference deals (the default).
+ *   "demo"  — the fictional multi-tenant fixtures the integration tests need.
+ */
+export type FixtureSet = "reiwa" | "demo";
+
+/** Seed a database that has no organisations yet. Returns true if it seeded. */
+export async function seedIfEmpty(
+  pool: Pool = getPool(), fixtures: FixtureSet = "reiwa",
+): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    const existing = await client.query<{ n: number }>(
+      "select count(*)::int as n from organizations");
+    if ((existing.rows[0]?.n ?? 0) > 0) return false;
+  } finally {
+    client.release();
+  }
+
+  if (fixtures === "demo") return seedDemoFixtures(pool);
+  await seedReiwaFixtures(pool);
+  return true;
+}
+
 /** Drop, migrate, seed. Returns the migrations that were applied. */
-export async function resetDatabase(pool: Pool = getPool()): Promise<string[]> {
+export async function resetDatabase(
+  pool: Pool = getPool(), fixtures: FixtureSet = "reiwa",
+): Promise<string[]> {
   await dropSchema(pool);
   const applied = await runMigrations(pool);
-  await seedIfEmpty(pool);
+  await seedIfEmpty(pool, fixtures);
   return applied;
 }

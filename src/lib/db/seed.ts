@@ -1,6 +1,12 @@
 // ============================================================================
-// Seed — idempotent demonstration data (runs once, when organizations is empty).
+// Demonstration fixtures — FICTIONAL, and for the integration test harness only.
 // ----------------------------------------------------------------------------
+// Nothing here is seeded into a normal database. `npm run db:seed` and
+// `npm run db:reset` load the firm's own reference deals from
+// src/lib/db/fixtures.ts; this file is loaded only by tests/global-setup.ts,
+// where the fictional organisations exist to prove row-level isolation between
+// tenants end to end.
+//
 // Two organisations so org isolation is provable end to end:
 //   * Meiji Shipping   — pipeline opportunities + the two demo assets.
 //   * Aoyama Holdings  — a separate asset that Meiji users must never see.
@@ -113,7 +119,7 @@ export async function seedInvestorIdentities(): Promise<Record<string, string>> 
  * Seed demonstration data. No-op when `organizations` already has rows.
  * Returns true when data was written.
  */
-export async function seedIfEmpty(pool: Pool = getPool()): Promise<boolean> {
+export async function seedDemoFixtures(pool: Pool = getPool()): Promise<boolean> {
   const client = await pool.connect();
   try {
     const existing = await client.query<{ n: number }>("select count(*)::int as n from organizations");
