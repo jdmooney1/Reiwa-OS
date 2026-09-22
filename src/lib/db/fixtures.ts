@@ -174,7 +174,7 @@ export async function seedReiwaFixtures(pool: Pool = getPool()): Promise<void> {
         `insert into opportunities(org_id, property_id, name, market, asset_type,
            stage, status, currency, summary, owner_user_id, created_by, archived_at)
          values ($1,$2,$3,$4,$5,$6,$7,'GBP',$8,$9,$9,
-                 case when $7 = 'rejected' then now() else null end)
+                 case when $7::text = 'rejected' then now() else null end)
          returning opportunity_id`,
         [org.org_id, prop.property_id, f.name, f.market, f.assetType,
          f.stage, f.status, f.summary, adminUserId]);
