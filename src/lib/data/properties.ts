@@ -57,20 +57,23 @@ export async function resolveProperty(
 ): Promise<ResolvedProperty> {
   const postcode = normalisePostcode(input.postcode) ?? normalisePostcode(input.address);
   const addressNormalised = normaliseAddress(input.address) || null;
-  const identityKey = propertyIdentityKey({
-    address: input.address,
-    postcode: postcode ?? input.postcode,
-    name: input.name,
-    city: input.city,
-  });
+  // Address-led only. The postcode is still normalised and stored below, but it
+  // is an attribute of the property, not part of its identity (migration 0013).
+  const identityKey = propertyIdentityKey({ address: input.address });
   const countryCode = normaliseCountry(input.country)
     ?? findPostcode(postcode ?? input.address)?.country
     ?? null;
 
   if (identityKey) {
+    // Scoped by market as well as org: the key is address-led and carries no
+    // location of its own, so "5 Pollen Street" in London and in Amsterdam are
+    // different buildings. Matches the unique index in migration 0013, and the
+    // same coalesce, so the lookup and the constraint agree about a null market.
     const existing = await tx.query<{ property_id: string }>(
-      "select property_id from properties where org_id = $1 and identity_key = $2",
-      [input.orgId, identityKey]);
+      `select property_id from properties
+        where org_id = $1 and coalesce(market, '') = coalesce($2::text, '')
+          and identity_key = $3`,
+      [input.orgId, str(input.market), identityKey]);
 
     if (existing.rows[0]) {
       const propertyId = existing.rows[0].property_id;
