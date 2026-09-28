@@ -26,6 +26,7 @@ import { applyDdTemplate, updateDdItem, addDdItem, type DdItemPatch } from "@/li
 import { createRisk, promoteFindingToRisk, updateRisk, type RiskPatch } from "@/lib/data/opportunity-risks";
 import { recordDecision, amendDecision, type IcOutcome } from "@/lib/data/ic-decisions";
 import { recordDocument } from "@/lib/data/opportunity-documents";
+import { setThreadConfirmed } from "@/lib/data/email-threads";
 import {
   checkUpload, newOpportunityObjectPath, putDocumentObject, deleteDocumentObject, safeFileName,
 } from "@/lib/documents/storage";
@@ -283,4 +284,27 @@ export async function uploadDocumentAction(
 
     refresh(opportunityId);
   });
+}
+
+// ---- Broker email threads --------------------------------------------------
+/**
+ * Confirm, or withdraw confirmation of, a thread link.
+ *
+ * A `review` link is a match the matcher was unsure of — it once paired
+ * "16 Conduit Street" with "9 Conduit Street" on a shared street name alone.
+ * Confirming is therefore a person's act and is recorded as one; the loader
+ * never confirms on their behalf, and re-running it never un-confirms what
+ * somebody has already agreed.
+ */
+export async function confirmThreadLinkAction(
+  opportunityId: string, emailThreadId: string, confirmed: boolean,
+): Promise<ActionResult> {
+  const session = await requireDbSession();
+  return runAction(
+    "workspace.emailThread.confirm",
+    { opportunityId, emailThreadId, confirmed },
+    async () => {
+      await setThreadConfirmed(session, opportunityId, emailThreadId, confirmed);
+      refresh(opportunityId);
+    });
 }

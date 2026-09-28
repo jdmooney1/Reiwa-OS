@@ -23,7 +23,8 @@ import { str } from "@/lib/data/coerce";
 import { resolveProperty } from "@/lib/data/properties";
 import { recordEvent } from "@/lib/data/property-events";
 import type { PipelineRow } from "@/lib/ingestion/pipeline-workbook";
-import { isNotABuilding, entryYieldPct } from "@/lib/ingestion/pipeline-workbook";
+import { isNotABuilding, entryYieldPct, classifyThread } from "@/lib/ingestion/pipeline-workbook";
+import { upsertThread, linkThread } from "@/lib/data/email-threads";
 
 export type LoadOutcome = "created" | "updated" | "skipped" | "failed" | "excluded";
 
@@ -164,6 +165,30 @@ export async function loadRow(
     });
   }
 
+  // ---- Email thread --------------------------------------------------------
+  // The sheet names at most one thread per deal. Firm-level threads, which
+  // cover several deals at once, are loaded separately and deliberately left
+  // unlinked - see loadMailMap().
+  if (row.gmailThreadId) {
+    const emailThreadId = await upsertThread(tx, {
+      orgId: ctx.orgId,
+      gmailThreadId: row.gmailThreadId,
+      subject: row.name,
+      market: row.market,
+      classification: "deal",
+      createdBy: ctx.userId,
+    });
+    await linkThread(tx, {
+      orgId: ctx.orgId,
+      opportunityId,
+      emailThreadId,
+      // A blank confidence is treated as needing review, never as settled.
+      confidence: row.gmailConfidence === "high" ? "high" : "review",
+      matchedSubject: row.name,
+      linkedBy: ctx.userId,
+    });
+  }
+
   return {
     ref: row.ref,
     outcome,
@@ -230,4 +255,37 @@ export async function recordLoadRow(
     [ctx.orgId, ctx.batchId, row.ref, JSON.stringify(row.raw), result.outcome,
      result.reason ?? null, result.opportunityId ?? null, result.propertyId ?? null,
      result.propertyUnkeyed ?? false]);
+}
+
+
+/**
+ * Record the Mail Map threads, linked to nothing.
+ *
+ * Nineteen are firm-level or administrative and one is a property that is not
+ * among the loaded deals. None is assigned automatically: a thread listing
+ * eight buildings belongs to eight opportunities or to none, and guessing which
+ * is exactly the error that paired "16 Conduit Street" with "9 Conduit Street".
+ *
+ * They are stored rather than dropped because an unmatched thread names a deal
+ * the sheet is missing, and because a thread recorded as `not_a_deal` is what
+ * stops a later pass offering it again as a candidate.
+ */
+export async function loadMailMap(
+  tx: Queryable,
+  ctx: LoadContext,
+  threads: readonly { category: string; market: string | null; threadId: string;
+                      subject: string | null; note: string | null }[],
+): Promise<number> {
+  for (const t of threads) {
+    await upsertThread(tx, {
+      orgId: ctx.orgId,
+      gmailThreadId: t.threadId,
+      subject: t.subject,
+      market: t.market,
+      classification: classifyThread(t.category, t.note),
+      note: t.note,
+      createdBy: ctx.userId,
+    });
+  }
+  return threads.length;
 }

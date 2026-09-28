@@ -65,7 +65,10 @@ export interface PipelineWorkbook {
   rows: PipelineRow[];
   issues: WorkbookIssue[];
   /** Threads named on the Mail Map tab as firm-level, admin or unmatched. */
-  unassignedThreads: { category: string; market: string | null; threadId: string; subject: string | null }[];
+  unassignedThreads: {
+    category: string; market: string | null; threadId: string;
+    subject: string | null; note: string | null;
+  }[];
   fx: { pair: string; rate: number }[];
 }
 
@@ -217,6 +220,7 @@ export async function readPipelineWorkbook(buffer: Buffer): Promise<PipelineWork
         market: text(row.getCell(idx("Market")).value),
         threadId,
         subject: text(row.getCell(idx("Subject")).value),
+        note: text(row.getCell(idx("Note")).value),
       });
     });
   }
@@ -233,6 +237,35 @@ export async function readPipelineWorkbook(buffer: Buffer): Promise<PipelineWork
   }
 
   return { rows, issues, unassignedThreads, fx };
+}
+
+// ---- Thread classification -------------------------------------------------
+export type ThreadClassification =
+  | "deal" | "firm_level" | "market_report" | "admin" | "not_a_deal" | "unmatched";
+
+/**
+ * Classify a Mail Map thread from its category and note.
+ *
+ * The Mail Map tab puts nineteen threads under one heading, "Multi / admin",
+ * which covers three genuinely different things: a broker's firm-level thread
+ * that WILL be assigned to deals by hand, correspondence that is not a deal at
+ * all, and two entries that must never be linked to anything.
+ *
+ * Those last two matter enough to be structural rather than a note somebody
+ * reads. One is a Google security alert mislabelled Amsterdam. The other is
+ * "16 Conduit Street", a Meiji-OWNED asset — the matcher originally paired it
+ * with "9 Conduit Street" (LON-052), which was wrong and was withdrawn. Marking
+ * it `not_a_deal` is what stops a later pass rediscovering it as a candidate
+ * and repeating the mistake.
+ */
+export function classifyThread(category: string, note: string | null): ThreadClassification {
+  const n = (note ?? "").toLowerCase();
+  if (/\bjunk\b|security alert/.test(n)) return "not_a_deal";
+  if (/owned asset|not a pipeline deal/.test(n)) return "not_a_deal";
+  if (/market report/.test(n)) return "market_report";
+  if (/admin, not a deal|intro call/.test(n)) return "admin";
+  if (/^unmatched$/i.test(category.trim())) return "unmatched";
+  return "firm_level";
 }
 
 // ---- Interpretation rules the loader applies -------------------------------

@@ -3,7 +3,9 @@ import { requireAuth, toDbSession } from "@/lib/auth/session";
 import { getOpportunityFile } from "@/lib/data/opportunity-file";
 import { listRisks } from "@/lib/data/opportunity-risks";
 import { listVersions } from "@/lib/data/underwriting";
+import { listOpportunityThreads } from "@/lib/data/email-threads";
 import { SummarySection } from "@/components/workspace/summary-section";
+import { EmailThreadsSection } from "@/components/workspace/email-threads-section";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,10 @@ export default async function SummaryPage({
   const file = await getOpportunityFile(session, params.opportunityId);
   if (!file) notFound();
 
-  const risks = await listRisks(session, params.opportunityId);
+  const [risks, threads] = await Promise.all([
+    listRisks(session, params.opportunityId),
+    listOpportunityThreads(session, params.opportunityId),
+  ]);
   const openRisks = risks
     .filter((r) => r.status === "open")
     .sort((a, b) => (b.financialImpact ?? 0) - (a.financialImpact ?? 0));
@@ -33,5 +38,14 @@ export default async function SummaryPage({
     if (working) workingAhead = { version: working.version };
   }
 
-  return <SummarySection file={file} openRisks={openRisks} workingAhead={workingAhead} />;
+  return (
+    <>
+      <SummarySection file={file} openRisks={openRisks} workingAhead={workingAhead} />
+      <EmailThreadsSection
+        opportunityId={params.opportunityId}
+        threads={threads}
+        canWrite={auth.role !== "investor_viewer"}
+      />
+    </>
+  );
 }
