@@ -14,6 +14,33 @@
 // Pure module: no server imports, no I/O. Fully unit tested.
 // ============================================================================
 
+/**
+ * "St" is Saint far more often than Street in London addresses, and expanding it
+ * blindly destroys the street name: "12 St George Street" became "12 street
+ * george street", whose key was "12street" — the building gone, and one house
+ * number away from silently merging with "12 St Mary Axe".
+ *
+ * Saint is distinguishable without a gazetteer. "St" means Saint when it is
+ * followed by a capitalised word AND the address carries a real street type
+ * later on ("...George STREET", "...Martins LANE"). "16 Conduit St, Mayfair"
+ * has no later street type, so its "St" is the street type itself.
+ *
+ * Applied to the RAW string, because the capitalisation is the signal and
+ * lowercasing destroys it.
+ */
+const SAINT_CANDIDATE = /\bSt\.?\s+(?=[A-Z])/g;
+const HAS_LATER_STREET_TYPE =
+  /\b(street|road|avenue|place|square|lane|drive|court|crescent|gardens?|terrace|parade|way|hill|row|walk|close|mews|wharf|quay|park|gate|yard|rise|grove|green|bridge|circus|embankment|buildings?|house|boulevard|highway|mount|axe)\b/i;
+
+function markSaints(raw: string): string {
+  if (!HAS_LATER_STREET_TYPE.test(raw)) return raw;
+  return raw.replace(SAINT_CANDIDATE, (match, offset: number) => {
+    // Only when a street type appears AFTER this occurrence.
+    const rest = raw.slice(offset + match.length);
+    return HAS_LATER_STREET_TYPE.test(rest) ? "saint " : match;
+  });
+}
+
 /** Combining diacritical marks, stripped after NFKD so accented spellings match. */
 const ACCENTS = /[\u0300-\u036f]/g;
 
@@ -120,7 +147,7 @@ export function normalisePostcode(raw: string | null | undefined): string | null
  */
 export function normaliseAddress(raw: string | null | undefined): string {
   if (!raw) return "";
-  let s = String(raw)
+  let s = markSaints(String(raw))
     .normalize("NFKD")
     .replace(ACCENTS, "")   // fold accents: Herengracht vs Hérengracht
     .toLowerCase();
@@ -182,30 +209,18 @@ export interface IdentityInput {
  * Asset" is a brochure title, not an identity.
  */
 export function propertyIdentityKey(input: IdentityInput): string | null {
-  const postcode = findPostcode(input.postcode) ?? findPostcode(input.address);
-  const address = normaliseAddress(input.address);
-  const street = streetPart(address);
-
-  if (postcode) {
-    // Postcode plus the street part only. The rest of the address - district,
-    // city, county - is exactly what varies between brokers describing the same
-    // building, so including it would manufacture false negatives.
-    //
-    // The postcode is passed through because it changes how much of the street
-    // is needed: a UK postcode already pins the address to a handful of
-    // buildings, so the number and the first word discriminate on their own.
-    // Without that anchor the fallback has to keep more.
-    const anchored = streetPart(address, true);
-    const detail = anchored ?? collapse(normaliseName(input.name));
-    return detail ? `pc:${postcode.compact}|${detail}` : `pc:${postcode.compact}`;
-  }
-
-  if (street && /\d/.test(street)) {
-    const city = collapse(normaliseName(input.city));
-    return `ad:${street}${city ? `|${city}` : ""}`;
-  }
-
-  return null;
+  // ONE key form, address-led. The postcode is deliberately NOT part of it.
+  //
+  // No row in the pipeline load carries a postcode, so a postcode-led key would
+  // encode nothing today — while the deferred email-extraction phase, whose
+  // sources DO carry postcodes ("24-26 Spring Street, Paddington, London
+  // W2 1JA"), would then mint a second key form for buildings already loaded
+  // and duplicate every one of them. Postcode is stored as an enrichable
+  // attribute on the property instead.
+  //
+  // Location is carried by the unique index, which is scoped
+  // (org_id, market, identity_key) — see migration 0013.
+  return streetPart(normaliseAddress(input.address));
 }
 
 /** Full street-type words that terminate the street part of an address. */
@@ -239,24 +254,51 @@ function isStreetType(token: string): boolean {
  * anchoring the key one token is enough to discriminate; without one, two are
  * kept, because the address is then carrying the identity alone.
  */
-export function streetPart(address: string, postcodeAnchored = false): string | null {
+export function streetPart(address: string): string | null {
   if (!address) return null;
   const tokens = address.split(" ").filter(Boolean);
   if (tokens.length === 0) return null;
 
-  const numberMatch = tokens[0].match(/^\d+[a-z]?(?:-\d+[a-z]?)?$/);
-  const start = numberMatch ? 1 : 0;
-  const number = numberMatch ? tokens[0] : "";
+  const isNumber = (t: string) => /^\d+[a-z]?(?:-\d+[a-z]?)?$/.test(t);
 
-  const rest = tokens.slice(start);
+  // The house number leads in English addresses ("5 Pollen Street") and TRAILS
+  // in Dutch ones ("Wolvenstraat 23"). Both are composed canonically as
+  // number-then-street, so one building keys the same whichever convention its
+  // source used.
+  //
+  // Getting this wrong is not merely a missed match: streetPart used to stop at
+  // the street-type token, which in Dutch is the FIRST token, so "Wolvenstraat
+  // 23" reduced to "wolvenstraat" — identical to "Wolvenstraat 99". Only the
+  // digit guard below stopped those two buildings merging.
+  let number = "";
+  let rest: string[];
+  if (isNumber(tokens[0])) {
+    number = tokens[0];
+    rest = tokens.slice(1);
+  } else if (tokens.length > 1 && isNumber(tokens[tokens.length - 1])) {
+    number = tokens[tokens.length - 1];
+    rest = tokens.slice(0, -1);
+  } else {
+    rest = tokens;
+  }
+
   if (rest.length === 0) return number || null;
 
   const typeIndex = rest.findIndex(isStreetType);
-  const fallback = postcodeAnchored ? 1 : 2;
-  const name = typeIndex >= 0 ? rest.slice(0, typeIndex + 1) : rest.slice(0, fallback);
+  // With market in the unique index the city cannot be confused across markets,
+  // so a single token suffices where no street type is recognisable. Two would
+  // drag in the locality and key "8 Bishopsgate" and "8 Bishopsgate, London"
+  // differently.
+  const name = typeIndex >= 0 ? rest.slice(0, typeIndex + 1) : rest.slice(0, 1);
 
   const joined = collapse(`${number}${name.join("")}`);
-  return joined || null;
+  if (!joined) return null;
+
+  // A street name with no number identifies a STREET, not a building: "York
+  // House" and "Nieuwe Herengracht" could be anywhere along it. Those stay
+  // unkeyable, create their own property and never auto-match — recoverable
+  // later if a source supplies a number, whereas a false merge is not.
+  return /\d/.test(joined) ? joined : null;
 }
 
 /** Space-free form used inside keys. */

@@ -198,3 +198,70 @@ describe("The record outlives the campaign", () => {
     expect(Number(grants[0].n)).toBe(0);
   });
 });
+
+describe("Identity is market-scoped, address-led, and postcode-enriched", () => {
+  it("keeps one address in two markets as two properties", async () => {
+    // The key is address-led and carries no location, so market is what tells
+    // a London street from an Amsterdam one (migration 0013).
+    const address = `${++n} Ambiguous Street`;
+    const amsterdam = await orgIdByName("Aoyama Holdings");
+    const amsterdamUser = await profileIdByEmail("user@aoyama.com");
+    const a = await withSession(session, (tx) =>
+      resolveProperty(tx, { orgId: meiji, name: "Ambiguous", address, market: "London" }));
+    const b = await withSession(session, (tx) =>
+      resolveProperty(tx, { orgId: meiji, name: "Ambiguous", address, market: "Amsterdam" }));
+    expect(b.propertyId).not.toBe(a.propertyId);
+    // And a different org is different again, whatever the market.
+    const c = await withSession(orgUserSession([amsterdam], amsterdamUser), (tx) =>
+      resolveProperty(tx, { orgId: amsterdam, name: "Ambiguous", address, market: "London" }));
+    expect(c.propertyId).not.toBe(a.propertyId);
+  });
+
+  it("reads St as Saint, so two Saint streets at one number stay apart", async () => {
+    const num = ++n;
+    const a = await withSession(session, (tx) =>
+      resolveProperty(tx, { orgId: meiji, name: "SG", address: `${num} St George Street`, market: "London" }));
+    const b = await withSession(session, (tx) =>
+      resolveProperty(tx, { orgId: meiji, name: "SMA", address: `${num} St Mary Axe`, market: "London" }));
+    expect(b.propertyId).not.toBe(a.propertyId);
+  });
+
+  it("composes a Dutch address the same whichever way round the number is", async () => {
+    const num = ++n;
+    const a = await withSession(session, (tx) =>
+      resolveProperty(tx, { orgId: meiji, name: "W", address: `Wolvenstraat ${num}`, market: "Amsterdam" }));
+    const b = await withSession(session, (tx) =>
+      resolveProperty(tx, { orgId: meiji, name: "W", address: `${num} Wolvenstraat`, market: "Amsterdam" }));
+    expect(b.propertyId).toBe(a.propertyId);
+    expect(b.created).toBe(false);
+  });
+
+  it("lets a postcode ENRICH a property rather than mint a second identity", async () => {
+    // The hazard this closes: the deferred email-extraction phase sees
+    // postcodes the pipeline load never did. A postcode-led key form would
+    // duplicate every property already loaded address-led.
+    const num = ++n;
+    const a = await withSession(session, (tx) =>
+      resolveProperty(tx, { orgId: meiji, name: "Spring", address: `${num} Spring Street`, market: "London" }));
+    const b = await withSession(session, (tx) =>
+      resolveProperty(tx, {
+        orgId: meiji, name: "Spring", market: "London",
+        address: `${num} Spring Street, Paddington, London W2 1JA`,
+      }));
+    expect(b.propertyId).toBe(a.propertyId);
+    expect(b.created).toBe(false);
+    const rows = await adminQuery<{ postcode: string }>(
+      "select postcode from properties where property_id = $1", [a.propertyId]);
+    expect(rows[0].postcode).toBe("W2 1JA");
+  });
+
+  it("leaves a building with no house number unkeyable, and never merges it", async () => {
+    const name = `Unnumbered House ${++n}`;
+    const a = await withSession(session, (tx) =>
+      resolveProperty(tx, { orgId: meiji, name, address: name, market: "London" }));
+    const b = await withSession(session, (tx) =>
+      resolveProperty(tx, { orgId: meiji, name, address: name, market: "London" }));
+    expect(a.identityKey).toBeNull();
+    expect(b.propertyId).not.toBe(a.propertyId);
+  });
+});

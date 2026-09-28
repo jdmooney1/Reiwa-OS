@@ -82,9 +82,16 @@ describe("propertyIdentityKey", () => {
     const b = propertyIdentityKey({ address: "22 Conduit Street", postcode: "W1S 2XJ" });
     expect(a).not.toBe(b);
   });
-  it("keys on the address when there is no postcode", () => {
-    const key = propertyIdentityKey({ address: "124 Herengracht", city: "Amsterdam" });
-    expect(key).toMatch(/^ad:/);
+  it("produces one address-led key form, with no postcode in it", () => {
+    // Postcode is stored as an enrichable attribute, never part of the key: the
+    // deferred email-extraction phase sees postcodes the pipeline load never
+    // did, and a second key form would duplicate every property already loaded.
+    const withPostcode = propertyIdentityKey({
+      address: "24-26 Spring Street, Paddington, London W2 1JA",
+    });
+    const without = propertyIdentityKey({ address: "24-26 Spring Street" });
+    expect(withPostcode).toBe("24-26springstreet");
+    expect(without).toBe(withPostcode);
   });
   it("refuses to key on a name alone, so it can never auto-merge a brochure title", () => {
     expect(propertyIdentityKey({ name: "Mayfair Asset" })).toBeNull();
@@ -123,5 +130,54 @@ describe("similarity", () => {
   });
   it("handles empty input", () => {
     expect(similarity("", "anything")).toBe(0);
+  });
+});
+
+describe("\"St\" is Saint far more often than Street", () => {
+  it("keeps the street name when St abbreviates Saint", () => {
+    // Expanding blindly gave "12 street george street", keyed "12street" - the
+    // building gone, and one house number from merging with 12 St Mary Axe.
+    expect(propertyIdentityKey({ address: "12 St George Street" })).toBe("12saintgeorgestreet");
+    expect(propertyIdentityKey({ address: "60 St James's Street" })).toBe("60saintjamessstreet");
+    expect(propertyIdentityKey({ address: "36-39 St Martins Lane" })).toBe("36-39saintmartinslane");
+    expect(propertyIdentityKey({ address: "24 St James's Square" })).toBe("24saintjamesssquare");
+  });
+
+  it("still expands St when it IS the street type", () => {
+    expect(propertyIdentityKey({ address: "16 Conduit St, Mayfair" }))
+      .toBe(propertyIdentityKey({ address: "16 Conduit Street, Mayfair" }));
+  });
+
+  it("no longer lets two Saint streets collide on their house number", () => {
+    expect(propertyIdentityKey({ address: "12 St George Street" }))
+      .not.toBe(propertyIdentityKey({ address: "12 St Mary Axe" }));
+  });
+});
+
+describe("The house number may lead or trail", () => {
+  it("composes Dutch addresses canonically", () => {
+    // streetPart used to stop at the street type, which in Dutch is the FIRST
+    // token, discarding the house number entirely.
+    expect(propertyIdentityKey({ address: "Wolvenstraat 23" })).toBe("23wolvenstraat");
+    expect(propertyIdentityKey({ address: "Herengracht 567" })).toBe("567herengracht");
+    expect(propertyIdentityKey({ address: "Keizersgracht 125-127" })).toBe("125-127keizersgracht");
+  });
+
+  it("keeps two buildings on one Dutch street apart", () => {
+    expect(propertyIdentityKey({ address: "Wolvenstraat 23" }))
+      .not.toBe(propertyIdentityKey({ address: "Wolvenstraat 99" }));
+  });
+
+  it("agrees whichever convention the source used", () => {
+    expect(propertyIdentityKey({ address: "Herengracht 124" }))
+      .toBe(propertyIdentityKey({ address: "124 Herengracht" }));
+  });
+
+  it("leaves a street with no house number unkeyable", () => {
+    // A street name alone identifies a STREET, not a building. Unkeyable can be
+    // upgraded when a source supplies a number; a false merge cannot be undone.
+    expect(propertyIdentityKey({ address: "Nieuwe Herengracht" })).toBeNull();
+    expect(propertyIdentityKey({ address: "York House" })).toBeNull();
+    expect(propertyIdentityKey({ address: "Royal Exchange" })).toBeNull();
   });
 });
