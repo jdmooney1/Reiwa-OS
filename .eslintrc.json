@@ -1,6 +1,33 @@
 {
   "extends": "next/core-web-vitals",
   "rules": {
-    "@next/next/no-html-link-for-pages": "off"
-  }
+    "@next/next/no-html-link-for-pages": "off",
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": [
+              "@/lib/ingestion/pipeline-workbook",
+              "**/lib/ingestion/pipeline-workbook"
+            ],
+            "message": "pipeline-workbook pulls in exceljs and must never reach a client bundle. It is imported by the loader script and server-side data modules only. If a screen needs something from it, move that value into a pure module (src/lib/ingestion/normalise.ts is the pattern) and import it from there."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "scripts/**/*.ts",
+        "src/lib/data/**/*.ts",
+        "src/app/actions/**/*.ts",
+        "tests/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
 }

@@ -19,7 +19,7 @@ import { basename, dirname, join } from "node:path";
 import { requireEnv } from "./env";
 import { getPool, closePool, withSessionOn, adminQuery, type Session } from "@/lib/db/client";
 import { readPipelineWorkbook, isNotABuilding, type PipelineRow } from "@/lib/ingestion/pipeline-workbook";
-import { loadRow, recordLoadRow, type LoadedRow, type LoadContext } from "@/lib/data/deal-load";
+import { loadRow, recordLoadRow, loadMailMap, type LoadedRow, type LoadContext } from "@/lib/data/deal-load";
 
 interface Args { file: string; org: string; write: boolean }
 
@@ -83,6 +83,10 @@ async function main(): Promise<void> {
       await recordLoadRow(tx, ctx, row, result);
     }
 
+    // Firm-level, administrative and unmatched threads: recorded, linked to
+    // nothing. Assigning them is a human decision.
+    const mailMapCount = await loadMailMap(tx, ctx, workbook.unassignedThreads);
+
     const count = (o: string) => results.filter((r) => r.outcome === o).length;
     await tx.query(
       `update deal_load_batches
@@ -143,6 +147,12 @@ async function main(): Promise<void> {
     say(collapsed === 0
       ? "  row that resolved a property got its own."
       : "  expected on this load — review the pairs before committing.");
+    const excludedCount = results.filter((r) => isNotABuilding(r.ref)).length;
+    if (excludedCount > 0) {
+      say(`  ${propertyCount} properties against ${results.length} opportunities is CORRECT,`);
+      say(`  not a missing row: ${excludedCount} opportunit${excludedCount === 1 ? "y is" : "ies are"} excluded from property`);
+      say(`  identity by name (listed below), and resolve${excludedCount === 1 ? "s" : ""} no property at all.`);
+    }
 
     say("");
     say("-- EXCEPTIONS: rows that are 1:1 by default, not by identity " + "-".repeat(11));
@@ -211,6 +221,23 @@ async function main(): Promise<void> {
       `select count(*) n from publication_sources ps
          join opportunities o on o.opportunity_id = ps.opportunity_id
         where o.org_id = $1`, [orgId]);
+    // ---- Email threads ----------------------------------------------------
+    const threads = await tx.query<{ classification: string; n: string }>(
+      `select classification, count(*) n from email_threads
+        where org_id = $1 group by classification order by classification`, [orgId]);
+    const links = await tx.query<{ confidence: string; n: string }>(
+      `select confidence, count(*) n from opportunity_email_threads
+        where org_id = $1 group by confidence order by confidence`, [orgId]);
+    say("");
+    say("-- Email threads " + "-".repeat(55));
+    for (const t of threads.rows) say(`  ${t.classification.padEnd(16)} ${t.n}`);
+    say(`  recorded from Mail Map, linked to nothing: ${mailMapCount}`);
+    for (const l of links.rows) {
+      say(`  links: ${l.confidence.padEnd(9)} ${l.n}` +
+          (l.confidence === "review" ? "   (awaiting human confirmation)" : ""));
+    }
+    say(`  ${workbook.rows.length - workbook.rows.filter((r) => r.gmailThreadId).length} deals have no thread. That is expected, not a gap.`);
+
     say("");
     say("-- Investor visibility " + "-".repeat(49));
     say(`  publications for these opportunities: ${published.rows[0].n}`);
