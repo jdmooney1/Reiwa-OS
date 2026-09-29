@@ -79,7 +79,7 @@ export function InvestorOrgDirectory({ orgs }: { orgs: InvestorOrgSummary[] }) {
             </label>
             <div className="md:col-span-3 flex justify-end">
               <button type="submit"
-                className="rounded bg-purple px-4 py-2 text-xs font-semibold text-ink hover:bg-surface-sunken">
+                className="rounded bg-purple px-4 py-2 text-xs font-semibold text-surface hover:bg-purple-70">
                 Create Organisation
               </button>
             </div>

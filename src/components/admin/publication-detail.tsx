@@ -302,7 +302,7 @@ function DraftEditor({ version, publicationId }: { version: PublicationVersion; 
           Investors never see drafts — this version goes live only when it is reviewed and published.
         </span>
         <button type="submit"
-          className="rounded bg-purple px-4 py-2 text-xs font-semibold text-ink hover:bg-purple-70">
+          className="rounded bg-purple px-4 py-2 text-xs font-semibold text-surface hover:bg-purple-70">
           Save Draft
         </button>
       </div>
@@ -474,10 +474,10 @@ function DocumentsCard({
             <label className="block md:col-span-3">
               <span className="eyebrow">File</span>
               <input name="file" type="file" required accept={UPLOAD_ACCEPT}
-                className="mt-1 block w-full rounded border border-line bg-surface-card px-2.5 py-1.5 text-xs text-ink file:mr-3 file:rounded file:border-0 file:bg-purple file:px-2.5 file:py-1 file:text-2xs file:font-semibold file:text-ink focus:border-line-strong focus:outline-none" />
+                className="mt-1 block w-full rounded border border-line bg-surface-card px-2.5 py-1.5 text-xs text-ink file:mr-3 file:rounded file:border-0 file:bg-purple file:px-2.5 file:py-1 file:text-2xs file:font-semibold file:text-surface focus:border-line-strong focus:outline-none" />
             </label>
             <div className="flex items-end justify-end">
-              <button type="submit" className="rounded bg-purple px-3.5 py-2 text-2xs font-semibold text-ink hover:bg-purple-70">
+              <button type="submit" className="rounded bg-purple px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-purple-70">
                 Upload Document
               </button>
             </div>
@@ -514,7 +514,7 @@ function DocumentsCard({
                     <div className="flex items-end justify-end gap-2 md:col-span-4">
                       <button type="button" onClick={() => setEditingId(null)}
                         className="text-2xs text-ink-faint hover:text-ink">Cancel</button>
-                      <button type="submit" className="rounded bg-purple px-3 py-1.5 text-2xs font-semibold text-ink">Save</button>
+                      <button type="submit" className="rounded bg-purple px-3 py-1.5 text-2xs font-semibold text-surface">Save</button>
                     </div>
                   </form>
                 ) : (
@@ -655,7 +655,7 @@ function AccessTab({
                 Visible immediately
               </label>
               <div className="flex items-end justify-end md:col-span-2">
-                <button type="submit" className="rounded bg-purple px-3.5 py-2 text-2xs font-semibold text-ink hover:bg-purple-70">
+                <button type="submit" className="rounded bg-purple px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-purple-70">
                   Grant Access
                 </button>
               </div>
@@ -829,9 +829,9 @@ function HeaderBtn({
     <button type="button" onClick={onClick} disabled={disabled}
       className={cn(
         "flex items-center gap-1.5 rounded px-3.5 py-2 text-xs font-semibold transition-colors disabled:opacity-60",
-        primary && "bg-purple text-ink hover:bg-surface-sunken",
+        primary && "bg-purple text-surface hover:bg-purple-70",
         !primary && !danger && "border border-line text-ink-muted hover:bg-surface-sunken hover:text-ink",
-        danger && "border border-negative/40 text-rose-200 hover:bg-negative/20",
+        danger && "border border-negative/40 text-negative hover:bg-negative/10",
       )}>
       {children}
     </button>

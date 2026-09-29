@@ -94,7 +94,7 @@ export function PublicationsDirectory({
                   </div>
                   <button disabled={pending}
                     onClick={() => start(() => preparePublicationAction(o.opportunityId))}
-                    className="flex shrink-0 items-center gap-1.5 rounded bg-purple px-3 py-1.5 text-2xs font-semibold text-ink hover:bg-surface-sunken disabled:opacity-60">
+                    className="flex shrink-0 items-center gap-1.5 rounded bg-purple px-3 py-1.5 text-2xs font-semibold text-surface hover:bg-purple-70 disabled:opacity-60">
                     {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                     Prepare for Investors
                   </button>
