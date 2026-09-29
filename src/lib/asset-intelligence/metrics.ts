@@ -105,6 +105,28 @@ export function threeWay(file: AssetFile, key: MetricKey): ThreeWay {
   };
 }
 
+/**
+ * Actual against plan: the latest closed period against the plan currently in
+ * force (the forecast, else the approved plan), falling back to underwriting
+ * only when no forecast exists. Null when there is no actual or no plan figure
+ * for the metric. `against` says which plan was used, so a caller never has to
+ * guess what "plan" meant.
+ *
+ * This is the number that matters once actuals exist. Forecast-vs-underwriting
+ * (threeWay) measures how the view of the future has moved; this measures what
+ * has happened.
+ */
+export function actualVsPlan(
+  file: AssetFile, key: MetricKey,
+): { v: Variance; plan: number; actual: number; against: "forecast" | "underwriting" } | null {
+  const tw = threeWay(file, key);
+  if (tw.actual == null) return null;
+  const against = tw.forecast != null ? "forecast" : "underwriting";
+  const plan = against === "forecast" ? tw.forecast : tw.underwriting;
+  if (plan == null) return null;
+  return { v: variance(tw.actual, plan), plan, actual: tw.actual, against };
+}
+
 // ---- Asset current snapshot (derived) --------------------------------------
 export interface AssetSnapshot {
   currency: Currency;
@@ -180,7 +202,18 @@ export interface PortfolioAggregate {
   noi: number | null;
   occupancy: number | null; // valuation-weighted
   projectedIrr: number | null; // equity-weighted
+  /**
+   * Value against cost, over ONLY the assets that have both a valuation and an
+   * acquisition price. Null when none do. See `coverage`.
+   */
   valuationVsCostPct: number | null;
+  /**
+   * How many assets each ratio above was actually computed from. An asset with
+   * no valuation recorded is not a distressed asset, it is a missing number, so
+   * it is left out of the ratios it would poison and counted here instead. It
+   * stays in assetCount, the money totals and every count.
+   */
+  coverage: { ltv: number; valueVsCost: number; irr: number };
   byCountry: { label: string; value: number }[];
   byCurrency: { label: string; value: number }[];
   worstSeverity: SeverityBand | null;
@@ -240,10 +273,26 @@ export function portfolioAggregate(
   const occW = snaps.reduce((a, x) => a + (x.s.occupancy != null ? x.s.occupancy * valW(x) : 0), 0);
   const occ = currentValuation > 0 ? occW / currentValuation : null;
 
-  // Equity-weighted forecast IRR.
+  // Equity-weighted forecast IRR, over the assets that HAVE a forecast IRR. The
+  // denominator used to be every asset's equity, so an asset with no IRR pulled
+  // the average toward zero.
   const eqW = (x: (typeof snaps)[number]) => (x.s.equity_invested ?? 0) * x.fx;
-  const irrW = snaps.reduce((a, x) => a + (x.s.forecast_irr != null ? x.s.forecast_irr * eqW(x) : 0), 0);
-  const irr = equityInvested > 0 ? irrW / equityInvested : null;
+  const withIrr = snaps.filter((x) => x.s.forecast_irr != null && eqW(x) > 0);
+  const irrEquity = withIrr.reduce((a, x) => a + eqW(x), 0);
+  const irr = irrEquity > 0
+    ? withIrr.reduce((a, x) => a + x.s.forecast_irr! * eqW(x), 0) / irrEquity
+    : null;
+
+  // Ratios that need a valuation. Debt and cost are summed over the SAME assets
+  // as the valuation they are divided into: 101.5% LTV and -68.9pts against cost
+  // were an unvalued asset's debt and price sitting in a numerator whose
+  // denominator never contained its value.
+  const ltvSet = snaps.filter((x) => (x.s.current_valuation ?? 0) > 0 && x.s.debt != null);
+  const ltvValue = ltvSet.reduce((a, x) => a + x.s.current_valuation! * x.fx, 0);
+  const ltvDebt = ltvSet.reduce((a, x) => a + x.s.debt! * x.fx, 0);
+  const costSet = snaps.filter((x) => (x.s.current_valuation ?? 0) > 0 && (x.s.acquisition_price ?? 0) > 0);
+  const costValue = costSet.reduce((a, x) => a + x.s.current_valuation! * x.fx, 0);
+  const costBase = costSet.reduce((a, x) => a + x.s.acquisition_price! * x.fx, 0);
 
   const group = (fn: (x: (typeof snaps)[number]) => string | null) => {
     const m = new Map<string, number>();
@@ -267,16 +316,19 @@ export function portfolioAggregate(
     currentValuation,
     equityInvested,
     debt,
-    ltv: currentValuation > 0 ? (debt / currentValuation) * 100 : null,
+    ltv: ltvValue > 0 ? (ltvDebt / ltvValue) * 100 : null,
     noi,
     occupancy: occ,
     projectedIrr: irr,
-    valuationVsCostPct: totalAcquisition > 0 ? ((currentValuation - totalAcquisition) / totalAcquisition) * 100 : null,
+    valuationVsCostPct: costBase > 0 ? ((costValue - costBase) / costBase) * 100 : null,
+    coverage: { ltv: ltvSet.length, valueVsCost: costSet.length, irr: withIrr.length },
     byCountry: group((x) => x.f.asset.country),
     byCurrency: group((x) => x.f.asset.currency),
     worstSeverity: worst,
     developmentCount: files.filter((f) => f.asset.lifecycle_stage === "development").length,
-    decisionsRequired: sum((x) => x.s.decisions_required),
+    // A count. It went through `sum`, which FX-converts, so a yen asset's
+    // decisions were multiplied by 0.005 and the dashboard read 4.55.
+    decisionsRequired: snaps.reduce((a, x) => a + x.s.decisions_required, 0),
     reportingCurrency,
   };
 }

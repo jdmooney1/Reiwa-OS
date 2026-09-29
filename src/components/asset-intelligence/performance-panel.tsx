@@ -3,7 +3,7 @@
 import { useFormStatus } from "react-dom";
 import type { AssetFile } from "@/lib/asset-intelligence/types";
 import {
-  threeWay, variance, varianceTone, formatMetric, METRICS, type MetricKey,
+  threeWay, variance, varianceTone, formatMetric, actualVsPlan, METRICS, type MetricKey,
 } from "@/lib/asset-intelligence/metrics";
 import { addPerformancePeriodAction } from "@/app/actions/assets";
 import { formatMoneyCompact, formatPct, formatDate } from "@/lib/format";
@@ -21,13 +21,13 @@ export function PerformancePanel({ file, canWrite }: { file: AssetFile; canWrite
       {/* Three-way vs underwriting */}
       <Card>
         <CardHeader eyebrow="Performance" title="Underwriting · Forecast · Latest Actual"
-          action={<span className="text-2xs text-ink-faint">Δ = forecast vs underwriting</span>} />
+          action={<span className="text-2xs text-ink-faint">Δ vs UW = forecast vs underwriting · Δ Actual vs Plan = latest actual vs forecast</span>} />
         <CardBody className="p-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left">
                 <th className="px-5 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint">Metric</th>
-                {["Underwriting", "Forecast", "Actual", "Δ vs UW"].map((h) => (
+                {["Underwriting", "Forecast", "Actual", "Δ vs UW", "Δ Actual vs Plan"].map((h) => (
                   <th key={h} className="px-4 py-2.5 text-right text-2xs font-medium uppercase tracking-label text-ink-faint">{h}</th>
                 ))}
               </tr>
@@ -36,6 +36,7 @@ export function PerformancePanel({ file, canWrite }: { file: AssetFile; canWrite
               {TW_ROWS.map((key) => {
                 const tw = threeWay(file, key);
                 const v = variance(tw.forecast, tw.underwriting);
+                const avp = actualVsPlan(file, key);
                 return (
                   <tr key={key}>
                     <td className="px-5 py-2.5 text-ink-muted">{METRICS[key].label}</td>
@@ -43,6 +44,10 @@ export function PerformancePanel({ file, canWrite }: { file: AssetFile; canWrite
                     <td className="px-4 py-2.5 text-right font-medium text-ink">{formatMetric(key, tw.forecast, cur)}</td>
                     <td className="px-4 py-2.5 text-right text-ink-muted">{tw.actual != null ? formatMetric(key, tw.actual, cur) : "—"}</td>
                     <td className="px-4 py-2.5 text-right"><VarianceValue v={v} tone={varianceTone(key, v)} unit={METRICS[key].unit} currency={cur} /></td>
+                    <td className="px-4 py-2.5 text-right">
+                      {avp ? <VarianceValue v={avp.v} tone={varianceTone(key, avp.v)} unit={METRICS[key].unit} currency={cur} />
+                        : <span className="text-ink-faint">—</span>}
+                    </td>
                   </tr>
                 );
               })}

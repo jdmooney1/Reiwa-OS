@@ -23,6 +23,9 @@ export function PortfolioDashboard({
   fxNote?: string;
 }) {
   const agg = portfolioAggregate(files, rates, "GBP");
+  // A ratio computed from only some of the assets says so. The assets left out
+  // have no valuation recorded, which is a gap in the data and not a loss.
+  const basis = (n: number) => (n < agg.assetCount ? `${n} of ${agg.assetCount} assets` : undefined);
 
   return (
     <div className="space-y-6 px-8 py-6">
@@ -37,15 +40,20 @@ export function PortfolioDashboard({
           <Kpi label="Assets" value={String(agg.assetCount)} />
           <Kpi label="Acquisition Cost" value={formatMoneyCompact(agg.totalAcquisition, "GBP")} sub="GBP-equiv" />
           <Kpi label="Current Valuation" value={formatMoneyCompact(agg.currentValuation, "GBP")}
-            extra={<VarianceValue v={{ abs: agg.valuationVsCostPct, pct: agg.valuationVsCostPct != null ? agg.valuationVsCostPct / 100 : null }} tone={agg.valuationVsCostPct != null && agg.valuationVsCostPct >= 0 ? "positive" : "negative"} showAbs unit="ppt" />} />
+            sub={agg.valuationVsCostPct != null ? (basis(agg.coverage.valueVsCost) && `vs cost: ${basis(agg.coverage.valueVsCost)}`) : "vs cost: n/a"}
+            extra={agg.valuationVsCostPct == null ? undefined : (
+              <VarianceValue v={{ abs: agg.valuationVsCostPct, pct: agg.valuationVsCostPct / 100 }}
+                tone={agg.valuationVsCostPct >= 0 ? "positive" : "negative"} showAbs unit="ppt" />
+            )} />
           <Kpi label="Equity Invested" value={formatMoneyCompact(agg.equityInvested, "GBP")} />
           <Kpi label="Debt" value={formatMoneyCompact(agg.debt, "GBP")} />
-          <Kpi label="LTV" value={formatPct(agg.ltv, 1)} />
+          <Kpi label="LTV" value={agg.ltv == null ? "n/a" : formatPct(agg.ltv, 1)} sub={agg.ltv == null ? "no valued assets" : basis(agg.coverage.ltv)} />
         </div>
         <div className="grid grid-cols-2 divide-x divide-line sm:grid-cols-3 lg:grid-cols-6">
           <Kpi label="NOI" value={formatMoneyCompact(agg.noi, "GBP")} sub="run-rate" />
           <Kpi label="Occupancy" value={formatPct(agg.occupancy, 1)} sub="val-weighted" />
-          <Kpi label="Projected IRR" value={formatPct(agg.projectedIrr, 1)} sub="equity-weighted" />
+          <Kpi label="Projected IRR" value={agg.projectedIrr == null ? "n/a" : formatPct(agg.projectedIrr, 1)}
+            sub={basis(agg.coverage.irr) ? `equity-weighted · ${basis(agg.coverage.irr)}` : "equity-weighted"} />
           <Kpi label="Development" value={`${agg.developmentCount} ${agg.developmentCount === 1 ? "asset" : "assets"}`} />
           <Kpi label="Decisions Required" value={String(agg.decisionsRequired)}
             tone={agg.decisionsRequired > 0 ? "negative" : "positive"} />
@@ -70,8 +78,8 @@ export function PortfolioDashboard({
               </span>
             </Row>
             <Row label="Value vs acquisition cost">
-              <VarianceValue v={{ abs: agg.valuationVsCostPct, pct: agg.valuationVsCostPct != null ? agg.valuationVsCostPct / 100 : null }}
-                tone={agg.valuationVsCostPct != null && agg.valuationVsCostPct >= 0 ? "positive" : "negative"} showAbs unit="ppt" />
+              {agg.valuationVsCostPct == null ? <span className="text-xs text-ink-faint">n/a</span> : <VarianceValue v={{ abs: agg.valuationVsCostPct, pct: agg.valuationVsCostPct != null ? agg.valuationVsCostPct / 100 : null }}
+                tone={agg.valuationVsCostPct >= 0 ? "positive" : "negative"} showAbs unit="ppt" />}
             </Row>
             <Row label="Development exposure">
               <span className="text-xs text-ink">{agg.developmentCount} of {agg.assetCount} assets</span>

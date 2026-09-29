@@ -10,11 +10,12 @@
 import type { Tone } from "@/lib/domain";
 import type { AssetFile } from "@/lib/asset-intelligence/types";
 import {
-  METRICS, threeWay, variance, varianceTone, assetSnapshot,
+  METRICS, threeWay, variance, varianceTone, assetSnapshot, actualVsPlan,
   latestClosedPeriod, priorClosedPeriod, type MetricKey,
 } from "@/lib/asset-intelligence/metrics";
 import { formatMetric } from "@/lib/asset-intelligence/metrics";
 import { formatPct, formatMoneyCompact } from "@/lib/format";
+import { isPastDue } from "@/lib/dd/progress";
 
 export type Provenance = "fact" | "calculation" | "forecast" | "assumption" | "commentary";
 
@@ -56,6 +57,20 @@ const MATERIAL_KEYS: MetricKey[] = ["noi", "occupancy_pct", "valuation", "irr_pc
 export function materialChanges(file: AssetFile): IntelStatement[] {
   const out: IntelStatement[] = [];
   const cur = file.asset.currency;
+
+  // Actual vs plan FIRST. Once a closed period exists it is what the asset is
+  // doing; a forecast-vs-underwriting movement is an opinion about the future
+  // and should not lead the summary while the measured result sits below it.
+  for (const key of MATERIAL_KEYS) {
+    const avp = actualVsPlan(file, key);
+    if (!avp || avp.v.pct == null || Math.abs(avp.v.pct) < 0.02) continue;
+    const dir = avp.v.abs! > 0 ? "ahead of" : "behind";
+    out.push({
+      provenance: "calculation",
+      tone: varianceTone(key, avp.v),
+      text: `Actual ${METRICS[key].label} is ${formatPct(Math.abs(avp.v.pct) * 100, 1)} ${dir} ${avp.against === "forecast" ? "plan" : "underwriting"} (${formatMetric(key, avp.plan, cur)} → ${formatMetric(key, avp.actual, cur)}).`,
+    });
+  }
 
   // Forecast vs underwriting.
   for (const key of MATERIAL_KEYS) {
@@ -118,8 +133,8 @@ export function buildAssetBrief(file: AssetFile): AssetBrief {
   for (const d of file.decisions.filter((d) => d.status === "required" || d.status === "open").slice(0, 3)) {
     whatNeedsAttention.push({
       provenance: "fact",
-      tone: "caution",
-      text: `Decision required: ${d.title}${d.deadline ? ` — by ${new Date(d.deadline).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}` : ""}.`,
+      tone: isPastDue(d.deadline) ? "negative" : "caution",
+      text: `Decision required: ${d.title}${d.deadline ? ` — ${isPastDue(d.deadline) ? "overdue since" : "by"} ${new Date(d.deadline).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}` : ""}.`,
     });
   }
   for (const r of file.risks.filter((r) => r.status === "open" && (r.severity === "high" || r.severity === "critical")).slice(0, 2)) {

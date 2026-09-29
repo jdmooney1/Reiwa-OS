@@ -1,6 +1,6 @@
 import type { AssetFile } from "@/lib/asset-intelligence/types";
 import {
-  assetSnapshot, threeWay, variance, varianceTone, formatMetric,
+  assetSnapshot, threeWay, variance, varianceTone, formatMetric, actualVsPlan,
   METRICS, SEVERITY_TONE, SEVERITY_LABEL, type MetricKey,
 } from "@/lib/asset-intelligence/metrics";
 import { buildAssetBrief, PROVENANCE_LABEL, PROVENANCE_TONE, type IntelStatement } from "@/lib/asset-intelligence/ai";
@@ -9,6 +9,7 @@ import { formatMoneyCompact, formatPct, formatDate } from "@/lib/format";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { VarianceValue } from "@/components/shared/variance";
+import { isPastDue } from "@/lib/dd/progress";
 import { cn } from "@/lib/utils";
 
 const THREE_WAY_ROWS: MetricKey[] = [
@@ -75,14 +76,14 @@ export function AssetOverview({ file }: { file: AssetFile }) {
       {/* Performance vs underwriting (three-way) */}
       <Card>
         <CardHeader eyebrow="Performance" title="Original Underwriting · Current Forecast · Actual"
-          action={<span className="text-2xs text-ink-faint">Δ = forecast vs underwriting</span>} />
+          action={<span className="text-2xs text-ink-faint">Δ vs UW = forecast vs underwriting · Δ Actual vs Plan = latest actual vs forecast</span>} />
         <CardBody className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left">
                   <th className="px-5 py-2.5 text-2xs font-medium uppercase tracking-label text-ink-faint">Metric</th>
-                  {["Underwriting", "Current Forecast", "Actual", "Δ vs UW"].map((h) => (
+                  {["Underwriting", "Current Forecast", "Actual", "Δ vs UW", "Δ Actual vs Plan"].map((h) => (
                     <th key={h} className="px-4 py-2.5 text-right text-2xs font-medium uppercase tracking-label text-ink-faint">{h}</th>
                   ))}
                 </tr>
@@ -91,6 +92,7 @@ export function AssetOverview({ file }: { file: AssetFile }) {
                 {THREE_WAY_ROWS.map((key) => {
                   const tw = threeWay(file, key);
                   const v = variance(tw.forecast, tw.underwriting);
+                  const avp = actualVsPlan(file, key);
                   return (
                     <tr key={key}>
                       <td className="px-5 py-2.5 text-ink-muted">{METRICS[key].label}</td>
@@ -99,6 +101,10 @@ export function AssetOverview({ file }: { file: AssetFile }) {
                       <td className="px-4 py-2.5 text-right text-ink-muted">{tw.actual != null ? formatMetric(key, tw.actual, cur) : "—"}</td>
                       <td className="px-4 py-2.5 text-right">
                         <VarianceValue v={v} tone={varianceTone(key, v)} unit={METRICS[key].unit} currency={cur} />
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        {avp ? <VarianceValue v={avp.v} tone={varianceTone(key, avp.v)} unit={METRICS[key].unit} currency={cur} />
+                          : <span className="text-ink-faint">—</span>}
                       </td>
                     </tr>
                   );
@@ -126,7 +132,9 @@ export function AssetOverview({ file }: { file: AssetFile }) {
                     </div>
                     {d.recommendation && <p className="mt-1 text-2xs text-ink-muted">{d.recommendation}</p>}
                     <div className="mt-1 flex items-center gap-2 text-2xs text-ink-faint">
-                      {d.deadline && <span>Due {formatDate(d.deadline)}</span>}
+                      {d.deadline && (isPastDue(d.deadline)
+                        ? <span className="font-medium text-negative">Overdue since {formatDate(d.deadline)}</span>
+                        : <span>Due {formatDate(d.deadline)}</span>)}
                       {d.financial_impact != null && <span>· Impact {formatMoneyCompact(d.financial_impact, cur)}</span>}
                     </div>
                   </li>

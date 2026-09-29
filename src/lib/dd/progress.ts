@@ -33,6 +33,14 @@ export function today(): string {
 }
 
 /**
+ * A date-only value strictly before `asOf`. Due today is not overdue.
+ * Postgres `date` arrives as YYYY-MM-DD, so this is an exact comparison.
+ */
+export function isPastDue(date: string | null | undefined, asOf: string = today()): boolean {
+  return !!date && date.slice(0, 10) < asOf;
+}
+
+/**
  * An open workstream whose due date has passed.
  *
  * A cleared line is never overdue however late it was cleared — the question
