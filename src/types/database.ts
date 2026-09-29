@@ -20,7 +20,7 @@
 // ============================================================================
 
 // ---- Enums -----------------------------------------------------------------
-export type Currency = "GBP" | "EUR" | "USD";
+export type Currency = "GBP" | "EUR" | "USD" | "JPY";
 
 export type Market =
   | "London" | "Amsterdam" | "Paris" | "Berlin" | "Frankfurt"

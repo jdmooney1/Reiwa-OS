@@ -31,11 +31,8 @@ import {
   checkUpload, newOpportunityObjectPath, putDocumentObject, deleteDocumentObject, safeFileName,
 } from "@/lib/documents/storage";
 import type { DdStatus, Recommendation } from "@/types/database";
+import { parseNumber, PERCENT, NON_NEGATIVE, ANY_AMOUNT, type Bounds } from "@/lib/validation/numeric";
 
-const num = (v: FormDataEntryValue | null): number | null => {
-  const s = String(v ?? "").trim();
-  return s === "" ? null : Number(s);
-};
 const text = (v: FormDataEntryValue | null): string | null => {
   const s = String(v ?? "").trim();
   return s === "" ? null : s;
@@ -47,27 +44,45 @@ function refresh(opportunityId: string) {
 }
 
 // ---- Underwriting ---------------------------------------------------------
-const UNDERWRITING_NUMERIC: (keyof UnderwritingInput)[] = [
-  "acquisitionPrice", "acquisitionCosts", "capex", "equity", "grossRentalIncome",
-  "noi", "erv", "occupancyPct", "debt", "ltvPct", "debtCostPct", "valuation",
-  "exitValue", "entryYieldPct", "exitYieldPct", "holdPeriodYears", "targetIrr",
-  "targetEquityMultiple",
-];
+// Every numeric field with what it may hold. Percentages are 0-100 as stored;
+// money cannot be negative except NOI, which genuinely can be on a vacant
+// building. Checked here because the form's own attributes are only a hint: a
+// browser lets "12e3" through a number input and a request need not come from one.
+const UNDERWRITING_NUMERIC: Partial<Record<keyof UnderwritingInput, { label: string; bounds: Bounds }>> = {
+  acquisitionPrice: { label: "Acquisition price", bounds: NON_NEGATIVE },
+  acquisitionCosts: { label: "Acquisition costs", bounds: NON_NEGATIVE },
+  capex: { label: "Capital expenditure", bounds: NON_NEGATIVE },
+  equity: { label: "Equity", bounds: NON_NEGATIVE },
+  grossRentalIncome: { label: "Gross rental income", bounds: NON_NEGATIVE },
+  noi: { label: "Net operating income", bounds: ANY_AMOUNT },
+  erv: { label: "ERV", bounds: NON_NEGATIVE },
+  occupancyPct: { label: "Occupancy", bounds: PERCENT },
+  debt: { label: "Debt", bounds: NON_NEGATIVE },
+  ltvPct: { label: "Leverage (LTV)", bounds: PERCENT },
+  debtCostPct: { label: "Debt cost", bounds: PERCENT },
+  valuation: { label: "Entry valuation", bounds: NON_NEGATIVE },
+  exitValue: { label: "Exit value", bounds: NON_NEGATIVE },
+  entryYieldPct: { label: "Entry yield", bounds: PERCENT },
+  exitYieldPct: { label: "Exit yield", bounds: PERCENT },
+  holdPeriodYears: { label: "Hold period", bounds: { min: 0, max: 100 } },
+  targetIrr: { label: "Target IRR", bounds: PERCENT },
+  targetEquityMultiple: { label: "Equity multiple", bounds: { min: 0, max: 100 } },
+};
 
 export async function createVersionAction(
   opportunityId: string, _prev: ActionResult, formData: FormData,
 ): Promise<ActionResult> {
   const session = await requireDbSession();
-  const input: UnderwritingInput = {
-    strategy: text(formData.get("strategy")),
-    thesis: text(formData.get("thesis")),
-    businessPlanAssumptions: text(formData.get("businessPlanAssumptions")),
-    changeRationale: text(formData.get("changeRationale")),
-  };
-  for (const key of UNDERWRITING_NUMERIC) {
-    (input as Record<string, unknown>)[key] = num(formData.get(key));
-  }
   return runAction("workspace.underwriting.create", { opportunityId }, async () => {
+    const input: UnderwritingInput = {
+      strategy: text(formData.get("strategy")),
+      thesis: text(formData.get("thesis")),
+      businessPlanAssumptions: text(formData.get("businessPlanAssumptions")),
+      changeRationale: text(formData.get("changeRationale")),
+    };
+    for (const [key, spec] of Object.entries(UNDERWRITING_NUMERIC)) {
+      (input as Record<string, unknown>)[key] = parseNumber(formData.get(key), spec.label, spec.bounds);
+    }
     await createVersion(session, opportunityId, input);
     refresh(opportunityId);
   }, {
@@ -160,7 +175,7 @@ export async function createRiskAction(
       description: text(formData.get("description")),
       severity: String(formData.get("severity") || "medium") as RiskPatch["severity"],
       mitigation: text(formData.get("mitigation")),
-      financialImpact: num(formData.get("financialImpact")),
+      financialImpact: parseNumber(formData.get("financialImpact"), "Financial impact", NON_NEGATIVE),
     });
     refresh(opportunityId);
   });

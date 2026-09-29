@@ -4,6 +4,7 @@ const CURRENCY_SYMBOL: Record<Currency, string> = {
   GBP: "£",
   EUR: "€",
   USD: "$",
+  JPY: "¥",
 };
 
 /** Compact money, e.g. £42.5m / €85.0m — for cards and headers. */

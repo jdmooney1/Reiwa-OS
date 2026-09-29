@@ -31,15 +31,10 @@ import {
   checkUpload, newObjectPath, putDocumentObject, deleteDocumentObject, safeFileName,
 } from "@/lib/documents/storage";
 import { AppError, reportError } from "@/lib/errors";
+import { parseNumber, PERCENT, NON_NEGATIVE } from "@/lib/validation/numeric";
 
 const trimmed = (v: FormDataEntryValue | null): string => String(v ?? "").trim();
 const orNull = (v: FormDataEntryValue | null): string | null => trimmed(v) || null;
-const numOrNull = (v: FormDataEntryValue | null): number | null => {
-  const s = trimmed(v);
-  if (s === "") return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-};
 
 function refreshInvestor(investorOrgId: string): void {
   revalidatePath("/admin");
@@ -258,13 +253,13 @@ export async function updateDraftVersionAction(
     assetType: orNull(formData.get("assetType")),
     strategy: orNull(formData.get("strategy")),
     currency: trimmed(formData.get("currency")) || "GBP",
-    headlinePrice: numOrNull(formData.get("headlinePrice")),
-    targetNiy: numOrNull(formData.get("targetNiy")),
-    targetIrr: numOrNull(formData.get("targetIrr")),
-    targetEquityMultiple: numOrNull(formData.get("targetEquityMultiple")),
-    holdPeriodYears: numOrNull(formData.get("holdPeriodYears")),
-    sizeSqft: numOrNull(formData.get("sizeSqft")),
-    sizeSqm: numOrNull(formData.get("sizeSqm")),
+    headlinePrice: parseNumber(formData.get("headlinePrice"), "Headline price", NON_NEGATIVE),
+    targetNiy: parseNumber(formData.get("targetNiy"), "Target NIY", PERCENT),
+    targetIrr: parseNumber(formData.get("targetIrr"), "Target IRR", PERCENT),
+    targetEquityMultiple: parseNumber(formData.get("targetEquityMultiple"), "Equity multiple", { min: 0, max: 100 }),
+    holdPeriodYears: parseNumber(formData.get("holdPeriodYears"), "Hold period", { min: 0, max: 100 }),
+    sizeSqft: parseNumber(formData.get("sizeSqft"), "Size (sq ft)", NON_NEGATIVE),
+    sizeSqm: parseNumber(formData.get("sizeSqm"), "Size (sq m)", NON_NEGATIVE),
     highlights,
   });
   refreshPublication(publicationId);
