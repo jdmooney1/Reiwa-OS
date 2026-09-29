@@ -3,6 +3,10 @@
 //
 //   npm run db:load-pipeline -- --file <path> --org "Meiji Shipping"
 //   npm run db:load-pipeline -- --file <path> --org "Meiji Shipping" --write
+//   npm run db:load-pipeline -- --file <path> --org "..." --user <email|profile id>
+//
+// --user attributes the load to a named profile (created_by on the batch and
+// every row). Omitted, the oldest profile is used, as before.
 //
 // Dry by default: it reads, resolves, reports, and rolls back. Nothing is
 // committed without --write.
@@ -19,9 +23,10 @@ import { basename, dirname, join } from "node:path";
 import { requireEnv } from "./env";
 import { getPool, closePool, withSessionOn, adminQuery, type Session } from "@/lib/db/client";
 import { readPipelineWorkbook, isNotABuilding, type PipelineRow } from "@/lib/ingestion/pipeline-workbook";
+import { parseUserRef, type UserRef } from "@/lib/ingestion/user-ref";
 import { loadRow, recordLoadRow, loadMailMap, type LoadedRow, type LoadContext } from "@/lib/data/deal-load";
 
-interface Args { file: string; org: string; write: boolean }
+interface Args { file: string; org: string; user?: UserRef; write: boolean }
 
 function parseArgs(): Args {
   const argv = process.argv.slice(2);
@@ -33,7 +38,8 @@ function parseArgs(): Args {
   const org = get("org");
   if (!file) throw new Error("--file <path to the staging workbook> is required.");
   if (!org) throw new Error('--org "<organisation name>" is required.');
-  return { file, org, write: argv.includes("--write") };
+  const user = get("user");
+  return { file, org, user: user === undefined ? undefined : parseUserRef(user), write: argv.includes("--write") };
 }
 
 const money = (v: number | null, ccy: string | null): string =>
@@ -52,9 +58,23 @@ async function main(): Promise<void> {
   if (!orgs[0]) throw new Error(`No organisation named "${args.org}".`);
   const orgId = orgs[0].org_id;
 
-  const staff = await adminQuery<{ user_id: string }>(
-    "select user_id from profiles order by created_at limit 1");
-  if (!staff[0]) throw new Error("No profile exists to attribute the load to.");
+  // --user names the person the load is attributed to. Without it the oldest
+  // profile is used, which on a database that was seeded first is a demo user.
+  let staff: { user_id: string }[];
+  if (args.user) {
+    staff = args.user.kind === "id"
+      ? await adminQuery<{ user_id: string }>(
+          "select user_id from profiles where user_id = $1", [args.user.value])
+      : await adminQuery<{ user_id: string }>(
+          "select user_id from profiles where lower(email) = $1", [args.user.value]);
+    if (staff.length === 0) throw new Error(`No profile matches --user ${args.user.value}.`);
+    if (staff.length > 1) throw new Error(`--user ${args.user.value} matches ${staff.length} profiles; use the profile id.`);
+  } else {
+    staff = await adminQuery<{ user_id: string }>(
+      "select user_id from profiles order by created_at limit 1");
+    if (!staff[0]) throw new Error("No profile exists to attribute the load to.");
+    console.warn("No --user given: attributing the load to the oldest profile.");
+  }
   const userId = staff[0].user_id;
 
   const pool = getPool();
