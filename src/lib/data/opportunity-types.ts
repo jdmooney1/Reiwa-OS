@@ -15,6 +15,8 @@ export const SOURCE_TYPES: SourceType[] = [
 
 export type OppPriority = "low" | "medium" | "high";
 
+export type GeocodeStatus = "pending" | "ok" | "failed" | "no_match";
+
 export const OPP_STAGES: OppStage[] = ["new", "screening", "underwriting", "ic", "approved", "acquired"];
 
 export interface Opportunity {
@@ -60,6 +62,22 @@ export interface Opportunity {
   address: string | null;
   city: string | null;
   country: string | null;
+  /**
+   * Where the property is, from the geocoder (migration 0016). INTERNAL ONLY:
+   * this type is never imported by anything the investor portal renders, and
+   * tests/unit/investor-no-location.test.ts holds that line.
+   */
+  latitude: number | null;
+  longitude: number | null;
+  geocodeStatus: GeocodeStatus;
+  /** What the geocoder resolved the address to, for comparison with `address`. */
+  formattedAddress: string | null;
+  /**
+   * When the geocoder was last asked. The freshness marker: Google-derived
+   * location data is shown for 30 days from this instant and not after
+   * (src/lib/geo/freshness.ts). Null on hand-entered coordinates.
+   */
+  geocodedAt: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
