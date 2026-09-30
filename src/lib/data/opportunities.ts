@@ -39,6 +39,7 @@ function mapOpp(r: Record<string, any>): Opportunity {
     latitude: num(r.latitude), longitude: num(r.longitude),
     geocodeStatus: (r.geocode_status ?? "pending") as GeocodeStatus,
     formattedAddress: str(r.formatted_address),
+    geocodedAt: r.geocoded_at ? new Date(r.geocoded_at).toISOString() : null,
     createdAt: r.created_at, updatedAt: r.updated_at, archivedAt: r.archived_at ?? null,
     assetId: r.asset_id ?? null,
   };
@@ -49,7 +50,7 @@ function mapOpp(r: Record<string, any>): Opportunity {
 // the directory, which is where that decision now lives.
 const SELECT = `
   select o.*, p.address, p.city, p.country,
-         p.latitude, p.longitude, p.geocode_status, p.formatted_address, a.asset_id
+         p.latitude, p.longitude, p.geocode_status, p.formatted_address, p.geocoded_at, a.asset_id
   from opportunities o
   left join properties p on p.property_id = o.property_id
   left join assets a on a.opportunity_id = o.opportunity_id`;

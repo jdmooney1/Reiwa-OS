@@ -14,6 +14,7 @@ import {
 import type { Currency } from "@/types/database";
 import { PropertyMap } from "@/components/workspace/property-map";
 import { mapStateFor } from "@/lib/geo/map-state";
+import { isGeocodeExpired } from "@/lib/geo/freshness";
 
 /**
  * The front page of an investment file.
@@ -139,7 +140,7 @@ export function SummarySection({
         ) : (
           <Empty title="Not located." hint={location.message} />
         )}
-        {o.formattedAddress && o.address && o.formattedAddress !== o.address && (
+        {o.formattedAddress && o.address && o.formattedAddress !== o.address && !isGeocodeExpired(o.geocodedAt) && (
           <p className="mt-2 text-2xs text-ink-faint">Geocoder read this as: {o.formattedAddress}</p>
         )}
       </Section>

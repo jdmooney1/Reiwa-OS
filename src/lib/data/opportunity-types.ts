@@ -72,6 +72,12 @@ export interface Opportunity {
   geocodeStatus: GeocodeStatus;
   /** What the geocoder resolved the address to, for comparison with `address`. */
   formattedAddress: string | null;
+  /**
+   * When the geocoder was last asked. The freshness marker: Google-derived
+   * location data is shown for 30 days from this instant and not after
+   * (src/lib/geo/freshness.ts). Null on hand-entered coordinates.
+   */
+  geocodedAt: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;

@@ -31,6 +31,26 @@ describe("mapStateFor", () => {
   });
 });
 
+describe("expiry", () => {
+  const now = new Date("2026-10-15T12:00:00Z");
+  const at = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+
+  it("plots a fresh geocode", () => {
+    expect(mapStateFor({ ...located, geocodedAt: at(5) }, true, now).kind).toBe("map");
+    expect(mapStateFor({ ...located, geocodedAt: at(30) }, true, now).kind).toBe("map");
+  });
+
+  it("does not plot coordinates older than 30 days, even though they are stored", () => {
+    const s = mapStateFor({ ...located, geocodedAt: at(31) }, true, now);
+    expect(s.kind).toBe("unlocated");
+    expect((s as { message: string }).message).toMatch(/30 days/);
+  });
+
+  it("does not expire a coordinate with no geocoded_at", () => {
+    expect(mapStateFor({ ...located, geocodedAt: null }, true, now).kind).toBe("map");
+  });
+});
+
 describe("isPlottable", () => {
   it("accepts a real point and refuses the rest", () => {
     expect(isPlottable(51.5, -0.1)).toBe(true);

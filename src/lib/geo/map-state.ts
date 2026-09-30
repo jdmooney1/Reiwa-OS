@@ -3,6 +3,7 @@
 // network, so the decision is testable and the component only draws it.
 // ============================================================================
 import type { GeocodeStatus } from "@/lib/data/opportunity-types";
+import { isGeocodeExpired, GEOCODE_TTL_DAYS } from "@/lib/geo/freshness";
 
 export type MapState =
   | { kind: "map"; lat: number; lng: number }
@@ -29,9 +30,19 @@ const WHY: Record<GeocodeStatus, string> = {
  * invented location reads as a fact.
  */
 export function mapStateFor(
-  p: { latitude: number | null; longitude: number | null; geocodeStatus: GeocodeStatus },
+  p: { latitude: number | null; longitude: number | null; geocodeStatus: GeocodeStatus; geocodedAt?: string | null },
   browserKeyConfigured: boolean,
+  now: Date = new Date(),
 ): MapState {
+  // Google's terms let this data be kept for 30 days. If the script has not run
+  // since, the stored coordinates are past that limit and are not shown, even
+  // though they may still be in the row.
+  if (p.geocodeStatus === "ok" && isGeocodeExpired(p.geocodedAt, now)) {
+    return {
+      kind: "unlocated",
+      message: `The stored location is more than ${GEOCODE_TTL_DAYS} days old and may not be shown. Re-run the geocoding script to refresh it.`,
+    };
+  }
   if (isPlottable(p.latitude, p.longitude) && p.geocodeStatus === "ok") {
     // A coordinate we hold but the geocoder did not vouch for (entered by hand)
     // is not plotted here: this panel only shows what was verified.
