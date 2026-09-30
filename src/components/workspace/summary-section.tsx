@@ -132,14 +132,30 @@ export function SummarySection({
       </div>
 
       <Section eyebrow="Location" title="On the map">
-        {location.kind === "map" ? (
-          <PropertyMap state={location} label={o.name} address={o.address} />
-        ) : location.kind === "unconfigured" ? (
-          <Empty title="Map unavailable."
-            hint="NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY is not set for this deployment." />
-        ) : (
-          <Empty title="Not located." hint={location.message} />
-        )}
+        <div className={o.hasStreetView && o.propertyId ? "grid grid-cols-1 gap-6 lg:grid-cols-2" : ""}>
+          <div>
+            {location.kind === "map" ? (
+              <PropertyMap state={location} label={o.name} address={o.address} />
+            ) : location.kind === "unconfigured" ? (
+              <Empty title="Map unavailable."
+                hint="NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY is not set for this deployment." />
+            ) : (
+              <Empty title="Not located." hint={location.message} />
+            )}
+          </div>
+          {o.hasStreetView && o.propertyId && (
+            <figure>
+              {/* Served by our own route, which holds the key and fetches the
+                  picture from Google each time: it is never stored. A plain img,
+                  because next/image would cache and re-serve it. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/property-photo/${o.propertyId}`} alt={`Street View of ${o.name}`}
+                loading="lazy" width={640} height={400}
+                className="h-auto w-full rounded border border-line bg-surface-sunken" />
+              <figcaption className="mt-2 text-2xs text-ink-faint">Street View · Google</figcaption>
+            </figure>
+          )}
+        </div>
         {o.formattedAddress && o.address && o.formattedAddress !== o.address && !isGeocodeExpired(o.geocodedAt) && (
           <p className="mt-2 text-2xs text-ink-faint">Geocoder read this as: {o.formattedAddress}</p>
         )}
