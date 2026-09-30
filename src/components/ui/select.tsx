@@ -7,22 +7,26 @@ export function Select({
   options,
   placeholder,
   className,
+  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className={cn("relative", className)}>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
         className={cn(
           "h-8 appearance-none rounded border border-line bg-surface-card pl-2.5 pr-7 text-xs text-ink",
           "focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30",
           value === "" && "text-ink-faint",
+          disabled && "cursor-not-allowed opacity-50",
         )}
       >
         {placeholder && <option value="">{placeholder}</option>}

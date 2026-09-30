@@ -8,12 +8,12 @@ import { staffNamesOn, nameOf } from "@/lib/data/directory";
 import { resolveProperty } from "@/lib/data/properties";
 import { recordEvent, priceChangeEvent } from "@/lib/data/property-events";
 import type {
-  Opportunity, OppStage, OppStatus, OppPriority, SourceType, GeocodeStatus,
+  Opportunity, OppStage, OppStatus, OppPriority, SourceType, GeocodeStatus, TriageStatus, TriagePriority,
 } from "@/lib/data/opportunity-types";
 
 export { OPP_STAGES, SOURCE_TYPES } from "@/lib/data/opportunity-types";
 export type {
-  Opportunity, OppStage, OppStatus, OppPriority, SourceType,
+  Opportunity, OppStage, OppStatus, OppPriority, SourceType, TriageStatus, TriagePriority,
 } from "@/lib/data/opportunity-types";
 
 function mapOpp(r: Record<string, any>): Opportunity {
@@ -29,6 +29,9 @@ function mapOpp(r: Record<string, any>): Opportunity {
     sourcedAt: str(r.sourced_at), referralNote: str(r.referral_note),
     brokerName: str(r.broker_name), vendorName: str(r.vendor_name),
     priority: r.priority as OppPriority,
+    triageStatus: r.triage_status as TriageStatus,
+    triagePriority: str(r.triage_priority) as TriagePriority | null,
+    triageNote: str(r.triage_note),
     ownerUserId: r.owner_user_id ?? null,
     // Supplied by the caller from the staff directory, not by a column.
     ownerName: null,

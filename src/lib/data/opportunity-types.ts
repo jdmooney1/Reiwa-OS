@@ -17,6 +17,17 @@ export type OppPriority = "low" | "medium" | "high";
 
 export type GeocodeStatus = "pending" | "ok" | "failed" | "no_match";
 
+/**
+ * Where a loaded deal stands in review. `untriaged` is what every row starts as
+ * and is deliberately never defaulted to `live` (migration 0014): an untriaged
+ * row must look incomplete, not quietly active.
+ */
+export type TriageStatus = "untriaged" | "live" | "dead" | "reference";
+export const TRIAGE_STATUSES: TriageStatus[] = ["untriaged", "live", "dead", "reference"];
+/** Only ever set on a `live` row: the database enforces that. */
+export type TriagePriority = "P1" | "P2" | "P3";
+export const TRIAGE_PRIORITIES: TriagePriority[] = ["P1", "P2", "P3"];
+
 export const OPP_STAGES: OppStage[] = ["new", "screening", "underwriting", "ic", "approved", "acquired"];
 
 export interface Opportunity {
@@ -49,6 +60,9 @@ export interface Opportunity {
   brokerName: string | null;
   vendorName: string | null;
   priority: OppPriority;
+  triageStatus: TriageStatus;
+  triagePriority: TriagePriority | null;
+  triageNote: string | null;
   ownerUserId: string | null;
   /** The owner's display name, joined for the workspace. Null when unassigned. */
   ownerName: string | null;
