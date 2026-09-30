@@ -33,6 +33,8 @@ Optional:
 | --- | --- |
 | `SUPABASE_DB_CA_CERT` | Override the shipped Supabase root CA (`supabase/prod-ca-2021.crt`). A PEM string or a path. TLS verification is always on and is never disabled. |
 | `DATABASE_POOL_MAX` | Local connection pool size (default 8). Raise only if the pooler's own limits allow it. |
+| `GOOGLE_MAPS_SERVER_KEY` | **Server only.** Geocoding and Street View Static API. Needed only by `npm run db:geocode-properties` (and the photo fetch, when built); the portal runs without it. Restricted in Google Cloud to those two APIs. Never give it a `NEXT_PUBLIC_` prefix. |
+| `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY` | Public by design. Maps JavaScript API only, restricted to this app's HTTP referrers. Needed only by pages that render a map. |
 
 Tests only — never set in a deployment:
 
