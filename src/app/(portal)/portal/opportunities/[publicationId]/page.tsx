@@ -3,8 +3,9 @@ import { ArrowLeft } from "lucide-react";
 import { requirePortalSession } from "@/lib/auth/portal-session";
 import {
   loadPortalOpportunity, loadPortalDocuments, loadSavedIds,
-  loadRequestsForPublication, recordPortalEvent,
+  loadRequestsForPublication, loadPortalLocation, recordPortalEvent,
 } from "@/lib/data/portal-feed";
+import { LocationMap } from "@/components/portal/location-map";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { PortalEmptyState, InvestorNote } from "@/components/portal/opportunity-cards";
 import { SaveButton, CompareButton } from "@/components/portal/portal-actions";
@@ -46,10 +47,12 @@ export default async function PortalOpportunityPage({
     );
   }
 
-  const [documents, savedIds, requests] = await Promise.all([
+  const [documents, savedIds, requests, location] = await Promise.all([
     loadPortalDocuments(investor.authUserId, opportunity.versionId),
     loadSavedIds(investor.authUserId),
     loadRequestsForPublication(investor.authUserId, opportunity.publicationId),
+    // Null for every investor below the diligence tier: the database decides.
+    loadPortalLocation(investor.authUserId, opportunity.publicationId),
   ]);
 
   // A factual P1 event. Never blocks the render (see recordPortalEvent).
@@ -111,6 +114,12 @@ export default async function PortalOpportunityPage({
                   </li>
                 ))}
               </ul>
+            </Section>
+          )}
+
+          {location && (
+            <Section title="Location">
+              <LocationMap lat={location.lat} lng={location.lng} label={o.title} />
             </Section>
           )}
 

@@ -22,7 +22,18 @@ declare global {
 
 let pending: Promise<any> | null = null;
 
-export function loadGoogleMaps(browserKey: string): Promise<any> {
+export interface LoadOptions {
+  /**
+   * Referrer policy for the script request ONLY. The investor portal sends
+   * `no-referrer` on every page, and the browser key is restricted by HTTP
+   * referrer in Google Cloud, so without this the script request carries no
+   * referrer and Google refuses the key. `origin` sends the site's origin and
+   * nothing else - no path, no query, no /access token.
+   */
+  referrerPolicy?: ReferrerPolicy;
+}
+
+export function loadGoogleMaps(browserKey: string, options: LoadOptions = {}): Promise<any> {
   if (typeof window === "undefined") return Promise.reject(new Error("Maps can only load in the browser."));
   if (window.google?.maps) return Promise.resolve(window.google.maps);
   if (pending) return pending;
@@ -34,6 +45,7 @@ export function loadGoogleMaps(browserKey: string): Promise<any> {
       key: browserKey, v: "weekly", loading: "async", callback: "__reiwaMapsReady",
     }).toString();
     script.async = true;
+    if (options.referrerPolicy) script.referrerPolicy = options.referrerPolicy;
     script.onerror = () => {
       pending = null; // let a later mount try again
       script.remove();

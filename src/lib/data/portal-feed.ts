@@ -8,9 +8,17 @@
 // No entitlement, organisation id or document tier is ever accepted from the
 // application, from the client, or from a function argument.
 //
+// LOCATION is the one thing that reaches an investor from beyond the published
+// snapshot, and it comes through investor_feed too (migration 0018): two columns,
+// latitude and longitude, that the DATABASE fills only for a diligence-tier
+// entitlement and a confirmed, under-30-day geocode. It is read by ONE function,
+// loadPortalLocation(), used by the opportunity page alone - deliberately not in
+// FEED_COLUMNS, so the home feed, compare and saved lists never carry a
+// coordinate. src/lib/portal/location.ts applies the tier a second time.
+//
 // The internal tables — opportunities, investment_cases, assets, business_plans,
-// transactions, organizations — are not referenced anywhere in this file, and
-// must not be. The investor projection carries no internal identifier to leak:
+// transactions, organizations, properties — are not referenced anywhere in this
+// file, and must not be. The investor projection carries no internal identifier to leak:
 // `investor_feed` is built from the investor-readable tables alone, and the
 // provenance tables (publication_sources, publication_version_sources) are
 // joined by nothing here.
@@ -23,6 +31,7 @@ import type {
   Placement, EntitlementDocumentLevel, DocumentCategory, RequestType,
 } from "@/lib/data/investor-portal";
 import type { Currency } from "@/types/database";
+import { visibleLocation, type PortalLocation } from "@/lib/portal/location";
 
 /** The approved, investor-visible shape of one opportunity. */
 export interface PortalOpportunity {
@@ -156,6 +165,36 @@ export async function loadPortalOpportunity(
     return rows;
   });
   return rows[0] ? toOpportunity(rows[0]) : null;
+}
+
+/**
+ * Where this opportunity is, for THIS investor, or null.
+ *
+ * Null for a standard-tier investor, for a publication they cannot read, and for
+ * one whose location is missing, unconfirmed or older than 30 days. The caller
+ * cannot tell those apart, and does not need to: nothing is shown in any of them.
+ * The database decides (investor_feed), and visibleLocation() checks the tier
+ * again on the row that came back.
+ */
+export async function loadPortalLocation(
+  authUserId: string, publicationId: string,
+): Promise<PortalLocation | null> {
+  if (!isUuid(publicationId)) return null;
+  const rows = await withInvestorSession(authUserId, async (tx) => {
+    const { rows } = await tx.query<{
+      document_access_level: string; latitude: unknown; longitude: unknown;
+    }>(
+      `select document_access_level, latitude, longitude
+         from investor_feed where publication_id = $1`, [publicationId]);
+    return rows;
+  });
+  const r = rows[0];
+  if (!r) return null;
+  return visibleLocation({
+    documentAccessLevel: r.document_access_level,
+    latitude: num(r.latitude),
+    longitude: num(r.longitude),
+  });
 }
 
 /**
