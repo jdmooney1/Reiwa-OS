@@ -12,6 +12,8 @@ import {
   SEVERITY_LABEL, SEVERITY_TONE,
 } from "@/lib/workspace/labels";
 import type { Currency } from "@/types/database";
+import { PropertyMap } from "@/components/workspace/property-map";
+import { mapStateFor } from "@/lib/geo/map-state";
 
 /**
  * The front page of an investment file.
@@ -37,6 +39,7 @@ export function SummarySection({
   const o = file.opportunity;
   const uw = file.authoritative;
   const cur = o.currency as Currency;
+  const location = mapStateFor(o, Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY));
 
   return (
     <div>
@@ -126,6 +129,20 @@ export function SummarySection({
           ]} />
         </Section>
       </div>
+
+      <Section eyebrow="Location" title="On the map">
+        {location.kind === "map" ? (
+          <PropertyMap state={location} label={o.name} address={o.address} />
+        ) : location.kind === "unconfigured" ? (
+          <Empty title="Map unavailable."
+            hint="NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY is not set for this deployment." />
+        ) : (
+          <Empty title="Not located." hint={location.message} />
+        )}
+        {o.formattedAddress && o.address && o.formattedAddress !== o.address && (
+          <p className="mt-2 text-2xs text-ink-faint">Geocoder read this as: {o.formattedAddress}</p>
+        )}
+      </Section>
 
       <Section eyebrow="Exposure" title="Open risks" action={
         <Link href={`/opportunities/${o.opportunityId}/risks`}
