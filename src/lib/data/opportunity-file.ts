@@ -12,7 +12,7 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { num } from "@/lib/data/coerce";
-import type { Opportunity } from "@/lib/data/opportunity-types";
+import { withoutLocation, type Opportunity, type LocationField } from "@/lib/data/opportunity-types";
 import type { UnderwritingVersion } from "@/lib/data/underwriting-types";
 import { getOpportunity, listOpportunitiesOn } from "@/lib/data/opportunities";
 import { listVersions } from "@/lib/data/underwriting";
@@ -85,8 +85,14 @@ export async function getOpportunityFile(
 }
 
 // ---------------------------------------------------------------------------
-/** A pipeline row: the opportunity plus the figures from its own case. */
-export interface PipelineRow extends Opportunity {
+/**
+ * A pipeline row: the opportunity plus the figures from its own case.
+ *
+ * Typed WITHOUT the location fields (latitude, longitude, formatted address,
+ * geocode status and age, street-view flag). This list goes to a client component
+ * and so to the browser, and the page never displays them; see LOCATION_FIELDS.
+ */
+export interface PipelineRow extends Omit<Opportunity, LocationField> {
   caseBasis: "approved" | "working" | "none";
   caseVersion: number | null;
   caseAcquisitionPrice: number | null;
@@ -127,7 +133,7 @@ export async function listPipeline(session: Session): Promise<PipelineRow[]> {
     return opportunities.map((o) => {
       const c = cases.get(o.opportunityId);
       return {
-        ...o,
+        ...withoutLocation(o),
         caseBasis: c ? (c.status === "approved" ? "approved" : "working") : "none",
         caseVersion: c ? Number(c.version) : null,
         caseAcquisitionPrice: c ? num(c.acquisition_price) : null,

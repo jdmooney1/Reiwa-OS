@@ -99,3 +99,27 @@ export interface Opportunity {
   archivedAt: string | null;
   assetId: string | null;
 }
+
+/**
+ * The location-derived fields on an Opportunity (migrations 0016, 0017).
+ *
+ * They exist for the opportunity workspace, which draws the map and the street
+ * photo, and are read from the database by the shared opportunity query. A LIST
+ * of opportunities does not display them, and a list handed to a client component
+ * is serialised into the page and delivered to the browser whole, so anything on
+ * the row goes with it. Lists strip these with withoutLocation() and are typed
+ * without them, so reaching for one on a list row is a compile error rather than
+ * a quiet leak. Google-derived data that is not displayed should not be shipped.
+ */
+export const LOCATION_FIELDS = [
+  "latitude", "longitude", "formattedAddress", "geocodeStatus", "geocodedAt", "hasStreetView",
+] as const satisfies readonly (keyof Opportunity)[];
+
+export type LocationField = (typeof LOCATION_FIELDS)[number];
+
+/** An opportunity without its location-derived fields. */
+export function withoutLocation<T extends Opportunity>(o: T): Omit<T, LocationField> {
+  const copy: Record<string, unknown> = { ...(o as object) };
+  for (const key of LOCATION_FIELDS) delete copy[key];
+  return copy as Omit<T, LocationField>;
+}
