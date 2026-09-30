@@ -78,6 +78,8 @@ export interface Opportunity {
    * (src/lib/geo/freshness.ts). Null on hand-entered coordinates.
    */
   geocodedAt: string | null;
+  /** A panorama id is on record, so /api/property-photo/<propertyId> has a picture to serve. */
+  hasStreetView: boolean;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;

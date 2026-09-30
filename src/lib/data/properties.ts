@@ -187,6 +187,35 @@ export async function findCandidates(
   }));
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * What the photo route needs, read under the caller's session so RLS decides who
+ * may see the property at all. Null when it does not exist OR the caller may not
+ * read it: the two are deliberately indistinguishable.
+ */
+export async function getPropertyPhotoSource(
+  session: Session, propertyId: string,
+): Promise<{
+  panoId: string | null; latitude: number | null; longitude: number | null;
+  geocodeStatus: string; geocodedAt: string | null;
+} | null> {
+  if (!UUID.test(propertyId)) return null;
+  return withSession(session, async (tx) => {
+    const { rows } = await tx.query<Record<string, any>>(
+      `select street_view_pano_id, latitude, longitude, geocode_status, geocoded_at
+         from properties where property_id = $1`, [propertyId]);
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      panoId: str(r.street_view_pano_id),
+      latitude: num(r.latitude), longitude: num(r.longitude),
+      geocodeStatus: r.geocode_status ?? "pending",
+      geocodedAt: r.geocoded_at ? new Date(r.geocoded_at).toISOString() : null,
+    };
+  });
+}
+
 /** Everything known about one property, for the record header. */
 export async function getProperty(
   session: Session, propertyId: string,

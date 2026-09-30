@@ -395,3 +395,15 @@ happens.
 - [ ] One real invitation delivered, accepted, and `/portal` reached
 - [ ] One document uploaded, downloaded by the investor, and the download
       visible in `/admin/activity`
+
+## Google Maps data: what may be kept, and for how long
+
+These follow Google's Maps Platform terms. Re-read them before changing any of it.
+
+| Data | Kept? | How |
+| --- | --- | --- |
+| Geocoded latitude / longitude / formatted address | **30 days** | `properties.geocoded_at` is the freshness marker. `npm run db:geocode-properties -- --write` refreshes anything older and clears whatever it cannot refresh. **Run it at least monthly**: until it runs, the app itself refuses to show an expired location. Coordinates entered by hand never expire. |
+| Street View panorama ID | Indefinitely | `properties.street_view_pano_id`, set by `npm run db:resolve-street-view -- --write` (free metadata requests; needs a fresh geocode first). |
+| Street View **image** | **Never** | Fetched live from Google by `/api/property-photo/<propertyId>` on every view, streamed and forgotten, `Cache-Control: private, no-store`. Not in Supabase Storage, not in a cache, not in the database. `tests/unit/street-view-no-storage.test.ts` fails if any code starts to. Each view is one billable Static Street View request. |
+
+The photo route serves signed-in staff only. Investors receive nothing: `investor_feed` carries no location and `tests/unit/investor-no-location.test.ts` holds that line.
