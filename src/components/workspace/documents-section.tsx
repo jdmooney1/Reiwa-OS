@@ -4,11 +4,15 @@ import type { OpportunityDocument } from "@/lib/data/opportunity-documents";
 import type { DdItemRecord } from "@/lib/data/due-diligence";
 import { DOC_CATEGORY_KEYS } from "@/lib/documents/catalog";
 import { MAX_DOCUMENT_BYTES, UPLOAD_ACCEPT } from "@/lib/documents/constraints";
+import { useRef, useState } from "react";
 import { useFormState } from "react-dom";
 import { uploadDocumentAction } from "@/app/actions/workspace";
 import { ACTION_IDLE } from "@/lib/actions/result";
 import { formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { useFileDrop, dropZoneClass } from "@/lib/ui/use-file-drop";
+import { titleFromFileName } from "@/lib/documents/suggest-title";
+import { cn } from "@/lib/utils";
 import { Section, TableWrap, Th, Td, Empty, Provenance, ActionError } from "@/components/workspace/primitives";
 
 /**
@@ -37,6 +41,25 @@ export function DocumentsSection({
 }) {
   const [state, formAction] = useFormState(
     uploadDocumentAction.bind(null, opportunityId), ACTION_IDLE);
+
+  // Dropping a file onto the File box is a shortcut for choosing it: it fills the
+  // file field and SUGGESTS a title, nothing more. It submits nothing, never
+  // overwrites a title the person has typed, and never guesses a category.
+  const fileInput = useRef<HTMLInputElement>(null);
+  const titleInput = useRef<HTMLInputElement>(null);
+  const [extraDropped, setExtraDropped] = useState(false);
+  const fileDrop = useFileDrop((files) => {
+    const first = files[0];
+    if (!first || !fileInput.current) return;
+    // Only the first file: documents go in one at a time, each with its own title.
+    const dt = new DataTransfer();
+    dt.items.add(first);
+    fileInput.current.files = dt.files;
+    setExtraDropped(files.length > 1);
+    if (titleInput.current && titleInput.current.value.trim() === "") {
+      titleInput.current.value = titleFromFileName(first.name);
+    }
+  });
 
   const linkedByDoc = new Map<string, DdItemRecord[]>();
   for (const it of ddItems) {
@@ -122,7 +145,7 @@ export function DocumentsSection({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="eyebrow">Title</span>
-                <input name="title" required
+                <input name="title" required ref={titleInput}
                   className="mt-1 h-9 w-full rounded border border-line bg-surface-card px-3 text-sm text-ink focus:border-line-strong focus:outline-none" />
               </label>
               <label className="block">
@@ -133,11 +156,20 @@ export function DocumentsSection({
                 </select>
               </label>
             </div>
-            <label className="block">
-              <span className="eyebrow">File</span>
-              <input name="file" type="file" required accept={UPLOAD_ACCEPT}
-                className="mt-1 block w-full text-xs text-ink-muted file:mr-3 file:rounded file:border file:border-line file:bg-surface-card file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-muted hover:file:text-ink" />
-            </label>
+            <div {...fileDrop.bind} className={cn("rounded-lg p-3", dropZoneClass(fileDrop.over))}>
+              <label className="block">
+                <span className="eyebrow">File</span>
+                <input name="file" type="file" required accept={UPLOAD_ACCEPT} ref={fileInput}
+                  onChange={() => setExtraDropped(false)}
+                  className="mt-1 block w-full text-xs text-ink-muted file:mr-3 file:rounded file:border file:border-line file:bg-surface-card file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-muted hover:file:text-ink" />
+              </label>
+              <p className="mt-1.5 text-2xs text-ink-faint">Or drop a file here.</p>
+              {extraDropped && (
+                <p role="status" className="mt-1.5 text-2xs text-ink-muted">
+                  Only the first file was used - documents are added one at a time, each with its own title and category.
+                </p>
+              )}
+            </div>
             <button type="submit"
               className="rounded bg-purple px-3.5 py-2 text-xs font-semibold text-surface hover:bg-purple-70">
               Upload document
