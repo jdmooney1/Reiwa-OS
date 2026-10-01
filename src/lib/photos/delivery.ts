@@ -20,9 +20,7 @@ import { withSession, type Session } from "@/lib/db/client";
 import { isUuid } from "@/lib/data/portal-feed";
 import { signPhotoObject, thumbPathFor } from "@/lib/photos/storage";
 import { mayReadPhoto } from "@/lib/photos/access";
-import { isPhotoVisibility } from "@/lib/photos/constraints";
-
-export type PhotoVariant = "full" | "thumb";
+import { isPhotoVisibility, type PhotoVariant } from "@/lib/photos/constraints";
 
 export async function issuePhotoDownload(
   session: Session, photoId: string, variant: PhotoVariant = "full",

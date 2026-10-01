@@ -3,9 +3,10 @@ import { ArrowLeft } from "lucide-react";
 import { requirePortalSession } from "@/lib/auth/portal-session";
 import {
   loadPortalOpportunity, loadPortalDocuments, loadSavedIds,
-  loadRequestsForPublication, loadPortalLocation, recordPortalEvent,
+  loadRequestsForPublication, loadPortalLocation, loadPortalPhotos, recordPortalEvent,
 } from "@/lib/data/portal-feed";
 import { LocationMap } from "@/components/portal/location-map";
+import { PhotoGallery } from "@/components/portal/photo-gallery";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { PortalEmptyState, InvestorNote } from "@/components/portal/opportunity-cards";
 import { SaveButton, CompareButton } from "@/components/portal/portal-actions";
@@ -47,12 +48,15 @@ export default async function PortalOpportunityPage({
     );
   }
 
-  const [documents, savedIds, requests, location] = await Promise.all([
+  const [documents, savedIds, requests, location, photos] = await Promise.all([
     loadPortalDocuments(investor.authUserId, opportunity.versionId),
     loadSavedIds(investor.authUserId),
     loadRequestsForPublication(investor.authUserId, opportunity.publicationId),
     // Null for every investor below the diligence tier: the database decides.
     loadPortalLocation(investor.authUserId, opportunity.publicationId),
+    // Empty unless staff cleared a photo to diligence AND the investor is at the
+    // diligence tier: the database decides, PhotoGallery checks the tier again.
+    loadPortalPhotos(investor.authUserId, opportunity.publicationId),
   ]);
 
   // A factual P1 event. Never blocks the render (see recordPortalEvent).
@@ -114,6 +118,12 @@ export default async function PortalOpportunityPage({
                   </li>
                 ))}
               </ul>
+            </Section>
+          )}
+
+          {photos.length > 0 && (
+            <Section title="Photographs">
+              <PhotoGallery photos={photos} tier={o.documentAccessLevel} title={o.title} />
             </Section>
           )}
 
