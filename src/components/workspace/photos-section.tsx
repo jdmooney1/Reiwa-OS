@@ -13,6 +13,7 @@ import {
 import { moveItem, shrinkImage } from "@/lib/photos/client";
 import { Section, Empty, Provenance, ActionError } from "@/components/workspace/primitives";
 import { cn } from "@/lib/utils";
+import { useFileDrop, dropZoneClass } from "@/lib/ui/use-file-drop";
 
 const VISIBILITY_LABEL: Record<PhotoVisibility, string> = {
   internal: "Internal only",
@@ -53,6 +54,18 @@ export function PhotosSection({
   // A fresh list from the server is the truth: drop the optimistic order, which
   // would otherwise leave a newly demoted headline stranded at the end.
   useEffect(() => { setOrder(null); }, [photos]);
+
+  const busy = pending || progress !== null;
+
+  // Dropping files from the OS is an alternative way into the same upload(): the
+  // same shrink, per-file errors and progress as the buttons. One file for the
+  // headline slot, any number for the gallery. Ignored while an upload runs.
+  const onFilesDropped = (asHeadline: boolean) => (files: File[]) => {
+    if (busy) { setError("Wait for the current upload to finish."); return; }
+    void upload(files, asHeadline);
+  };
+  const headlineDrop = useFileDrop(onFilesDropped(true), { disabled: !canWrite });
+  const galleryDrop = useFileDrop(onFilesDropped(false), { disabled: !canWrite });
 
   if (!propertyId) {
     return (
@@ -119,8 +132,6 @@ export function PhotosSection({
     setDragId(null);
   }
 
-  const busy = pending || progress !== null;
-
   return (
     <Section
       eyebrow="Asset"
@@ -145,16 +156,27 @@ export function PhotosSection({
         visibility setting only records who it is intended for.
       </p>
 
-      <div className="relative overflow-hidden rounded-lg border border-line bg-surface-sunken">
+      <div
+        {...(canWrite ? headlineDrop.bind : {})}
+        className={cn(
+          "relative overflow-hidden rounded-lg bg-surface-sunken",
+          canWrite ? dropZoneClass(headlineDrop.over) : "border border-line",
+        )}
+      >
+        {/* The photo paints over the zone's own tint, so while a file is over the
+            headline slot the tint is laid on top of it. */}
+        {headlineDrop.over && (
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 bg-purple/10" />
+        )}
         {headline ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={`/api/asset-photos/${headline.photoId}`} alt="Headline photograph"
-            className="aspect-[16/9] w-full object-cover"
+            className="max-h-[480px] w-full object-contain bg-surface-sunken"
           />
         ) : (
           <div className="flex aspect-[16/9] w-full items-center justify-center text-xs text-ink-faint">
-            No headline photograph
+            {canWrite ? "Drag a photograph here, or click Upload headline" : "No headline photograph"}
           </div>
         )}
         {canWrite && (
@@ -179,8 +201,17 @@ export function PhotosSection({
         )}
       </div>
 
-      {shown.length > 0 && (
-        <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {(shown.length > 0 || canWrite) && (
+        <div
+          {...(canWrite ? galleryDrop.bind : {})}
+          className={cn("mt-4 rounded-lg", canWrite && ["p-3", dropZoneClass(galleryDrop.over)])}
+        >
+        {shown.length === 0 ? (
+          <p className="py-6 text-center text-xs text-ink-faint">
+            Drag photos here, or click Add to gallery
+          </p>
+        ) : (
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {shown.map((p, i) => (
             <li
               key={p.photoId}
@@ -238,6 +269,8 @@ export function PhotosSection({
             </li>
           ))}
         </ul>
+        )}
+        </div>
       )}
 
       {canWrite && headline && (
