@@ -97,7 +97,7 @@ describe("listPipeline's payload", () => {
       // the board card and table (opportunity-pipeline.tsx)
       "opportunityId", "name", "city", "assetType", "strategy", "stage", "status", "currency",
       "triageStatus", "triagePriority", "triageNote",
-      "caseBasis", "caseVersion", "caseAcquisitionPrice", "caseTotalCost", "caseEntryYieldPct", "caseTargetIrr",
+      "caseBasis", "caseVersion", "caseAcquisitionPrice", "caseTotalCost", "caseEntryYieldPct", "caseTargetIrr", "headlinePhotoId",
       // the filter and search (src/lib/pipeline/filter.ts)
       "address", "brokerName", "market",
     ];

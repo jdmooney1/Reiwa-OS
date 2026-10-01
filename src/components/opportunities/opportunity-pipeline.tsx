@@ -140,7 +140,15 @@ export function OpportunityPipeline({ opportunities }: { opportunities: Pipeline
 function OppCard({ o }: { o: PipelineRow }) {
   return (
     <Link href={`/opportunities/${o.opportunityId}`}>
-      <Card className="p-3.5 transition-colors hover:border-line">
+      <Card className="overflow-hidden p-0 transition-colors hover:border-line">
+        {o.headlinePhotoId && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/asset-photos/${o.headlinePhotoId}`} alt="" loading="lazy"
+            className="aspect-[16/9] w-full object-cover"
+          />
+        )}
+        <div className="p-3.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-ink">{o.name}</div>
@@ -159,6 +167,7 @@ function OppCard({ o }: { o: PipelineRow }) {
             ? <Badge tone="neutral">{STRATEGY_LABEL[o.strategy as Strategy] ?? o.strategy}</Badge>
             : <span />}
           <span className="text-2xs text-ink-faint">{basisNote(o)}</span>
+        </div>
         </div>
       </Card>
     </Link>

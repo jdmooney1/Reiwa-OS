@@ -44,7 +44,22 @@ describe("Street View code stores no imagery", () => {
     for (const f of readdirSync(dir)) {
       const sql = readFileSync(join(dir, f), "utf8").replace(/--.*$/gm, "");
       expect(sql, f).not.toMatch(/street_?view[a-z_]*\s+bytea/i);
+      // `property_photos` (0019) is the register of photographs STAFF upload, and
+      // is the one table allowed to carry that name. It must hold no Street View
+      // data of any kind; the file-level guard below and the import guard in the
+      // next test keep the two stores apart.
+      if (f === "0019_property_photos.sql") {
+        expect(sql, f).not.toMatch(/street_?view|pano/i);
+        continue;
+      }
       expect(sql, f).not.toMatch(/create\s+table[^;]*(street_?view|property_photos)/i);
+    }
+  });
+
+  it("no Street View file can reach the uploaded-photo store", () => {
+    for (const f of STREET_VIEW_FILES) {
+      const code = readFileSync(join(ROOT, f), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+      expect(code, f).not.toMatch(/@\/lib\/photos|property_photos|PHOTO_BUCKET|putPhotoObject/);
     }
   });
 
