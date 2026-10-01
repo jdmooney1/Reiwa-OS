@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useFormState } from "react-dom";
-import { AlertTriangle, ArrowUpRight } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, ChevronRight } from "lucide-react";
 import type { DdItemRecord } from "@/lib/data/due-diligence";
 import { isDdOverdue, type Progress } from "@/lib/dd/progress";
 import { DD_STATUS_ORDER } from "@/lib/domain";
@@ -211,15 +211,34 @@ function DdRow({
   const cleared = item.status === "reviewed" || item.status === "resolved";
 
   return (
-    <li className="py-2.5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="min-w-0 flex-1 text-left"
-          aria-expanded={open}
-        >
-          <span className={cn("text-sm", cleared ? "text-ink-muted" : "text-ink")}>{item.item}</span>
+    <li className="py-1">
+      {/*
+        The whole row is one button. It used to be a bare button around the item
+        text with nothing to say it could be clicked: no cursor, no hover, no
+        marker. A reviewer who did not already know the row opened never found the
+        status, due date, finding or resolution behind it. Everything inside is
+        plain text, so one button is valid and the click target is the full row.
+      */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={cn(
+          "group -mx-2 flex w-[calc(100%+1rem)] cursor-pointer items-start gap-2 rounded px-2 py-1.5 text-left transition-colors",
+          "hover:bg-surface-sunken/60 focus-visible:bg-surface-sunken/60",
+          open && "bg-surface-sunken/40",
+        )}
+      >
+        <ChevronRight
+          aria-hidden="true"
+          strokeWidth={2}
+          className={cn(
+            "mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint transition-transform duration-150 group-hover:text-ink",
+            open && "rotate-90 text-ink",
+          )}
+        />
+        <span className="min-w-0 flex-1">
+          <span className={cn("block text-sm", cleared ? "text-ink-muted" : "text-ink")}>{item.item}</span>
           {item.question && (
             <span className="mt-0.5 block max-w-2xl text-2xs leading-relaxed text-ink-faint">
               {item.question}
@@ -228,8 +247,8 @@ function DdRow({
           {item.finding && !open && (
             <span className="mt-1 block max-w-2xl truncate text-xs text-ink-muted">{item.finding}</span>
           )}
-        </button>
-        <div className="flex shrink-0 items-center gap-2">
+        </span>
+        <span className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {item.due_date && (
             <span className={cn(
               "text-2xs",
@@ -242,11 +261,16 @@ function DdRow({
             <span className="text-2xs text-ink-faint">{ownerLabel(item)}</span>
           )}
           <Badge tone={DD_STATUS_TONE[item.status]}>{DD_STATUS_LABEL[item.status]}</Badge>
-        </div>
-      </div>
+          {/* Says what the row does. "Update" for someone who can edit, "View" for
+              someone who can only read the finding. */}
+          <span className="w-12 text-right text-2xs font-medium text-ink-faint group-hover:text-ink">
+            {open ? "Close" : canWrite ? "Update" : "View"}
+          </span>
+        </span>
+      </button>
 
       {open && (
-        <div className="mt-3 border-l-2 border-line pl-4">
+        <div className="mt-2 ml-1.5 border-l-2 border-line pl-4">
           {canWrite ? (
             <form action={formAction} className="space-y-3">
               <div className="flex flex-wrap items-end gap-3">
