@@ -16,6 +16,14 @@
 // FEED_COLUMNS, so the home feed, compare and saved lists never carry a
 // coordinate. src/lib/portal/location.ts applies the tier a second time.
 //
+// PHOTOGRAPHS arrive the same way (migration 0020): `headline_photo_id` on
+// investor_feed is the teaser photo's id, NULL unless staff have cleared a photo
+// to `diligence` AND this investor's entitlement is at the diligence tier; the
+// gallery is read by loadPortalPhotos() through app.investor_publication_photos().
+// Both carry ids only - the bytes come from /portal/photos/<id>, which the
+// database authorises again. src/lib/portal/photos.ts applies the tier a second
+// time, so neither layer is the only one.
+//
 // The internal tables — opportunities, investment_cases, assets, business_plans,
 // transactions, organizations, properties — are not referenced anywhere in this
 // file, and must not be. The investor projection carries no internal identifier to leak:
@@ -32,6 +40,7 @@ import type {
 } from "@/lib/data/investor-portal";
 import type { Currency } from "@/types/database";
 import { visibleLocation, type PortalLocation } from "@/lib/portal/location";
+import { visiblePhotos, visibleHeadlinePhoto, type PortalPhoto } from "@/lib/portal/photos";
 
 /** The approved, investor-visible shape of one opportunity. */
 export interface PortalOpportunity {
@@ -60,6 +69,8 @@ export interface PortalOpportunity {
   sizeSqm: number | null;
   highlights: string[];
   publishedAt: string | null;
+  /** The teaser photo's id for a diligence-tier entitlement, else null. */
+  headlinePhotoId: string | null;
 }
 
 export interface PortalDocument {
@@ -80,7 +91,7 @@ const FEED_COLUMNS = `
   document_access_level, title, headline, overview, market, submarket, city,
   country, asset_type, strategy, currency, headline_price, target_niy,
   target_irr, target_equity_multiple, hold_period_years, size_sqft, size_sqm,
-  highlights, published_at`;
+  highlights, published_at, headline_photo_id`;
 
 interface FeedRow {
   publication_id: string; version_id: string; placement: string; sort_order: number;
@@ -91,6 +102,7 @@ interface FeedRow {
   headline_price: unknown; target_niy: unknown; target_irr: unknown;
   target_equity_multiple: unknown; hold_period_years: unknown;
   size_sqft: unknown; size_sqm: unknown; highlights: unknown; published_at: string | null;
+  headline_photo_id?: string | null;
 }
 
 function toOpportunity(r: FeedRow): PortalOpportunity {
@@ -120,6 +132,10 @@ function toOpportunity(r: FeedRow): PortalOpportunity {
     sizeSqm: num(r.size_sqm),
     highlights: Array.isArray(r.highlights) ? (r.highlights as string[]).map(String) : [],
     publishedAt: str(r.published_at),
+    headlinePhotoId: visibleHeadlinePhoto({
+      documentAccessLevel: r.document_access_level,
+      headlinePhotoId: r.headline_photo_id ?? null,
+    }),
   };
 }
 
@@ -194,6 +210,33 @@ export async function loadPortalLocation(
     documentAccessLevel: r.document_access_level,
     latitude: num(r.latitude),
     longitude: num(r.longitude),
+  });
+}
+
+/**
+ * The photographs of this opportunity that THIS investor may see, in display
+ * order, or an empty list.
+ *
+ * Empty for a standard-tier investor, for a publication they cannot read, and
+ * when no photo has been cleared to diligence: the caller cannot tell those
+ * apart and does not need to. The database decides
+ * (app.investor_publication_photos), and visiblePhotos() checks the tier again
+ * on the investor's own feed row.
+ */
+export async function loadPortalPhotos(
+  authUserId: string, publicationId: string,
+): Promise<PortalPhoto[]> {
+  if (!isUuid(publicationId)) return [];
+  const { tier, photos } = await withInvestorSession(authUserId, async (tx) => {
+    const feed = await tx.query<{ document_access_level: string }>(
+      "select document_access_level from investor_feed where publication_id = $1", [publicationId]);
+    const gallery = await tx.query<{ photo_id: string; caption: string | null }>(
+      "select photo_id, caption from app.investor_publication_photos($1)", [publicationId]);
+    return { tier: feed.rows[0]?.document_access_level ?? "", photos: gallery.rows };
+  });
+  return visiblePhotos({
+    documentAccessLevel: tier,
+    photos: photos.map((p) => ({ photoId: p.photo_id, caption: p.caption })),
   });
 }
 

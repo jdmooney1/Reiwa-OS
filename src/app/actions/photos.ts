@@ -9,9 +9,13 @@
 //     a browser never names the property or supplies a path.
 //   * Validated against what the server received: allow-listed type, size
 //     ceiling, and the file's own first bytes must agree with its declared type.
-//   * Stored at a random, server-generated path in the private bucket, then
-//     recorded as `internal`. There is no visibility parameter on upload.
-//   * If the row does not land, the object does not survive it.
+//   * RE-ENCODED on the server, always (lib/photos/process.ts): orientation is
+//     baked into the pixels and every byte of metadata, GPS included, is dropped.
+//     The browser's own shrink is a convenience; this is the control. A full
+//     image and a thumbnail are stored, both JPEG, at a random server-generated
+//     path in the private bucket, then recorded as `internal`. There is no
+//     visibility parameter on upload.
+//   * If the row does not land, neither object survives it.
 //
 // ONE photograph per call. The browser sends them one at a time (it also shrinks
 // them first, see components/workspace/photos-section.tsx) so each request stays
@@ -26,8 +30,9 @@ import { getOpportunity } from "@/lib/data/opportunities";
 import {
   recordPhoto, setHeadline, setPhotoVisibility, reorderPhotos, deletePhotoRow,
 } from "@/lib/data/property-photos";
-import { checkPhoto } from "@/lib/photos/constraints";
-import { newPhotoObjectPath, putPhotoObject, deletePhotoObject } from "@/lib/photos/storage";
+import { checkPhoto, STORED_PHOTO_TYPE } from "@/lib/photos/constraints";
+import { reencodePhoto } from "@/lib/photos/process";
+import { newPhotoObjectPath, putPhotoObject, deletePhotoObject, thumbPathFor } from "@/lib/photos/storage";
 import { isUuid } from "@/lib/data/portal-feed";
 import type { Session } from "@/lib/db/client";
 
@@ -63,15 +68,27 @@ export async function uploadPhotoAction(
     const check = checkPhoto(file.type, bytes.byteLength, bytes.subarray(0, 16));
     if (!check.ok) throw new AppError(check.reason);
 
-    const objectPath = newPhotoObjectPath(propertyId, check.mimeType);
-    await putPhotoObject(objectPath, bytes, check.mimeType);
+    // The header looked like an image; the body may not decode. That is the
+    // person's file, not a fault.
+    let processed;
     try {
+      processed = await reencodePhoto(bytes);
+    } catch {
+      throw new AppError("That file could not be read as an image. Try saving it again as a JPEG.");
+    }
+
+    // Everything stored is JPEG now, whatever was uploaded.
+    const objectPath = newPhotoObjectPath(propertyId, STORED_PHOTO_TYPE);
+    try {
+      await putPhotoObject(objectPath, processed.full, STORED_PHOTO_TYPE);
+      await putPhotoObject(thumbPathFor(objectPath), processed.thumb, STORED_PHOTO_TYPE);
       await recordPhoto(session, {
-        propertyId, objectPath, mimeType: check.mimeType,
+        propertyId, objectPath, mimeType: STORED_PHOTO_TYPE,
         asHeadline: formData.get("headline") === "1",
       });
     } catch (e) {
-      // An object with no row is unreachable and unaccounted for.
+      // An object with no row is unreachable and unaccounted for: remove both,
+      // whichever of the three steps failed.
       await deletePhotoObject(objectPath);
       throw e;
     }

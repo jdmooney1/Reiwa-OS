@@ -18,12 +18,12 @@
 // ============================================================================
 import { withSession, type Session } from "@/lib/db/client";
 import { isUuid } from "@/lib/data/portal-feed";
-import { signPhotoObject } from "@/lib/photos/storage";
+import { signPhotoObject, thumbPathFor } from "@/lib/photos/storage";
 import { mayReadPhoto } from "@/lib/photos/access";
-import { isPhotoVisibility } from "@/lib/photos/constraints";
+import { isPhotoVisibility, type PhotoVariant } from "@/lib/photos/constraints";
 
 export async function issuePhotoDownload(
-  session: Session, photoId: string,
+  session: Session, photoId: string, variant: PhotoVariant = "full",
 ): Promise<string | null> {
   if (!isUuid(photoId)) return null;
   // Before the database is even asked: a role that may read no photographs at
@@ -38,5 +38,10 @@ export async function issuePhotoDownload(
   if (!row || !isPhotoVisibility(row.visibility)) return null;
   if (!mayReadPhoto(session.role, row.visibility)) return null;
 
+  if (variant === "thumb") {
+    // A photograph stored before thumbnails existed has none: serve the full
+    // image rather than a broken one.
+    return (await signPhotoObject(thumbPathFor(row.object_path))) ?? signPhotoObject(row.object_path);
+  }
   return signPhotoObject(row.object_path);
 }
