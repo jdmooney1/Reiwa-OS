@@ -129,7 +129,7 @@ model behind it survives and is ready for a screen to be built against it.
 | --- | --- | --- |
 | Due Diligence Tracker | ✅ London / Amsterdam checklists, jurisdiction-branched; progress and blocking-item computation | `src/lib/dd/templates.ts`, `src/lib/dd/progress.ts` |
 | Investment Score | ✅ 11 weighted criteria summing to 100, recommendation bands; radar and dial components | `src/lib/scoring/model.ts`, `src/components/shared/` |
-| Investment Memo | ✅ 17-section IC spine, 4 output formats (IC / teaser / snapshot / Japanese) | `src/lib/memo/sections.ts` |
+| Investment Memo | ✅ Composed deterministically from real rows, versioned and immutable once final; 17-section spine, 4 formats (IC / teaser / snapshot / Japanese), print view | `src/lib/memo/`, migration 0023, [`07`](07-memo-generator.md) |
 | Document Vault | ✅ Category taxonomy mapped to DD sections | `src/lib/documents/catalog.ts` |
 | Risk Register | ✅ `opportunity_risks` (migration 0008) holds the pre-acquisition register, with `source_dd_item_id` linking a risk back to the diligence finding it was promoted from; `asset_risks` is the post-acquisition register | `src/lib/data/opportunity-risks.ts` |
 | Asset Snapshot, Financial Metrics | ❌ No schema | |

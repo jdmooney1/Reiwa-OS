@@ -60,6 +60,7 @@ const EXPECTED: Record<string, { authenticated: boolean; why: string }> = {
   guard_ic_amendment:         { authenticated: false, why: "trigger function" },
   touch_opportunity_material: { authenticated: false, why: "trigger function" },
   project_case_to_opportunity: { authenticated: false, why: "trigger function" },
+  guard_memo:                  { authenticated: false, why: "trigger only, never called directly - 0023" },
 };
 
 interface FunctionAcl {
