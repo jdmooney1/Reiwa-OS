@@ -144,9 +144,15 @@ describe("EXECUTE privileges on schema app", () => {
       select p.proname, array_to_string(p.proconfig, ',') as config
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where p.prosecdef and n.nspname in ('app', 'public')`);
-    // Five from the portal work, plus app.staff_names() from 0011.
-    expect(definers.length).toBe(6);
-    expect(definers.map((d) => d.proname)).toContain("staff_names");
+    // Five from the portal work, app.staff_names() from 0011, the location bridge
+    // from 0018 and the three photo bridges from 0020. Named rather than counted, so
+    // adding one is a visible edit to this list and not a number somebody bumps.
+    expect(definers.map((d) => d.proname).sort()).toEqual([
+      "current_investor_contact_id", "current_investor_org_id", "investor_active_version_id",
+      "investor_can_read_document", "investor_can_read_publication", "investor_photo",
+      "investor_publication_headline_photo", "investor_publication_location",
+      "investor_publication_photos", "staff_names",
+    ]);
     for (const fn of definers) {
       expect({ fn: fn.proname, config: fn.config })
         .toEqual({ fn: fn.proname, config: 'search_path=""' });
