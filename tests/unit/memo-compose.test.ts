@@ -98,12 +98,62 @@ describe("one composition rule per section", () => {
     expect(s.status).toBe("empty");
   });
 
-  it("investment_thesis and business_plan carry the analyst's own text VERBATIM from the case", () => {
+  it("investment_thesis and business_plan still carry the analyst's own text VERBATIM, but as INTERNAL blocks", () => {
     const t = section(base(), "investment_thesis");
-    expect(t.blocks).toEqual([expect.objectContaining({ kind: "text", text: CASE.thesis, audience: "external" })]);
+    expect(t.status).toBe("composed");
+    expect(t.blocks).toEqual([expect.objectContaining({ kind: "text", text: CASE.thesis, audience: "internal", source: "Underwriting v3 (approved)" })]);
     const b = section(base(), "business_plan");
+    expect(b.status).toBe("composed");
     expect(text(b.blocks)).toContain(CASE.businessPlanAssumptions!);
     expect(text(b.blocks)).toContain("Strategy: Value-add");
+    expect(b.blocks.every((x) => x.audience === "internal")).toBe(true);
+  });
+
+  it("in the Internal IC Memo both sections show the full analyst text, sourced, exactly as before", () => {
+    const m = composeMemo(base());
+    const thesis = resolveSection(m.sections.investment_thesis, null, "ic");
+    expect(thesis.state).toBe("composed");
+    expect(text(thesis.blocks)).toBe(CASE.thesis);
+    expect(thesis.blocks[0].source).toBe("Underwriting v3 (approved)");
+    const plan = resolveSection(m.sections.business_plan, null, "ic");
+    expect(plan.state).toBe("composed");
+    expect(text(plan.blocks)).toContain(CASE.businessPlanAssumptions!);
+    expect(plan.withheld).toBe(0);
+  });
+
+  it("in the Teaser and the Snapshot both sections are EMPTY and say to write an investor-facing version; none of the analyst's text appears", () => {
+    const m = composeMemo(base());
+    for (const f of ["teaser", "snapshot"] as const) {
+      for (const k of ["investment_thesis", "business_plan"] as const) {
+        const r = resolveSection(m.sections[k], null, f);
+        expect(r.state, `${f}/${k}`).toBe("empty");
+        expect(r.blocks).toEqual([]);
+        expect(r.emptyReason).toBe("The recorded content for this section is internal and is not shown in this format. Write an investor-facing version in the override box.");
+        expect(r.withheld).toBeGreaterThan(0);
+      }
+    }
+    // The strategy label would otherwise stand alone under a Business Plan heading.
+    expect(text(resolveSection(m.sections.business_plan, null, "teaser").blocks)).toBe("");
+  });
+
+  it("a section withheld from an external format does not carry flags about content it is not showing", () => {
+    const m = composeMemo(base({ basis: { kind: "working", case: { ...CASE, status: "current" } } }));
+    expect(m.sections.investment_thesis.flags).toEqual(["Based on unapproved underwriting"]);
+    expect(resolveSection(m.sections.investment_thesis, null, "ic").flags).toEqual(["Based on unapproved underwriting"]);
+    expect(resolveSection(m.sections.investment_thesis, null, "teaser").flags).toEqual([]);
+    // A section that is genuinely empty at source keeps its flags.
+    const none = composeMemo(base({ basis: { kind: "working", case: { ...CASE, status: "current", thesis: null } } }));
+    expect(resolveSection(none.sections.investment_thesis, null, "teaser").flags).toEqual(["Based on unapproved underwriting"]);
+  });
+
+  it("an override for either section appears in the external formats, exactly as for every other section", () => {
+    const m = composeMemo(base());
+    for (const f of ["teaser", "snapshot"] as const) {
+      const t = resolveSection(m.sections.investment_thesis, "Prime South Kensington office with reversionary upside.", f);
+      expect(t.state).toBe("edited");
+      expect(t.overrideText).toBe("Prime South Kensington office with reversionary upside.");
+      expect(resolveSection(m.sections.business_plan, "Refurbish and re-let.", f).state).toBe("edited");
+    }
   });
 
   it("investment_thesis: a case with no thesis, or no case, is empty", () => {
@@ -353,11 +403,31 @@ describe("formats are lenses on one record", () => {
     expect(emptySectionsFor(m, {}, "japanese")).toEqual([]);
   });
 
-  it("unreviewedExternalText names the sections that carry analyst-written underwriting text into an external format", () => {
+  it("with a full underwriting, the teaser still lists thesis and business plan as printing blank: they are internal by default", () => {
     const m = composeMemo(base());
-    expect(unreviewedExternalText(m, {}, "teaser")).toEqual(["investment_thesis", "business_plan"]);
-    expect(unreviewedExternalText(m, { investment_thesis: "rewritten for investors" }, "teaser")).toEqual(["business_plan"]);
-    expect(unreviewedExternalText(m, {}, "ic")).toEqual([]);
+    expect(emptySectionsFor(m, {}, "teaser")).toEqual(["executive_summary", "investment_thesis", "business_plan"]);
+    expect(emptySectionsFor(m, {}, "snapshot")).toEqual(["executive_summary"]);
+    expect(emptySectionsFor(m, { executive_summary: "s", investment_thesis: "t", business_plan: "b" }, "teaser")).toEqual([]);
+    expect(emptySectionsFor(m, {}, "ic")).not.toContain("investment_thesis");
+  });
+
+  it("unreviewedExternalText is now always empty for underwriting text: nothing the analyst wrote reaches an external format unwritten-for-investors", () => {
+    const m = composeMemo(base());
+    for (const f of ["teaser", "snapshot", "ic", "japanese"] as const) {
+      expect(unreviewedExternalText(m, {}, f), f).toEqual([]);
+    }
+    expect(unreviewedExternalText(m, { investment_thesis: "rewritten for investors" }, "teaser")).toEqual([]);
+  });
+
+  it("no composed `text` block anywhere is external: external prose can only come from a person's override", () => {
+    const m = composeMemo(base({
+      decision: { decisionDate: "2026-09-10", outcome: "approved", recommendation: "proceed", rationale: "R", conditions: "C" },
+      risks: [risk({ description: "d", mitigation: "m" })],
+      ddItems: [dd({ finding: "f" })],
+    }));
+    for (const [key, s] of Object.entries(m.sections)) {
+      for (const b of s.blocks) if (b.kind === "text") expect(b.audience, `${key}: ${b.source}`).toBe("internal");
+    }
   });
 
   it("the Japanese summary is a single hand-written text under its own key", () => {

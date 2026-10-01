@@ -367,21 +367,27 @@ function textFromCase(
   if (!c) return empty(`No underwriting version exists, so there is no ${noun} to carry. Write it in the override box, or create one on the Underwriting tab.`);
   const text = pick(c);
   if (!hasText(text)) return empty(`Underwriting v${c.version} has no ${noun} recorded.`, caseFlags(src));
-  return composed([{ kind: "text", audience: "external", source: basisLabel(src), text }], caseFlags(src));
+  // INTERNAL. Underwriting thesis text is written in committee voice (hedges,
+  // candid risk framing, negotiating reasoning). It reaches an external format only
+  // when a person writes an investor-facing version in the override box.
+  return composed([{ kind: "text", audience: "internal", source: basisLabel(src), text }], caseFlags(src));
 }
 
 function businessPlan(src: MemoSource): ComposedSection {
   const blocks: Block[] = [];
   const c = src.basis.case;
   if (c && hasText(c.businessPlanAssumptions)) {
-    blocks.push({ kind: "text", audience: "external", source: basisLabel(src), text: c.businessPlanAssumptions });
+    // INTERNAL, for the same reason as the thesis: analyst prose in committee voice.
+    blocks.push({ kind: "text", audience: "internal", source: basisLabel(src), text: c.businessPlanAssumptions });
   }
   const dd = ddIn(src, "Business Plan Scenarios");
-  // The strategy label alone is not a business plan: it is only worth printing
-  // beside a plan, never standing in for one.
+  // The strategy label alone is not a business plan: it is only worth showing
+  // beside a plan, never standing in for one. It is therefore internal too: with the
+  // plan text internal, an external format would otherwise print "Strategy" alone
+  // under a Business Plan heading. (The label already appears under Asset Overview.)
   const strategy = c?.strategy ?? src.opportunity.strategy;
   if (blocks.length + dd.length > 0 && hasText(strategy)) {
-    blocks.push({ kind: "facts", audience: "external", source: c?.strategy ? basisLabel(src) : "Opportunity record",
+    blocks.push({ kind: "facts", audience: "internal", source: c?.strategy ? basisLabel(src) : "Opportunity record",
       items: [{ label: "Strategy", value: strategyText(strategy) }] });
   }
   if (dd.length > 0) {
@@ -638,7 +644,10 @@ export function resolveSection(
     const reason = section.status === "empty"
       ? section.emptyReason
       : "The recorded content for this section is internal and is not shown in this format. Write an investor-facing version in the override box.";
-    return { state: "empty", overrideText: null, blocks: [], flags: section.flags, emptyReason: reason, withheld };
+    // When the content was withheld rather than absent, its flags describe content
+    // this format does not show ("Based on unapproved underwriting"), so they go too.
+    const flags = section.status === "empty" ? section.flags : [];
+    return { state: "empty", overrideText: null, blocks: [], flags, emptyReason: reason, withheld };
   }
   return { state: "composed", overrideText: null, blocks, flags: section.flags, emptyReason: null, withheld };
 }

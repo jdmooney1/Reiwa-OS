@@ -58,7 +58,7 @@ finding, a risk's mitigation), carried verbatim and attributed to its source.
 | --- | --- |
 | Executive Summary | none - written by hand, always empty until it is |
 | Key Metrics | the approved `investment_cases` row; else the `current` one, flagged "Based on unapproved underwriting"; else empty |
-| Investment Thesis, Business Plan | `thesis` / `business_plan_assumptions` of that case, verbatim |
+| Investment Thesis, Business Plan | `thesis` / `business_plan_assumptions` of that case, verbatim, **internal**: shown in the IC memo, empty in the Teaser and Snapshot until overridden |
 | Asset Overview, Location and Market | `opportunities` / `properties`: name, type, strategy, size, market, submarket, city, country |
 | Income and Tenancy | the case's income fields, plus income and covenant diligence |
 | Financial Analysis, Capex Plan | the case's figures; capex also from capex diligence |
@@ -77,11 +77,14 @@ be the way round that. Tests hold the line.
 
 **Audience.** Every block is `external` or `internal`. The Investor Teaser and the
 One-Page Snapshot show external blocks only (price, targets, market, asset type, size,
-strategy, hold, exit figures). Financing structure, income detail, diligence findings and
-the risk register appear in the Internal IC Memo only. A person's own override text is
-shown in every format because they chose to write it. Underwriting thesis and business
-plan text is external by the format definition but is the analyst's text as written, so
-finalising an external format asks the person to confirm it is fit to leave the building.
+strategy under Asset Overview, hold and exit figures). Financing structure, income
+detail, diligence findings and the risk register appear in the Internal IC Memo only.
+**So do the underwriting's Investment Thesis and Business Plan text**: it is written in
+committee voice (hedges, candid risk framing, negotiating reasoning), so in the external
+formats those two sections are empty until a person writes an investor-facing version in
+the override box. A person's own override text is shown in every format because they
+chose to write it. No composed prose block is external; external prose comes only from an
+override.
 
 **Persistence** (`memos`, migration 0023). `content` is the composed snapshot
 (structured data, a copy and not a live join); `overrides` is per-section human text
