@@ -105,7 +105,13 @@ describe("1. only a short allowlist of investor files mentions a photograph", ()
     const delivery = stripComments(read("src/lib/photos/portal-delivery.ts"));
     expect(delivery).toContain("from app.investor_photo($1)");
     // (The NEVER check above allows this file only because it spells the column in SQL.)
-    expect(delivery).not.toMatch(/property_photos|visibility|document_tier|investor_org_id|is_headline/);
+    // The event insert names its columns and pins the caller through app.current_investor_*();
+    // those are the only places a contact or organisation may appear, and never as a filter on a request value.
+    const stripped = delivery
+      .replace(/app\.current_investor_(org|contact)_id\(\)/g, "")
+      .replace(/investor_contact_id, investor_org_id, event_type/, "")
+      .replace(/e\.investor_contact_id = /, "");
+    expect(stripped).not.toMatch(/property_photos|visibility|document_tier|investor_org_id|is_headline/);
   });
 });
 

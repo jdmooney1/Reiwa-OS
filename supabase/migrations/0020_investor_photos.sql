@@ -25,8 +25,10 @@
 --   One function, one comparison, no second gate to drift.
 --
 -- WHAT THEY RETURN
---   app.investor_photo(uuid)                   object_path, mime_type  - for the delivery
---                                              route to sign. Never sent to a browser.
+--   app.investor_photo(uuid)                   object_path, mime_type, publication_id - for the
+--                                              delivery route to sign and to record the view
+--                                              against the publication that granted it. The
+--                                              path is never sent to a browser.
 --   app.investor_publication_photos(uuid)      photo_id, is_headline, sort_order, caption
 --                                              for the deal page's gallery.
 --   app.investor_publication_headline_photo()  one photo_id for the teaser.
@@ -44,11 +46,11 @@
 
 -- ---- One photo, for delivery ------------------------------------------------
 create or replace function app.investor_photo(p_photo_id uuid)
-  returns table (object_path text, mime_type text)
+  returns table (object_path text, mime_type text, publication_id uuid)
   language sql stable security definer
   set search_path = ''
   as $fn$
-    select pp.object_path, pp.mime_type
+    select pp.object_path, pp.mime_type, p.publication_id
       from public.property_photos pp
       join public.properties pr          on pr.property_id    = pp.property_id
       join public.opportunities o        on o.property_id     = pr.property_id
