@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import {
   checkPhoto, sniffImageType, ALLOWED_PHOTO_TYPES, MAX_PHOTO_BYTES, PHOTO_BUCKET,
-  DEFAULT_PHOTO_VISIBILITY, isPhotoVisibility,
+  DEFAULT_PHOTO_VISIBILITY, PHOTO_VISIBILITIES, isPhotoVisibility,
 } from "@/lib/photos/constraints";
 import { fitWithin, moveItem, MAX_EDGE } from "@/lib/photos/client";
 import { mayReadPhoto } from "@/lib/photos/access";
@@ -59,8 +59,14 @@ describe("defaults and the bucket", () => {
   it("a photograph is internal until a person widens it", () => {
     expect(DEFAULT_PHOTO_VISIBILITY).toBe("internal");
     expect(isPhotoVisibility("internal")).toBe(true);
+    expect(isPhotoVisibility("diligence")).toBe(true);
     expect(isPhotoVisibility("public")).toBe(false);
     expect(isPhotoVisibility(undefined)).toBe(false);
+  });
+
+  it("has no standard tier: a photo is never more exposed than the location pin", () => {
+    expect(isPhotoVisibility("standard")).toBe(false);
+    expect([...PHOTO_VISIBILITIES]).toEqual(["internal", "diligence"]);
   });
 
   it("has its own bucket, distinct from documents", () => {
@@ -93,7 +99,7 @@ describe("shrinking and ordering in the browser", () => {
 describe("who may read a photograph", () => {
   it("internal staff read every tier", () => {
     for (const role of ["reiwa_admin", "org_user"] as const) {
-      for (const tier of ["internal", "standard", "diligence"] as const) {
+      for (const tier of ["internal", "diligence"] as const) {
         expect(mayReadPhoto(role, tier), `${role}/${tier}`).toBe(true);
       }
     }
@@ -101,7 +107,7 @@ describe("who may read a photograph", () => {
 
   it("the read-only role and anything unknown read nothing at any tier", () => {
     for (const role of ["investor_viewer", null, undefined, "investor", "anon"]) {
-      for (const tier of ["internal", "standard", "diligence"] as const) {
+      for (const tier of ["internal", "diligence"] as const) {
         expect(mayReadPhoto(role as never, tier), `${String(role)}/${tier}`).toBe(false);
       }
     }

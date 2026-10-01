@@ -16,7 +16,6 @@ import { cn } from "@/lib/utils";
 
 const VISIBILITY_LABEL: Record<PhotoVisibility, string> = {
   internal: "Internal only",
-  standard: "Standard investors",
   diligence: "Diligence investors",
 };
 

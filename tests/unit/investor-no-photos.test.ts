@@ -94,9 +94,12 @@ describe("3. what migration 0019 grants", () => {
     expect(sql).not.toMatch(/grant[^;]*property_photos[^;]*\b(anon|public)\b/i);
   });
 
-  it("a photograph is internal by default, only the three tiers are valid, and one headline per property", () => {
+  it("a photograph is internal by default, only internal and diligence are valid, and one headline per property", () => {
     expect(sql).toMatch(/visibility\s+text not null default 'internal'/);
-    expect(sql).toMatch(/check \(visibility in \('internal', 'standard', 'diligence'\)\)/);
+    expect(sql).toMatch(/check \(visibility in \('internal', 'diligence'\)\)/);
+    // No standard tier for a photo: never more exposed than the location pin.
+    // (The exact check above is the guard; the table comment may explain why.)
+    expect(sql.match(/visibility[^;]*?check[^;]*?;/is)?.[0] ?? "").not.toMatch(/standard/i);
     expect(sql).toMatch(/create unique index if not exists property_photos_one_headline\s+on property_photos\(property_id\) where is_headline/);
   });
 

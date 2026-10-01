@@ -4,9 +4,13 @@
 -- A property has photographs: one HEADLINE and a gallery. The bytes live in the
 -- private Supabase Storage bucket `property-photos`; this table is the register.
 --
--- THE DEFAULT IS INTERNAL. `visibility` reuses the document vocabulary
--- (internal / standard / diligence) so the same entitlement comparison,
--- app.document_tier(), can decide a photo later exactly as it decides a document.
+-- THE DEFAULT IS INTERNAL, AND THERE IS NO `standard` TIER FOR A PHOTO. The
+-- exterior of an off-market building can identify it as surely as its address,
+-- and a standard-tier investor has not cleared whatever bar gets an investor to
+-- diligence tier. A photo is therefore never more exposed than the location pin,
+-- which is itself diligence-only (0018). `visibility` is `internal` or
+-- `diligence`; the diligence value is gated later by the same comparison the pin
+-- uses, app.document_tier('diligence') <= app.document_tier(entitlement).
 -- Nothing here reads it for an investor: there is NO investor policy, NO view
 -- change and NO helper in this migration. A portal contact has no `profiles` row
 -- and no `organization_members` row, so app.has_org() is false for every org and
@@ -32,7 +36,7 @@ create table if not exists property_photos (
   sort_order  integer not null default 0,
   caption     text,
   visibility  text not null default 'internal'
-                check (visibility in ('internal', 'standard', 'diligence')),
+                check (visibility in ('internal', 'diligence')),
   uploaded_by uuid not null references profiles(user_id),
   created_at  timestamptz not null default now()
 );
@@ -42,7 +46,7 @@ comment on table property_photos is
 comment on column property_photos.object_path is
   'Path in the private property-photos bucket. Server-generated, random, never sent to a browser.';
 comment on column property_photos.visibility is
-  'internal | standard | diligence. Recorded now, consumed by nothing investor-facing until Phase 2.';
+  'internal | diligence. No standard tier: a photo is never more exposed than the location pin. Recorded now, consumed by nothing investor-facing until Phase 2.';
 
 -- At most ONE headline per property, enforced where it cannot be bypassed. The
 -- same pattern as properties_identity_key (0012): a partial unique index.

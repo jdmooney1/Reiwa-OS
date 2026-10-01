@@ -101,11 +101,15 @@ describe("every photograph starts internal", () => {
     expect(r[0].visibility).toBe("internal");
   });
 
-  it("the table refuses a visibility outside the three tiers and a type outside the three images", async () => {
-    await expect(adminQuery(
-      `insert into property_photos (org_id, property_id, object_path, mime_type, visibility, uploaded_by)
-       values ($1, $2, $3, 'image/jpeg', 'public', $4)`,
-      [meiji, propertyId, path(), writer.userId])).rejects.toMatchObject({ code: "23514" });
+  it("the table refuses any visibility but internal or diligence (no standard tier for a photo), and any type outside the three images", async () => {
+    for (const bad of ["public", "standard"]) {
+      await expect(adminQuery(
+        `insert into property_photos (org_id, property_id, object_path, mime_type, visibility, uploaded_by)
+         values ($1, $2, $3, 'image/jpeg', $5, $4)`,
+        [meiji, propertyId, path(), writer.userId, bad]), bad).rejects.toMatchObject({ code: "23514" });
+    }
+    const id = await add();
+    await expect(setPhotoVisibility(writer, propertyId, id, "standard")).rejects.toThrow(/not a valid visibility/);
     await expect(adminQuery(
       `insert into property_photos (org_id, property_id, object_path, mime_type, uploaded_by)
        values ($1, $2, $3, 'image/svg+xml', $4)`,
@@ -131,7 +135,7 @@ describe("staff access", () => {
 
   it("a photograph of one property cannot be touched through another property's id", async () => {
     const id = await add();
-    await expect(setPhotoVisibility(writer, randomUUID(), id, "standard")).rejects.toThrow(/could not be found/);
+    await expect(setPhotoVisibility(writer, randomUUID(), id, "diligence")).rejects.toThrow(/could not be found/);
     await expect(reorderPhotos(writer, propertyId, [id, randomUUID()])).rejects.toThrow(/not part of this property/);
   });
 
@@ -146,7 +150,7 @@ describe("staff access", () => {
 describe("no investor can read a photograph, at any tier", () => {
   const INVESTORS = ["principal@kitano-fo.example", "partner@sakura-cap.example"];
 
-  it.each(["internal", "standard", "diligence"] as const)("a %s photograph is invisible to every investor", async (tier) => {
+  it.each(["internal", "diligence"] as const)("a %s photograph is invisible to every investor", async (tier) => {
     const id = await add();
     await setPhotoVisibility(writer, propertyId, id, tier);
     for (const email of INVESTORS) {

@@ -30,9 +30,14 @@ export const ALLOWED_PHOTO_TYPES: Readonly<Record<string, string>> = Object.free
 
 export const PHOTO_ACCEPT = Object.keys(ALLOWED_PHOTO_TYPES).join(",");
 
-/** Who may be shown a photo. Same words as a document's access level. */
-export type PhotoVisibility = "internal" | "standard" | "diligence";
-export const PHOTO_VISIBILITIES: readonly PhotoVisibility[] = ["internal", "standard", "diligence"];
+/**
+ * Who may be shown a photo. Deliberately NOT the document vocabulary: there is
+ * no `standard`. An off-market building's exterior can identify it as surely as
+ * its address, so a photo is never more exposed than the location pin, which is
+ * diligence-tier only. The database check (migration 0019) says the same.
+ */
+export type PhotoVisibility = "internal" | "diligence";
+export const PHOTO_VISIBILITIES: readonly PhotoVisibility[] = ["internal", "diligence"];
 
 /** What a new photograph is until someone decides otherwise. */
 export const DEFAULT_PHOTO_VISIBILITY: PhotoVisibility = "internal";
