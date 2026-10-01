@@ -31,8 +31,8 @@ describe("board card", () => {
     opportunities: [row("1", PHOTO), row("2", null)],
   }));
 
-  it("shows the headline photograph through the delivery route, by id", () => {
-    expect(html).toContain(`src="/api/asset-photos/${PHOTO}"`);
+  it("shows the headline THUMBNAIL through the delivery route, by id", () => {
+    expect(html).toContain(`src="/api/asset-photos/${PHOTO}?variant=thumb"`);
     expect(html.match(/\/api\/asset-photos\//g)).toHaveLength(1);
   });
 

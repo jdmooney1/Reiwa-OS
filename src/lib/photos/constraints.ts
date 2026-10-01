@@ -28,6 +28,18 @@ export const ALLOWED_PHOTO_TYPES: Readonly<Record<string, string>> = Object.free
   "image/webp": ".webp",
 });
 
+/** What every stored photograph is, whatever was uploaded: the server re-encodes to JPEG. */
+export const STORED_PHOTO_TYPE = "image/jpeg";
+
+/** The longest edge of the stored full-size image and of its thumbnail, in pixels. */
+export const FULL_EDGE = 2400;
+export const THUMB_EDGE = 480;
+
+/** The thumbnail's path, deterministically derived from the full image's. */
+export function thumbPathFor(objectPath: string): string {
+  return objectPath.replace(/(\.[a-z0-9]+)$/i, "-thumb$1");
+}
+
 export const PHOTO_ACCEPT = Object.keys(ALLOWED_PHOTO_TYPES).join(",");
 
 /**
