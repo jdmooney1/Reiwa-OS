@@ -13,6 +13,9 @@ import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
 
 export default defineConfig({
+  // tsconfig sets `jsx: preserve` for Next, so vitest's own transform needs to be
+  // told how to read a component. Only affects rendering a component in a test.
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
