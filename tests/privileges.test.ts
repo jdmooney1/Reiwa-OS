@@ -32,6 +32,12 @@ const EXPECTED: Record<string, { authenticated: boolean; why: string }> = {
   investor_active_version_id:    { authenticated: true, why: "publication_versions policy" },
   investor_can_read_document:    { authenticated: true, why: "publication_documents policy" },
 
+  // ---- Bridges from the internal side to the investor, SECURITY DEFINER -----
+  // Re-checks everything itself (the caller's own visible entitlement, a published
+  // publication, the diligence tier through app.document_tier) because
+  // `authenticated` can call it with any id.
+  investor_publication_location: { authenticated: true, why: "investor_feed lat/lng (0018); SECURITY DEFINER, diligence-tier gate" },
+
   // ---- The internal staff directory (0011) ----------------------------------
   // Granted to `authenticated` because both staff and investors arrive on that
   // role and the function must therefore do its own gate: it returns nothing
@@ -59,6 +65,8 @@ const EXPECTED: Record<string, { authenticated: boolean; why: string }> = {
   guard_ic_decision:          { authenticated: false, why: "trigger function" },
   guard_ic_amendment:         { authenticated: false, why: "trigger function" },
   touch_opportunity_material: { authenticated: false, why: "trigger function" },
+  guard_deal_load_raw:        { authenticated: false, why: "trigger only, never called directly - 0014, revoked in 0022" },
+  guard_email_thread_link:    { authenticated: false, why: "trigger only, never called directly - 0015, revoked in 0022" },
   project_case_to_opportunity: { authenticated: false, why: "trigger function" },
 };
 
@@ -134,9 +142,14 @@ describe("EXECUTE privileges on schema app", () => {
       select p.proname, array_to_string(p.proconfig, ',') as config
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where p.prosecdef and n.nspname in ('app', 'public')`);
-    // Five from the portal work, plus app.staff_names() from 0011.
-    expect(definers.length).toBe(6);
-    expect(definers.map((d) => d.proname)).toContain("staff_names");
+    // Five from the portal work, app.staff_names() from 0011 and the location
+    // bridge from 0018. Named rather than counted, so adding one is a visible edit
+    // to this list and not a number somebody bumps.
+    expect(definers.map((d) => d.proname).sort()).toEqual([
+      "current_investor_contact_id", "current_investor_org_id", "investor_active_version_id",
+      "investor_can_read_document", "investor_can_read_publication", "investor_publication_location",
+      "staff_names",
+    ]);
     for (const fn of definers) {
       expect({ fn: fn.proname, config: fn.config })
         .toEqual({ fn: fn.proname, config: 'search_path=""' });
