@@ -131,7 +131,7 @@ model behind it survives and is ready for a screen to be built against it.
 | Investment Score | ✅ 11 weighted criteria summing to 100, recommendation bands; radar and dial components | `src/lib/scoring/model.ts`, `src/components/shared/` |
 | Investment Memo | ✅ 17-section IC spine, 4 output formats (IC / teaser / snapshot / Japanese) | `src/lib/memo/sections.ts` |
 | Document Vault | ✅ Category taxonomy mapped to DD sections | `src/lib/documents/catalog.ts` |
-| Risk Register | ⚠️ Partial — `asset_risks` exists post-acquisition; no pre-acquisition risk table |  |
+| Risk Register | ✅ `opportunity_risks` (migration 0008) holds the pre-acquisition register, with `source_dd_item_id` linking a risk back to the diligence finding it was promoted from; `asset_risks` is the post-acquisition register | `src/lib/data/opportunity-risks.ts` |
 | Asset Snapshot, Financial Metrics | ❌ No schema | |
 | Deal Contacts, Contacts Directory | ❌ No schema. `/contacts` was an empty placeholder and was removed | |
 | Settings | ❌ Empty placeholder, removed | |
