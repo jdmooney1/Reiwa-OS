@@ -10,6 +10,8 @@
 //   npm run db:storage:test
 import { requireEnv } from "./env";
 import { ensureDocumentBucket, DOCUMENT_BUCKET } from "@/lib/documents/storage";
+import { ensurePhotoBucket } from "@/lib/photos/storage";
+import { PHOTO_BUCKET } from "@/lib/photos/constraints";
 
 async function main(): Promise<void> {
   requireEnv();
@@ -29,6 +31,21 @@ async function main(): Promise<void> {
     );
   }
   console.log("Bucket is private. Downloads are served only as short-lived signed URLs.");
+
+  // Asset photographs: a second private bucket, held to the same rule.
+  const photos = await ensurePhotoBucket();
+  console.log(
+    photos.created
+      ? `Created private bucket ${PHOTO_BUCKET} on ${project}.`
+      : `Bucket ${PHOTO_BUCKET} already exists on ${project}.`,
+  );
+  if (photos.isPublic) {
+    throw new Error(
+      `Bucket ${PHOTO_BUCKET} is PUBLIC. Photographs must not be publicly readable - ` +
+      `set it to private in the Supabase dashboard.`,
+    );
+  }
+  console.log("Photo bucket is private.");
 }
 
 main().catch((e) => {

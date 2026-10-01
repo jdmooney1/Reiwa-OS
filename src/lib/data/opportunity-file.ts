@@ -100,6 +100,12 @@ export interface PipelineRow extends Omit<Opportunity, LocationField> {
   caseEntryYieldPct: number | null;
   caseTargetIrr: number | null;
   caseEquityMultiple: number | null;
+  /**
+   * The id of the property's headline photograph, for the board card. An id and
+   * nothing else: the image is fetched through /api/asset-photos/<id>, which
+   * re-checks the session, so the pipeline payload carries no path and no bytes.
+   */
+  headlinePhotoId: string | null;
 }
 
 /**
@@ -130,6 +136,10 @@ export async function listPipeline(session: Session): Promise<PipelineRow[]> {
         order by opportunity_id, (status = 'approved') desc, version desc`);
     const cases = new Map(rows.map((r) => [r.opportunity_id as string, r]));
 
+    const heads = await tx.query<{ property_id: string; photo_id: string }>(
+      "select property_id, photo_id from property_photos where is_headline");
+    const headline = new Map(heads.rows.map((r) => [r.property_id, r.photo_id]));
+
     return opportunities.map((o) => {
       const c = cases.get(o.opportunityId);
       return {
@@ -141,6 +151,7 @@ export async function listPipeline(session: Session): Promise<PipelineRow[]> {
         caseEntryYieldPct: c ? num(c.entry_yield_pct) : null,
         caseTargetIrr: c ? num(c.target_irr) : null,
         caseEquityMultiple: c ? num(c.target_equity_multiple) : null,
+        headlinePhotoId: (o.propertyId && headline.get(o.propertyId)) || null,
       };
     });
   });

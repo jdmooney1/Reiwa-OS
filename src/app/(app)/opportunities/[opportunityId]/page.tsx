@@ -4,6 +4,8 @@ import { getOpportunityFile } from "@/lib/data/opportunity-file";
 import { listRisks } from "@/lib/data/opportunity-risks";
 import { listVersions } from "@/lib/data/underwriting";
 import { listOpportunityThreads } from "@/lib/data/email-threads";
+import { listPropertyPhotos } from "@/lib/data/property-photos";
+import { PhotosSection } from "@/components/workspace/photos-section";
 import { SummarySection } from "@/components/workspace/summary-section";
 import { EmailThreadsSection } from "@/components/workspace/email-threads-section";
 
@@ -19,9 +21,11 @@ export default async function SummaryPage({
   const file = await getOpportunityFile(session, params.opportunityId);
   if (!file) notFound();
 
-  const [risks, threads] = await Promise.all([
+  const propertyId = file.opportunity.propertyId;
+  const [risks, threads, photos] = await Promise.all([
     listRisks(session, params.opportunityId),
     listOpportunityThreads(session, params.opportunityId),
+    propertyId ? listPropertyPhotos(session, propertyId) : Promise.resolve([]),
   ]);
   const openRisks = risks
     .filter((r) => r.status === "open")
@@ -41,6 +45,12 @@ export default async function SummaryPage({
   return (
     <>
       <SummarySection file={file} openRisks={openRisks} workingAhead={workingAhead} />
+      <PhotosSection
+        opportunityId={params.opportunityId}
+        propertyId={propertyId}
+        photos={photos}
+        canWrite={auth.role !== "investor_viewer"}
+      />
       <EmailThreadsSection
         opportunityId={params.opportunityId}
         threads={threads}

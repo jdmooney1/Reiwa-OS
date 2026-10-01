@@ -5,6 +5,12 @@ const nextConfig = {
   // it is required at runtime.
   experimental: {
     serverComponentsExternalPackages: ["pg"],
+    // Next's default for a server action's request body is 1 MB. A photograph
+    // is shrunk in the browser to about 3.5 MB at most before it is sent
+    // (lib/photos/client.ts), and the hosting platform caps a request near
+    // 4.5 MB, so this is set just above that: it lifts the framework's own
+    // limit without pretending the platform's does not exist.
+    serverActions: { bodySizeLimit: "5mb" },
   },
   async headers() {
     return [
