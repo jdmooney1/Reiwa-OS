@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useReducer, useState } from "react";
 import type { UnderwritingVersion } from "@/lib/data/underwriting-types";
 import { useFormState } from "react-dom";
 import { createVersionAction } from "@/app/actions/workspace";
@@ -8,6 +8,9 @@ import { ACTION_IDLE } from "@/lib/actions/result";
 import { ActionError } from "@/components/workspace/primitives";
 import { currencySymbol } from "@/lib/format";
 import type { Currency } from "@/types/database";
+import {
+  deriveReducer, initDerive, isAutoFilled, reconcile, type Warning,
+} from "@/lib/underwriting/derive";
 
 /**
  * Create the next underwriting version.
@@ -18,9 +21,12 @@ import type { Currency } from "@/types/database";
  * becomes noise.
  *
  * Structured inputs only, for fields the schema actually has. There is no
- * formula bar and no derived cell — total cost is computed in Postgres from
- * price, costs and capex, so it is shown here as a read-only consequence of
- * what is typed rather than as something to disagree with.
+ * formula bar. Total cost is computed in Postgres from price, costs and capex.
+ *
+ * A few fields follow arithmetically from others (equity, LTV, occupancy, entry
+ * yield, ...). Those are filled in when empty and marked "calculated"; anything
+ * the person has typed, or that carried forward from the last version, is never
+ * overwritten. The rules live in lib/underwriting/derive.ts.
  */
 const GROUPS: { title: string; fields: { name: keyof UnderwritingVersion; label: string; kind: "money" | "percent" | "years" | "multiple" }[] }[] = [
   {
@@ -71,9 +77,6 @@ export function NewVersionForm({
   currency: Currency;
 }) {
   const [open, setOpen] = useState(false);
-  const [state, formAction] = useFormState(
-    createVersionAction.bind(null, opportunityId), ACTION_IDLE);
-  const sym = currencySymbol(currency);
 
   if (!open) {
     return (
@@ -86,11 +89,41 @@ export function NewVersionForm({
       </button>
     );
   }
+  return (
+    <VersionFields
+      opportunityId={opportunityId} seed={seed} currency={currency}
+      onCancel={() => setOpen(false)}
+    />
+  );
+}
 
-  const initial = (k: keyof UnderwritingVersion) => {
-    const v = seed?.[k];
-    return typeof v === "number" ? String(v) : "";
-  };
+/** Every numeric field as the string the form holds, carried forward from the seed. */
+function seedValues(seed: UnderwritingVersion | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const g of GROUPS) {
+    for (const f of g.fields) {
+      const v = seed?.[f.name];
+      out[String(f.name)] = typeof v === "number" ? String(v) : "";
+    }
+  }
+  return out;
+}
+
+function VersionFields({
+  opportunityId, seed, currency, onCancel,
+}: {
+  opportunityId: string;
+  seed: UnderwritingVersion | null;
+  currency: Currency;
+  onCancel: () => void;
+}) {
+  const [state, formAction] = useFormState(
+    createVersionAction.bind(null, opportunityId), ACTION_IDLE);
+  const [derive, dispatch] = useReducer(deriveReducer, seed, (s) => initDerive(seedValues(s)));
+  const sym = currencySymbol(currency);
+
+  const warnings = reconcile(derive.values, currency);
+  const costsTouched = derive.touched.has("acquisitionCosts");
 
   return (
     <form action={formAction} className="max-w-4xl space-y-6">
@@ -108,19 +141,46 @@ export function NewVersionForm({
         <fieldset key={g.title}>
           <legend className="eyebrow mb-2">{g.title}</legend>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
-            {g.fields.map((f) => (
-              <Field
-                key={String(f.name)}
-                label={f.label}
-                name={String(f.name)}
-                type="number"
-                step={f.kind === "money" ? "1" : "0.01"}
-                prefix={f.kind === "money" ? sym : undefined}
-                suffix={f.kind === "percent" ? "%" : f.kind === "multiple" ? "x" : undefined}
-                defaultValue={initial(f.name)}
-              />
-            ))}
+            {g.fields.map((f) => {
+              const name = String(f.name);
+              return (
+                <Field
+                  key={name}
+                  label={f.label}
+                  name={name}
+                  type="number"
+                  step={f.kind === "money" ? "1" : "0.01"}
+                  prefix={f.kind === "money" ? sym : undefined}
+                  suffix={f.kind === "percent" ? "%" : f.kind === "multiple" ? "x" : undefined}
+                  value={derive.values[name] ?? ""}
+                  calculated={isAutoFilled(derive, name)}
+                  onValue={(raw) => dispatch({ type: "edit", name, raw })}
+                  onBlur={() => dispatch({ type: "blur", name })}
+                />
+              );
+            })}
+            {g.title === "Cost" && (
+              <div>
+                <Field
+                  label="Costs as % of price"
+                  type="number"
+                  step="0.01"
+                  suffix="%"
+                  value={derive.costsPctDraft}
+                  onValue={(raw) => dispatch({ type: "costsPctDraft", raw })}
+                  onBlur={() => dispatch({ type: "costsPctCommit" })}
+                />
+                {derive.costsPct !== "" && costsTouched && (
+                  <p className="mt-1 text-2xs text-ink-faint">
+                    Acquisition costs were entered directly, so {derive.costsPct}% is not
+                    applied. Clear that field to use it.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
+          {g.title === "Debt" && <Warnings items={warnings.filter((w) => w.group === "sources")} />}
+          {g.title === "Income" && <Warnings items={warnings.filter((w) => w.group === "income")} />}
         </fieldset>
       ))}
 
@@ -153,13 +213,14 @@ export function NewVersionForm({
         </button>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={onCancel}
           className="rounded border border-line px-3 py-2 text-xs font-medium text-ink-muted hover:text-ink"
         >
           Cancel
         </button>
         <span className="text-2xs text-ink-faint">
-          Total cost is computed from price, costs and capex.
+          Total cost is computed from price, costs and capex. Fields marked
+          calculated are filled in for you; type over one to keep your own figure.
         </span>
       </div>
       <ActionError message={state.error} />
@@ -167,22 +228,51 @@ export function NewVersionForm({
   );
 }
 
+function Warnings({ items }: { items: Warning[] }) {
+  if (items.length === 0) return null;
+  return (
+    <ul className="mt-2 space-y-1" role="status">
+      {items.map((w) => (
+        <li key={w.message} className="rounded border border-caution/40 bg-caution/10 px-3 py-1.5 text-xs text-ink">
+          {w.message}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Field({
-  label, name, type = "text", step, defaultValue, placeholder, prefix, suffix, required,
+  label, name, type = "text", step, defaultValue, value, placeholder, prefix, suffix, required,
+  calculated, onValue, onBlur,
 }: {
   label: string;
-  name: string;
+  /** Omitted for a helper box that must not be posted with the form. */
+  name?: string;
   type?: string;
   step?: string;
   defaultValue?: string;
+  /** With onValue, makes the input controlled. */
+  value?: string;
   placeholder?: string;
   prefix?: string;
   suffix?: string;
   required?: boolean;
+  /** The value was filled in by the form, not typed. */
+  calculated?: boolean;
+  onValue?: (raw: string) => void;
+  onBlur?: () => void;
 }) {
+  const controlled = value !== undefined;
   return (
     <label className="block">
-      <span className="eyebrow">{label}</span>
+      <span className="eyebrow">
+        {label}
+        {calculated && (
+          <span className="ml-1.5 rounded bg-surface-sunken px-1 py-px text-2xs font-medium normal-case tracking-normal text-ink-muted">
+            calculated
+          </span>
+        )}
+      </span>
       <span className="mt-1 flex h-9 items-center rounded border border-line bg-surface-card focus-within:border-line-strong focus-within:ring-1 focus-within:ring-purple/30">
         {prefix && <span className="pl-2.5 text-2xs text-ink-faint">{prefix}</span>}
         <input
@@ -190,9 +280,14 @@ function Field({
           type={type}
           step={step}
           required={required}
-          defaultValue={defaultValue}
+          {...(controlled
+            ? { value, onChange: (e: React.ChangeEvent<HTMLInputElement>) => onValue?.(e.target.value) }
+            : { defaultValue })}
+          onBlur={onBlur}
           placeholder={placeholder}
-          className="h-full w-full min-w-0 bg-transparent px-2.5 text-sm text-ink placeholder:text-ink-faint focus:outline-none"
+          className={`h-full w-full min-w-0 bg-transparent px-2.5 text-sm placeholder:text-ink-faint focus:outline-none ${
+            calculated ? "italic text-ink-muted" : "text-ink"
+          }`}
         />
         {suffix && <span className="pr-2.5 text-2xs text-ink-faint">{suffix}</span>}
       </span>
