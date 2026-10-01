@@ -28,6 +28,9 @@ export const ALLOWED_PHOTO_TYPES: Readonly<Record<string, string>> = Object.free
   "image/webp": ".webp",
 });
 
+/** Which rendition a delivery route serves. */
+export type PhotoVariant = "full" | "thumb";
+
 /** What every stored photograph is, whatever was uploaded: the server re-encodes to JPEG. */
 export const STORED_PHOTO_TYPE = "image/jpeg";
 
