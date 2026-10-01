@@ -4,7 +4,7 @@ const nextConfig = {
   // node-postgres opens raw TCP/TLS sockets; keep it out of the server bundle so
   // it is required at runtime.
   experimental: {
-    serverComponentsExternalPackages: ["pg"],
+    serverComponentsExternalPackages: ["pg", "sharp"],
     // Next's default for a server action's request body is 1 MB. A photograph
     // is shrunk in the browser to about 3.5 MB at most before it is sent
     // (lib/photos/client.ts), and the hosting platform caps a request near

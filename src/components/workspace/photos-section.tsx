@@ -197,7 +197,7 @@ export function PhotosSection({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`/api/asset-photos/${p.photoId}`} alt={`Gallery photograph ${i + 1}`}
+                src={`/api/asset-photos/${p.photoId}?variant=thumb`} alt={`Gallery photograph ${i + 1}`}
                 loading="lazy" draggable={false}
                 className="aspect-[4/3] w-full object-cover"
               />
