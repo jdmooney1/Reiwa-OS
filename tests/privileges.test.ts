@@ -69,6 +69,8 @@ const EXPECTED: Record<string, { authenticated: boolean; why: string }> = {
   guard_ic_decision:          { authenticated: false, why: "trigger function" },
   guard_ic_amendment:         { authenticated: false, why: "trigger function" },
   touch_opportunity_material: { authenticated: false, why: "trigger function" },
+  guard_deal_load_raw:        { authenticated: false, why: "trigger only, never called directly - 0014, revoked in 0022" },
+  guard_email_thread_link:    { authenticated: false, why: "trigger only, never called directly - 0015, revoked in 0022" },
   project_case_to_opportunity: { authenticated: false, why: "trigger function" },
 };
 
