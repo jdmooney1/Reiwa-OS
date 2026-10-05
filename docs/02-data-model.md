@@ -153,6 +153,18 @@ deleted.
 **`asset_decisions`** — `title`, `issue`, `recommendation`, `financial_impact`,
 `decision_maker`, `deadline`, `status`.
 
+### Value allocation (`0027_case_value_allocation.sql`)
+
+`investment_cases` carries `land_value`, `building_value`, `depreciation_years` and
+`depreciation_method` (`'straight_line'` only). They are case data: entered once per
+underwriting version on the same form as every other assumption, and locked with the
+rest of the case once approved. When both values are present they must add up to
+`acquisition_price` within 0.5% (a CHECK, mirrored in
+`src/lib/underwriting/allocation.ts`); one half alone is allowed, and the form fills
+the other as the remainder. Nothing derived is stored: the building share, the annual
+depreciation and every yen figure are computed on read, so they follow the life
+assumption and the exchange rate.
+
 ### FX (`0004_fx.sql`)
 
 **`fx_rates`** — `currency`, `rate_to_gbp`, `as_of_date`, `source`. The source and

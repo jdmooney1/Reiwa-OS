@@ -135,3 +135,54 @@ describe("the workspace shows the gaps so an author can see them", () => {
     expect(t).not.toContain("4.50%");
   });
 });
+
+// ---- Phase 2: the allocation panel ------------------------------------------
+describe("the value allocation panel", () => {
+  const WITH = composeSnapshot(snapshotSource({
+    basis: { kind: "approved", case: { ...snapshotSource().basis.case!, landValue: 30_000_000, buildingValue: 34_000_000, depreciationYears: 40, depreciationMethod: "straight_line" } },
+  }));
+
+  it("prints land, building and the depreciation line with GBP and JPY figures, and the Japanese labels", () => {
+    const t = textOf(render(WITH, "print"));
+    expect(t).toContain("Value allocation");
+    expect(t).toContain("価格内訳");
+    expect(t).toContain("£30.0M");  expect(t).toContain("47%");
+    expect(t).toContain("£34.0M");  expect(t).toContain("53%");
+    expect(t).toContain("¥5.77B");                   // 30m / 0.0052
+    expect(t).toContain("¥6.54B");                   // 34m / 0.0052
+    expect(t).toContain("depreciable base");
+    expect(t).toContain("40 yrs");
+    expect(t).toContain("straight-line");
+    expect(t).toContain("≈ ¥163.5M / yr · est.");    // 850k / 0.0052
+    for (const ja of ["土地価格", "建物価格", "減価償却基準"]) expect(t).toContain(ja);
+    expect(t).not.toMatch(/[\[\]]/);
+    expect(t).not.toMatch(/TBC/i);
+  });
+
+  it("is cleanly absent before the figures are entered, on a printed copy", () => {
+    const t = textOf(render(FULL, "print"));
+    for (const absent of ["Value allocation", "Land value", "Building value", "Depreciation", "depreciable"]) expect(t).not.toContain(absent);
+  });
+
+  it("drops only the depreciation cell when there is no life", () => {
+    const d = composeSnapshot(snapshotSource({
+      basis: { kind: "approved", case: { ...snapshotSource().basis.case!, landValue: 30_000_000, buildingValue: 34_000_000 } },
+    }));
+    const t = textOf(render(d, "print"));
+    expect(t).toContain("Building value");
+    expect(t).not.toContain("Depreciation basis");
+  });
+
+  it("shows the deal-currency charge when there is no yen rate", () => {
+    const d = composeSnapshot(snapshotSource({
+      fxJpy: null,
+      basis: { kind: "approved", case: { ...snapshotSource().basis.case!, landValue: 30_000_000, buildingValue: 34_000_000, depreciationYears: 40, depreciationMethod: "straight_line" } },
+    }));
+    expect(textOf(render(d, "print"))).toContain("≈ £850K / yr · est.");
+  });
+
+  it("an older stored snapshot without an allocation still renders", () => {
+    const old = { ...FULL } as Partial<ComposedSnapshot>; delete old.allocation;
+    expect(() => render(old as ComposedSnapshot, "print")).not.toThrow();
+  });
+});

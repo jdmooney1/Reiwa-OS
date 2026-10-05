@@ -32,6 +32,7 @@ import {
 } from "@/lib/documents/storage";
 import type { DdStatus, Recommendation } from "@/types/database";
 import { parseNumber, PERCENT, NON_NEGATIVE, ANY_AMOUNT, type Bounds } from "@/lib/validation/numeric";
+import { resolveAllocation } from "@/lib/underwriting/allocation";
 
 const text = (v: FormDataEntryValue | null): string | null => {
   const s = String(v ?? "").trim();
@@ -67,6 +68,8 @@ const UNDERWRITING_NUMERIC: Partial<Record<keyof UnderwritingInput, { label: str
   holdPeriodYears: { label: "Hold period", bounds: { min: 0, max: 100 } },
   targetIrr: { label: "Target IRR", bounds: PERCENT },
   targetEquityMultiple: { label: "Equity multiple", bounds: { min: 0, max: 100 } },
+  landValue: { label: "Land value", bounds: NON_NEGATIVE },
+  buildingValue: { label: "Building value", bounds: NON_NEGATIVE },
 };
 
 export async function createVersionAction(
@@ -83,6 +86,15 @@ export async function createVersionAction(
     for (const [key, spec] of Object.entries(UNDERWRITING_NUMERIC)) {
       (input as Record<string, unknown>)[key] = parseNumber(formData.get(key), spec.label, spec.bounds);
     }
+    // Value allocation: a whole-year life (the method follows from it; there is only
+    // one) and a land/building split that adds up to the price.
+    const years = parseNumber(formData.get("depreciationYears"), "Depreciation life", { min: 1, max: 100 });
+    const alloc = resolveAllocation(
+      { price: input.acquisitionPrice ?? null, land: input.landValue ?? null, building: input.buildingValue ?? null, years },
+      (n) => Math.round(n).toLocaleString("en-GB"));
+    if (!alloc.ok) throw new AppError(alloc.error);
+    input.depreciationYears = alloc.depreciationYears;
+    input.depreciationMethod = alloc.depreciationMethod;
     await createVersion(session, opportunityId, input);
     refresh(opportunityId);
   }, {

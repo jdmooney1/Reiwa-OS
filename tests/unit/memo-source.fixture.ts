@@ -13,6 +13,7 @@ export const SNAP_CASE: MemoCase = {
   // Deliberately different from the price: the Snapshot's "Price Guidance" is the price, not the valuation.
   valuation: 70_000_000, exitValue: 78_000_000,
   entryYieldPct: 2.97, exitYieldPct: 4.5, holdPeriodYears: 5, targetIrr: 14.2, targetEquityMultiple: 1.9,
+  landValue: null, buildingValue: null, depreciationYears: null, depreciationMethod: null,
 };
 
 /** A GBP deal with every field the Snapshot can show recorded. */

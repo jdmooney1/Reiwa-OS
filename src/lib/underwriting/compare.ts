@@ -17,7 +17,7 @@ export interface CompareField {
   key: keyof UnderwritingVersion;
   label: string;
   kind: FieldKind;
-  group: "Cost" | "Income" | "Debt" | "Value & return" | "Narrative";
+  group: "Cost" | "Income" | "Debt" | "Value & return" | "Value allocation" | "Narrative";
   /** True when a DECREASE is the favourable direction (costs, leverage). */
   lowerIsBetter?: boolean;
 }
@@ -46,6 +46,10 @@ export const COMPARE_FIELDS: CompareField[] = [
   { key: "holdPeriodYears", label: "Hold period", kind: "years", group: "Value & return" },
   { key: "targetIrr", label: "Target IRR", kind: "percent", group: "Value & return" },
   { key: "targetEquityMultiple", label: "Equity multiple", kind: "multiple", group: "Value & return" },
+
+  { key: "landValue", label: "Land value", kind: "money", group: "Value allocation" },
+  { key: "buildingValue", label: "Building value", kind: "money", group: "Value allocation" },
+  { key: "depreciationYears", label: "Depreciation life", kind: "years", group: "Value allocation" },
 
   { key: "strategy", label: "Strategy", kind: "text", group: "Narrative" },
   { key: "thesis", label: "Investment thesis", kind: "text", group: "Narrative" },

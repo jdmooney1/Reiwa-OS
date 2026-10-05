@@ -24,6 +24,7 @@ const CASE: MemoCase = {
   equity: 35_600_000, grossRentalIncome: 2_048_000, noi: 1_900_800, erv: 2_200_000, occupancyPct: 93.1,
   debt: 30_000_000, ltvPct: 45.73, debtCostPct: 5.4, valuation: 64_000_000, exitValue: 78_000_000,
   entryYieldPct: 2.97, exitYieldPct: 4.5, holdPeriodYears: 5, targetIrr: 14.2, targetEquityMultiple: 1.9,
+  landValue: null, buildingValue: null, depreciationYears: null, depreciationMethod: null,
 };
 
 const dd = (over: Partial<MemoDdItem>): MemoDdItem => ({

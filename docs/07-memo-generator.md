@@ -100,11 +100,11 @@ the other formats.
 | Total Area | the opportunity's sq ft and sq m; tsubo is sq m / 3.30578 (`src/lib/units.ts`) |
 | Address, City, Country, Submarket, Asset Type, Ref | `properties` and `opportunities` |
 | Photograph | a `diligence`-cleared `property_photos` row (above) |
+| Value allocation, Depreciation Basis | the case's `land_value`, `building_value`, `depreciation_years` (migration 0027). Building % = building / (land + building); the annual charge is building / years, straight-line, converted to yen like the price. All **derived on read, never stored** (`src/lib/underwriting/allocation.ts`). Absent until land AND building are entered; the depreciation cell is absent until a life is |
 | FX footer | the stored rates with their source and date, and `This rate is N days old.` when the oldest used is past 30 days |
 
 **What is not shown, and why.** Nothing the record cannot back: WAULT, every Property
-Facts and Property Notes row, transport and the map have no source, and the land and
-building value and depreciation basis arrive with Phase 2. **Reversionary yield is not
+Facts and Property Notes row, transport and the map have no source. **Reversionary yield is not
 shown either**: the opportunity's `reversionary_yield` column is a copy of the case's
 *exit* yield (migration 0009), a different quantity, and printing it under that name
 would state a number nobody underwrote. A printed copy drops each missing cell and closes

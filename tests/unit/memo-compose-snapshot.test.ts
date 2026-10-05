@@ -174,3 +174,72 @@ describe("the format and the stored memo", () => {
     expect(finaliseNotices(composeMemo(snapshotSource({ asset: { ...NO_ASSET, photoId: "p" } })), "snapshot")[0]).toMatch(/a photograph\./);
   });
 });
+
+// ---- Phase 2: value allocation and the depreciation line ---------------------
+describe("value allocation and depreciation", () => {
+  const withAlloc = (over: Partial<typeof SNAP_CASE> = {}, src: Partial<MemoSource> = {}) => snap({
+    basis: { kind: "approved", case: { ...SNAP_CASE, landValue: 30_000_000, buildingValue: 34_000_000, depreciationYears: 40, depreciationMethod: "straight_line", ...over } },
+    ...src,
+  });
+
+  it("derives the shares and the straight-line annual charge on read, with yen from the same rates as the price", () => {
+    const a = withAlloc().allocation!;
+    expect(a).toMatchObject({ land: 30_000_000, building: 34_000_000 });
+    expect(a.landPct).toBeCloseTo(46.875, 9);
+    expect(a.buildingPct).toBeCloseTo(53.125, 9);
+    expect(a.depreciation).toMatchObject({ years: 40, method: "straight_line", annual: 850_000 });
+    expect(a.landJpy).toBeCloseTo(30_000_000 / 0.0052, 0);
+    expect(a.buildingJpy).toBeCloseTo(34_000_000 / 0.0052, 0);
+    expect(a.depreciation!.annualJpy).toBeCloseTo(850_000 / 0.0052, 0);
+  });
+
+  it("goes through pounds for a euro deal, like the price line", () => {
+    const a = composeSnapshot(eurDeal({ basis: { kind: "approved", case: { ...SNAP_CASE, landValue: 30_000_000, buildingValue: 34_000_000, depreciationYears: 40, depreciationMethod: "straight_line" } } })).allocation!;
+    expect(a.buildingJpy).toBeCloseTo(34_000_000 * 0.871 / 0.0052, 0);
+  });
+
+  it("without a yen rate it still shows the allocation in the deal currency, and no yen", () => {
+    const a = withAlloc({}, { fxJpy: null }).allocation!;
+    expect(a.landJpy).toBeNull();
+    expect(a.buildingJpy).toBeNull();
+    expect(a.depreciation!.annualJpy).toBeNull();
+    expect(a.depreciation!.annual).toBe(850_000);
+  });
+
+  it("a yen deal quotes the allocation in yen and adds no second yen figure", () => {
+    const a = withAlloc({}, { opportunity: { ...snapshotSource().opportunity, currency: "JPY" } }).allocation!;
+    expect(a.landJpy).toBeNull();
+    expect(a.building).toBe(34_000_000);
+  });
+
+  it("is absent, with a reason, until BOTH halves are entered", () => {
+    for (const [land, building, why] of [[null, null, /not captured/], [30_000_000, null, /Only one of/], [null, 34_000_000, /Only one of/]] as const) {
+      const s = withAlloc({ landValue: land, buildingValue: building });
+      expect(s.allocation, `${land}/${building}`).toBeNull();
+      expect(s.gaps.find((g) => g.key === "value_allocation")!.why).toMatch(why);
+    }
+  });
+
+  it("is not shown, and says why, if the stored split does not add up to the price", () => {
+    const s = withAlloc({ buildingValue: 20_000_000 });
+    expect(s.allocation).toBeNull();
+    expect(s.gaps.find((g) => g.key === "value_allocation")!.why).toMatch(/do not add up/);
+  });
+
+  it("with no depreciation life the split shows and the charge does not, and the gap is named", () => {
+    const s = withAlloc({ depreciationYears: null, depreciationMethod: null });
+    expect(s.allocation!.depreciation).toBeNull();
+    expect(s.gaps.map((g) => g.key)).toContain("depreciation_basis");
+    expect(s.gaps.map((g) => g.key)).not.toContain("value_allocation");
+  });
+
+  it("is not read from the opportunity's projection: it is case data", () => {
+    const s = snap({ basis: { kind: "none", case: null } });
+    expect(s.allocation).toBeNull();
+  });
+
+  it("nothing derived is stored: the composed content holds the inputs' results only for this composition", () => {
+    // Recomposing with a different life moves the charge, because nothing but the inputs is ever kept.
+    expect(withAlloc({ depreciationYears: 20 }).allocation!.depreciation!.annual).toBe(1_700_000);
+  });
+});

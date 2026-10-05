@@ -61,6 +61,12 @@ export interface UnderwritingVersion {
   targetIrr: number | null;
   targetEquityMultiple: number | null;
 
+  // Value allocation (migration 0027). Derived figures are computed on read.
+  landValue: number | null;
+  buildingValue: number | null;
+  depreciationYears: number | null;
+  depreciationMethod: string | null;
+
   assumptions: Record<string, unknown>;
 
   acquisitionDate: string | null;

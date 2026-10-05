@@ -1,3 +1,4 @@
+import { allocationShares, annualDepreciation } from "@/lib/underwriting/allocation";
 import Link from "next/link";
 import type { OpportunityFile } from "@/lib/data/opportunity-file";
 import type { UnderwritingVersion } from "@/lib/data/underwriting-types";
@@ -231,6 +232,12 @@ function metricsFor(uw: UnderwritingVersion, cur: Currency) {
   if (uw.targetEquityMultiple != null) {
     out.push({ label: "Equity multiple", value: formatMultiple(uw.targetEquityMultiple) });
   }
+  // Value allocation: the shares and the annual charge are derived on read.
+  const shares = allocationShares(uw.landValue, uw.buildingValue);
+  money("Land value", uw.landValue, shares ? `${shares.landPct.toFixed(0)}% of the split` : undefined);
+  money("Building value", uw.buildingValue, shares ? `${shares.buildingPct.toFixed(0)}% of the split, depreciable` : undefined);
+  const yearly = annualDepreciation(uw.buildingValue, uw.depreciationYears);
+  if (yearly !== null) money("Depreciation a year", yearly, `straight-line over ${uw.depreciationYears} yrs, estimate`);
   money("Exit value", uw.exitValue);
   // Exit yield sits beside exit value deliberately: the pair is how an exit is
   // argued, and a stabilised value quoted without the yield it was struck at is
