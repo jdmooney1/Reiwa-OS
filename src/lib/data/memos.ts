@@ -40,6 +40,8 @@ function toMemoCase(c: UnderwritingVersion): MemoCase {
     valuation: c.valuation, exitValue: c.exitValue, entryYieldPct: c.entryYieldPct,
     exitYieldPct: c.exitYieldPct, holdPeriodYears: c.holdPeriodYears, targetIrr: c.targetIrr,
     targetEquityMultiple: c.targetEquityMultiple,
+    landValue: c.landValue, buildingValue: c.buildingValue,
+    depreciationYears: c.depreciationYears, depreciationMethod: c.depreciationMethod,
   };
 }
 

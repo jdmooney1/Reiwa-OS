@@ -43,6 +43,7 @@ import type { MemoSectionKey, OutputFormat } from "@/lib/memo/sections";
 import { MEMO_SECTIONS, FORMAT_BY_KEY } from "@/lib/memo/sections";
 import { fxStaleness, oldestStaleness, convertViaGbp, FX_BASE_CURRENCY, FX_STALE_AFTER_DAYS } from "@/lib/fx";
 import { areaFrom, type Area } from "@/lib/units";
+import { allocationShares, annualDepreciation, checkAllocation, isDepreciationMethod, type DepreciationMethod } from "@/lib/underwriting/allocation";
 import { DD_STATUS_LABEL, ASSET_TYPE_LABEL, STRATEGY_LABEL, isDdOpen, isDdIssue } from "@/lib/domain";
 import { RECOMMENDATION_LABEL } from "@/lib/scoring/score";
 import type { AssetType, DdSection, DdStatus, Recommendation, Strategy } from "@/types/database";
@@ -114,6 +115,11 @@ export interface MemoCase {
   holdPeriodYears: number | null;
   targetIrr: number | null;
   targetEquityMultiple: number | null;
+  /** Value allocation (migration 0027). The shares and the annual charge are derived in composeSnapshot, never stored. */
+  landValue: number | null;
+  buildingValue: number | null;
+  depreciationYears: number | null;
+  depreciationMethod: string | null;
 }
 
 export interface MemoRisk {
@@ -270,10 +276,24 @@ export interface ComposedSnapshot {
   capex: number | null;
   area: Area | null;
   fx: SnapshotFx | null;
+  /** Land, building and depreciation, derived on read. Null until the case holds a land AND a building value that reconcile to the price. */
+  allocation: SnapshotAllocation | null;
   /** Where the figures come from, in words: "Reiwa underwriting v3 (approved)". Null when from nothing. */
   basisLabel: string | null;
   /** What the template has a place for and the record cannot fill. The workspace lists them; a printed copy never mentions them. */
   gaps: { key: string; label: string; why: string }[];
+}
+
+export interface SnapshotAllocation {
+  land: number;
+  building: number;
+  landPct: number;
+  buildingPct: number;
+  /** Yen equivalents, from the same rates as the price line; null when a rate is missing or the deal is in yen. */
+  landJpy: number | null;
+  buildingJpy: number | null;
+  /** Null until a life is entered. */
+  depreciation: { years: number; method: DepreciationMethod; annual: number; annualJpy: number | null } | null;
 }
 
 export interface SnapshotFx {
@@ -787,15 +807,43 @@ export function composeSnapshot(src: MemoSource): ComposedSnapshot {
       ? "Reiwa opportunity record" : null;
 
   const area = areaFrom(o.sizeSqft, o.sizeSqm);
+
+  // Value allocation: only from a case (it is case data), only when BOTH halves are
+  // entered and add up to the price. Derived here, on read, from the four stored inputs.
+  const yen = (n: number) => (dealIsYen ? null : convertViaGbp(n, dealRate, jpy?.rateToGbp));
+  const split = c ? allocationShares(c.landValue, c.buildingValue) : null;
+  const reconciles = c ? checkAllocation(c.acquisitionPrice, c.landValue, c.buildingValue)?.ok === true : false;
+  let allocation: SnapshotAllocation | null = null;
+  if (c && split && reconciles) {
+    const annual = c.depreciationYears !== null && isDepreciationMethod(c.depreciationMethod)
+      ? annualDepreciation(c.buildingValue, c.depreciationYears) : null;
+    allocation = {
+      land: c.landValue!, building: c.buildingValue!, landPct: split.landPct, buildingPct: split.buildingPct,
+      landJpy: yen(c.landValue!), buildingJpy: yen(c.buildingValue!),
+      depreciation: annual !== null
+        ? { years: c.depreciationYears!, method: c.depreciationMethod as DepreciationMethod, annual, annualJpy: yen(annual) }
+        : null,
+    };
+  }
   const gaps: ComposedSnapshot["gaps"] = [
     { key: "rev_yield", label: "Reversionary yield", why: "The record's reversionary yield is the exit yield, a different quantity, so it is not shown under this name. It needs its own underwriting input." },
     { key: "wault", label: "WAULT", why: "No lease data is captured." },
-    { key: "value_allocation", label: "Value allocation and depreciation basis", why: "Land value, building value and depreciation are not captured." },
     { key: "property_facts", label: "Property facts", why: "Build year, refurbishment, floors, use, planning and seller are not captured." },
     { key: "property_notes", label: "Property notes", why: "Tenure, energy rating, heritage, lease profile and rent basis are not captured." },
     { key: "transport", label: "Transport", why: "No transport data is captured." },
     { key: "map", label: "Map", why: "No map image is captured." },
   ];
+  if (!allocation) {
+    const entered = c ? [c.landValue, c.buildingValue].filter((x) => x !== null).length : 0;
+    gaps.push({
+      key: "value_allocation", label: "Value allocation and depreciation basis",
+      why: entered === 0 ? "Land value, building value and depreciation are not captured."
+        : entered === 1 ? "Only one of land value and building value is entered; the split needs both."
+        : "Land value and building value do not add up to the acquisition price, so the split is not shown.",
+    });
+  } else if (!allocation.depreciation) {
+    gaps.push({ key: "depreciation_basis", label: "Depreciation basis", why: "No depreciation life is entered, so there is no annual charge." });
+  }
   if (!src.asset.photoId) {
     gaps.unshift({ key: "photo", label: "Photograph", why: "No photograph has been cleared for investors. Mark one as diligence on the asset to use it here." });
   }
@@ -813,7 +861,7 @@ export function composeSnapshot(src: MemoSource): ComposedSnapshot {
     currency: o.currency,
     price, priceJpy, niyPct, passingRent, erv,
     occupancyPct: c ? c.occupancyPct : null,
-    capex, area, fx, basisLabel: label, gaps,
+    capex, area, fx, allocation, basisLabel: label, gaps,
   };
 }
 

@@ -40,6 +40,8 @@ function mapCase(r: Record<string, any>): UnderwritingVersion {
     entryYieldPct: num(r.entry_yield_pct), exitYieldPct: num(r.exit_yield_pct),
     holdPeriodYears: num(r.hold_period_years), targetIrr: num(r.target_irr),
     targetEquityMultiple: num(r.target_equity_multiple),
+    landValue: num(r.land_value), buildingValue: num(r.building_value),
+    depreciationYears: num(r.depreciation_years), depreciationMethod: str(r.depreciation_method),
     assumptions: (r.assumptions ?? {}) as Record<string, unknown>,
     acquisitionDate: str(r.acquisition_date),
     // Author names are supplied by the caller from the staff directory.
@@ -76,6 +78,10 @@ export interface UnderwritingInput {
   holdPeriodYears?: number | null;
   targetIrr?: number | null;
   targetEquityMultiple?: number | null;
+  landValue?: number | null;
+  buildingValue?: number | null;
+  depreciationYears?: number | null;
+  depreciationMethod?: string | null;
   assumptions?: Record<string, unknown>;
 }
 
@@ -90,6 +96,8 @@ const COLUMNS: Record<keyof UnderwritingInput, string> = {
   entryYieldPct: "entry_yield_pct", exitYieldPct: "exit_yield_pct",
   holdPeriodYears: "hold_period_years", targetIrr: "target_irr",
   targetEquityMultiple: "target_equity_multiple", assumptions: "assumptions",
+  landValue: "land_value", buildingValue: "building_value",
+  depreciationYears: "depreciation_years", depreciationMethod: "depreciation_method",
 };
 
 function columnsFor(input: UnderwritingInput) {

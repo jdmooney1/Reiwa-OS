@@ -2,6 +2,7 @@ import type { ComposedSnapshot } from "@/lib/memo/compose";
 import { ReiwaLockup } from "@/components/brand/reiwa-lockup";
 import { formatMoneyUnits, formatDate, currencySymbol } from "@/lib/format";
 import type { Currency } from "@/types/database";
+import { METHOD_LABEL } from "@/lib/underwriting/allocation";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -160,6 +161,8 @@ export function AssetSnapshot({ data, surface }: { data: ComposedSnapshot; surfa
             {row2.map((c) => <Cell key={c.en} en={c.en} ja={c.ja} value={c.v} surface={surface} valueClassName="text-[18px]" />)}
           </div>
 
+          {(data.allocation ?? null) && <Allocation data={data} />}
+
           {data.fx && <FxLine data={data} />}
           {!data.fx && data.basisLabel && (
             <p className="mt-3 text-right font-mono text-[9px] text-ink-faint" data-line="source">
@@ -191,6 +194,53 @@ export function AssetSnapshot({ data, surface }: { data: ComposedSnapshot; surfa
           <span className="font-semibold text-ink">Reiwa Capital</span> · Confidential · {formatDate(data.preparedOn)}{data.ref ? ` · ${data.ref}` : ""}
         </p>
       </footer>
+    </div>
+  );
+}
+
+/** Value allocation: land, building and the straight-line charge, all derived on read. */
+function Allocation({ data }: { data: ComposedSnapshot }) {
+  const a = data.allocation!;
+  const cur = asCurrency(data.currency);
+  const yen = (n: number | null) => (n === null ? null : formatMoneyUnits(n, "JPY"));
+  const cell = "min-w-0 px-4 py-3";
+  const label = "font-mono text-[9px] uppercase tracking-[0.14em] text-ink-muted";
+  return (
+    <div className="mt-4" data-block="allocation">
+      <div className="flex items-center gap-3">
+        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-muted">Value allocation <span lang="ja" className="ml-1 normal-case tracking-normal">価格内訳</span></span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+      <div className="mt-2 grid divide-x divide-line border border-line [grid-template-columns:repeat(auto-fit,minmax(0,1fr))]">
+        <div className={cell} data-cell="LAND VALUE">
+          <div className={label}>Land value</div>
+          <div className="text-[9px] text-ink-faint" lang="ja">土地価格</div>
+          <div className="mt-1 text-[18px] leading-tight text-ink">
+            {formatMoneyUnits(a.land, cur)} <span className="text-[11px] text-ink-muted">{pctShort(Math.round(a.landPct))}</span>
+          </div>
+          {a.landJpy !== null && <div className="mt-0.5 font-mono text-[9px] text-ink-faint">{yen(a.landJpy)}</div>}
+        </div>
+        <div className={cn(cell, "bg-surface-sunken")} data-cell="BUILDING VALUE">
+          <div className={label}>Building value</div>
+          <div className="text-[9px] text-ink-faint" lang="ja">建物価格</div>
+          <div className="mt-1 text-[18px] leading-tight text-ink">
+            {formatMoneyUnits(a.building, cur)} <span className="text-[11px] text-ink-muted">{pctShort(Math.round(a.buildingPct))}</span>
+          </div>
+          <div className="mt-0.5 font-mono text-[9px] text-ink-faint">{a.buildingJpy !== null ? `${yen(a.buildingJpy)} · ` : ""}depreciable base</div>
+        </div>
+        {a.depreciation && (
+          <div className={cell} data-cell="DEPRECIATION BASIS">
+            <div className={label}>Depreciation basis</div>
+            <div className="text-[9px] text-ink-faint" lang="ja">減価償却基準</div>
+            <div className="mt-1 text-[18px] leading-tight text-ink">
+              {a.depreciation.years} yrs <span className="text-[11px] text-ink-muted">{METHOD_LABEL[a.depreciation.method]}</span>
+            </div>
+            <div className="mt-0.5 font-mono text-[9px] text-ink-faint">
+              ≈ {a.depreciation.annualJpy !== null ? yen(a.depreciation.annualJpy) : formatMoneyUnits(a.depreciation.annual, cur)} / yr · est.
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

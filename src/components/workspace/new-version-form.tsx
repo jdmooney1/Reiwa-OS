@@ -56,6 +56,14 @@ const GROUPS: { title: string; fields: { name: keyof UnderwritingVersion; label:
     ],
   },
   {
+    title: "Value allocation",
+    fields: [
+      { name: "landValue", label: "Land value", kind: "money" },
+      { name: "buildingValue", label: "Building value (depreciable)", kind: "money" },
+      { name: "depreciationYears", label: "Depreciation life (years)", kind: "years" },
+    ],
+  },
+  {
     title: "Value and return",
     fields: [
       { name: "valuation", label: "Entry valuation", kind: "money" },
@@ -149,7 +157,7 @@ function VersionFields({
                   label={f.label}
                   name={name}
                   type="number"
-                  step={f.kind === "money" ? "1" : "0.01"}
+                  step={f.kind === "money" || f.name === "depreciationYears" ? "1" : "0.01"}
                   prefix={f.kind === "money" ? sym : undefined}
                   suffix={f.kind === "percent" ? "%" : f.kind === "multiple" ? "x" : undefined}
                   value={derive.values[name] ?? ""}
@@ -181,6 +189,16 @@ function VersionFields({
           </div>
           {g.title === "Debt" && <Warnings items={warnings.filter((w) => w.group === "sources")} />}
           {g.title === "Income" && <Warnings items={warnings.filter((w) => w.group === "income")} />}
+          {g.title === "Value allocation" && (
+            <>
+              <Warnings items={warnings.filter((w) => w.group === "allocation")} />
+              <p className="mt-2 text-2xs text-ink-faint">
+                Enter one half and the other is filled as the remainder of the acquisition price. Building value is the
+                depreciable base; the annual charge is worked out straight-line over this life and shown on the Asset
+                Snapshot with its yen equivalent. It is an estimate, not tax advice.
+              </p>
+            </>
+          )}
         </fieldset>
       ))}
 

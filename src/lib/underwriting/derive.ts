@@ -25,6 +25,7 @@
 // and the server still validates whatever is posted.
 // ============================================================================
 import { formatMoney, formatPct } from "@/lib/format";
+import { ALLOCATION_TOLERANCE, checkAllocation } from "@/lib/underwriting/allocation";
 import type { Currency } from "@/types/database";
 
 /** Fields the engine may fill. Everything else on the form is always the person's. */
@@ -32,6 +33,7 @@ export const DERIVABLE = [
   "acquisitionCosts", "equity", "debt", "ltvPct",
   "occupancyPct", "grossRentalIncome", "erv",
   "valuation", "entryYieldPct",
+  "landValue", "buildingValue",
 ] as const;
 export type DerivableKey = (typeof DERIVABLE)[number];
 
@@ -59,6 +61,7 @@ function parse(raw: string | number | null | undefined): number | undefined {
 type Num = Partial<Record<string, number>>;
 
 const isMoney = (k: string) => k !== "ltvPct" && k !== "occupancyPct" && k !== "entryYieldPct";
+// landValue and buildingValue are money, so they take the default.
 
 /** Matches the server bounds: money at least zero, percentages 0-100. */
 function acceptable(key: DerivableKey, n: number): boolean {
@@ -139,6 +142,15 @@ const RULES: Rule[] = [
   { target: "erv", touched: ["occupancyPct"],
     calc: (v) => (positive(v.occupancyPct) && v.grossRentalIncome !== undefined
       ? v.grossRentalIncome / (v.occupancyPct / 100) : undefined) },
+  // Value allocation: the two halves of the acquisition price. Whichever the person
+  // types first, the other is the remainder; typing both is their own decision and
+  // is checked, not overwritten (see reconcile()). Measured against the PRICE.
+  { target: "buildingValue", touched: ["landValue"],
+    calc: (v) => (v.acquisitionPrice !== undefined && v.landValue !== undefined
+      ? v.acquisitionPrice - v.landValue : undefined) },
+  { target: "landValue", touched: ["buildingValue"],
+    calc: (v) => (v.acquisitionPrice !== undefined && v.buildingValue !== undefined
+      ? v.acquisitionPrice - v.buildingValue : undefined) },
   // Entry yield = NOI / anchor. NOI, not gross rent: GRI / price overstates it.
   { target: "entryYieldPct",
     calc: (v) => {
@@ -268,7 +280,7 @@ export function isAutoFilled(state: DeriveState, name: string): boolean {
 
 export interface Warning {
   /** Which group of fields it concerns, so the form can put it beside them. */
-  group: "sources" | "income";
+  group: "sources" | "income" | "allocation";
   message: string;
 }
 
@@ -315,6 +327,17 @@ export function reconcile(values: Record<string, string | number | null>, curren
           `${v.grossRentalIncome < expected ? "below" : "above"} the ${money(v.grossRentalIncome)} entered.`,
       });
     }
+  }
+
+  const split = checkAllocation(v.acquisitionPrice, v.landValue, v.buildingValue);
+  if (split && !split.ok) {
+    out.push({
+      group: "allocation",
+      message:
+        `Land ${money(v.landValue!)} plus building ${money(v.buildingValue!)} is ${money(v.landValue! + v.buildingValue!)}, ` +
+        `${money(Math.abs(split.gap))} ${split.gap < 0 ? "short of" : "over"} the acquisition price ${money(v.acquisitionPrice!)}. ` +
+        `The split has to come within ${(ALLOCATION_TOLERANCE * 100).toFixed(1)}% of the price before it can be saved.`,
+    });
   }
   return out;
 }
