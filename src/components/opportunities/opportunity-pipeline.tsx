@@ -144,7 +144,7 @@ function OppCard({ o }: { o: PipelineRow }) {
         {o.headlinePhotoId && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={`/api/asset-photos/${o.headlinePhotoId}`} alt="" loading="lazy"
+            src={`/api/asset-photos/${o.headlinePhotoId}?variant=thumb`} alt="" loading="lazy"
             className="aspect-[16/9] w-full object-cover"
           />
         )}

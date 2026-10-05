@@ -13,6 +13,7 @@ export const EVENT_LABEL: Record<ActivityEventType, string> = {
   document_viewed: "Viewed document",
   document_downloaded: "Downloaded document",
   information_requested: "Requested information",
+  photo_viewed: "Viewed photograph",
 };
 
 export const EVENT_TONE: Record<ActivityEventType, Tone> = {
@@ -24,6 +25,7 @@ export const EVENT_TONE: Record<ActivityEventType, Tone> = {
   document_viewed: "neutral",
   document_downloaded: "accent",
   information_requested: "positive",
+  photo_viewed: "neutral",
 };
 
 export const REQUEST_TYPE_LABEL: Record<RequestType, string> = {

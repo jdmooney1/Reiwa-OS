@@ -8,7 +8,8 @@
 // off-market asset.
 //
 // This is a convenience, never a control. The server validates what it receives
-// regardless (lib/photos/constraints.ts).
+// regardless (lib/photos/constraints.ts) and re-encodes every photograph itself
+// (lib/photos/process.ts), which is what actually removes metadata.
 // ============================================================================
 
 export const MAX_EDGE = 2400;

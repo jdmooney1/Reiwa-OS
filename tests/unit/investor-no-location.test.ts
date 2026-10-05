@@ -90,11 +90,17 @@ describe("2. the database gives coordinates to a diligence-tier entitlement only
   const fn = sql.slice(sql.indexOf("create or replace function app.investor_publication_location"), sql.indexOf("revoke execute on function"));
   const view = sql.slice(sql.indexOf("create or replace view investor_feed"), sql.indexOf("revoke all on investor_feed"));
 
-  it("0018 is the only migration after 0005 that defines investor_feed", () => {
+  it("only 0018 and 0020 define investor_feed after 0005, and 0020 (photos) leaves the location columns exactly as they were", () => {
     const dir = join(ROOT, "supabase/migrations");
     const definers = readdirSync(dir).filter((f) => f.slice(0, 4) > "0005"
       && /create\s+(or\s+replace\s+)?view\s+investor_feed/i.test(read(`supabase/migrations/${f}`)));
-    expect(definers).toEqual(["0018_investor_location.sql"]);
+    expect(definers).toEqual(["0018_investor_location.sql", "0020_investor_photos.sql"]);
+    // 0020 re-states the view to append ONE column; the location gate must survive it untouched.
+    const later = stripSqlComments(read("supabase/migrations/0020_investor_photos.sql"));
+    const laterView = later.slice(later.indexOf("create or replace view investor_feed"), later.indexOf("revoke all on investor_feed"));
+    expect(laterView).toMatch(/loc\.latitude,\s*loc\.longitude,/);
+    expect(laterView).toContain("left join lateral app.investor_publication_location(p.publication_id) loc on true");
+    expect(laterView).toContain("security_invoker = true");
   });
 
   it("the gate is app.document_tier(), the same comparison documents use, at the diligence tier", () => {
