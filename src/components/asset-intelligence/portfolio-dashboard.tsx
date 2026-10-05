@@ -15,12 +15,14 @@ import { VarianceValue } from "@/components/shared/variance";
 import { cn } from "@/lib/utils";
 
 export function PortfolioDashboard({
-  files, rates, fxNote,
+  files, rates, fxNote, fxStale,
 }: {
   files: AssetFile[];
   /** Currency -> rate to GBP, from fx_rates. Required: see portfolioAggregate. */
   rates: Record<string, number>;
   fxNote?: string;
+  /** Set when the oldest rate is past the staleness threshold. A flag, never a block. */
+  fxStale?: string;
 }) {
   const agg = portfolioAggregate(files, rates, "GBP");
   // A ratio computed from only some of the assets says so. The assets left out
@@ -34,6 +36,7 @@ export function PortfolioDashboard({
           Reporting currency GBP · {fxNote}
         </div>
       )}
+      {fxStale && <p role="status" className="text-xs text-caution">{fxStale}</p>}
       {/* Primary KPI strip */}
       <Card>
         <div className="grid grid-cols-2 divide-x divide-line border-b border-line sm:grid-cols-3 lg:grid-cols-6">

@@ -64,7 +64,7 @@ finding, a risk's mitigation), carried verbatim and attributed to its source.
 | Financial Analysis, Capex Plan | the case's figures; capex also from capex diligence |
 | Exit Strategy | hold period, exit value and yield from the case; exit diligence. There is no exit text field |
 | Planning/Heritage/ESG, Japan Rationale, Tax and Structuring | their **diligence workstreams** (status, finding, resolution). No dedicated schema exists for these |
-| FX Sensitivity | deal currency, the `fx_rates` row **with its source**, and the currency-risk diligence workstreams. There is no hedge data; the section says so |
+| FX Sensitivity | deal currency, the `fx_rates` row **with its source**, and the currency-risk diligence workstreams. There is no hedge data; the section says so. A rate more than 30 days old is flagged with its age ("This rate is N days old"), measured against the date the memo is composed on |
 | Risk and Mitigation | the risk register ranked by severity then impact, plus flagged diligence issues not yet promoted |
 | Recommendation | the investment committee's **recorded** decision. The Investment Score model stores no scores per opportunity, so none is shown |
 | Further DD Required | open diligence workstreams grouped by section |

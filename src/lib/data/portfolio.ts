@@ -6,6 +6,7 @@ import { withSession, type Session } from "@/lib/db/client";
 import { num } from "@/lib/data/coerce";
 import { listAssetFiles } from "@/lib/data/assets";
 import { portfolioAggregate, type PortfolioAggregate } from "@/lib/asset-intelligence/metrics";
+import { FX_BASE_CURRENCY } from "@/lib/fx";
 import type { AssetFile } from "@/lib/asset-intelligence/types";
 
 export interface FxContext {
@@ -59,8 +60,10 @@ export function fxContextFrom(rows: readonly FxRateRow[]): FxContext {
     if (rate === null || !Number.isFinite(rate) || rate <= 0) continue;
     rates[r.currency] = rate;
     if (!sources.includes(r.source)) sources.push(r.source);
-    // Rows arrive oldest first, so the first usable one is the stalest.
-    if (asOf === null) asOf = r.as_of_date;
+    // Rows arrive oldest first, so the first usable one is the stalest. GBP is
+    // left out: GBP to GBP is 1 by definition, and its date says nothing about
+    // how current the other rates are.
+    if (asOf === null && r.currency !== FX_BASE_CURRENCY) asOf = r.as_of_date;
   }
 
   // GBP against GBP is one by definition, not an assumption about a market.

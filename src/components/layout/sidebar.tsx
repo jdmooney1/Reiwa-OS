@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Boxes, Building2, LogOut, Landmark, Users, FileText , Activity } from "lucide-react";
+import { LayoutGrid, Boxes, Building2, LogOut, Landmark, Users, FileText , Activity, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReiwaLockup } from "@/components/brand/reiwa-lockup";
 import { signOutAction } from "@/app/actions/auth";
@@ -50,12 +50,15 @@ export function Sidebar({
       ],
     },
     // Firm holds what belongs to the house rather than to one deal or one
-    // investor. Today that is the audit trail; it is the section the rest of the
-    // firm-level surfaces will join.
+    // investor. Today that is the audit trail and the reference data (exchange
+    // rates); it is the section the rest of the firm-level surfaces will join.
     ...(user.role === "reiwa_admin"
       ? [{
           heading: "Firm",
-          items: [{ href: "/admin/activity", label: "Activity", icon: Activity }],
+          items: [
+            { href: "/admin/activity", label: "Activity", icon: Activity },
+            { href: "/admin/settings", label: "Settings", icon: Settings },
+          ],
         }]
       : []),
   ];

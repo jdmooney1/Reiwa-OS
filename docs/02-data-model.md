@@ -160,6 +160,15 @@ date are surfaced on the portfolio screen. There is no fallback rate table in
 application code: `portfolioAggregate` requires an explicit rate map and raises
 rather than assume a missing currency.
 
+`0025_fx_rates_admin_write.sql` makes the rates maintainable: Reiwa administrators
+(`app.is_admin()`) can insert or update a rate from **Admin → Settings**, nobody else
+can, and nothing can delete one. A rate must have a non-blank `source` and be above
+zero (table checks); the action also refuses placeholder sources such as the seeded
+"Demo static rates". `updated_by` and `updated_at` record who last changed it. This
+is **not a live feed**: a rate is what was typed, from the source named, as of the
+date given. Any rate older than 30 days (`src/lib/fx.ts`) is flagged on the portfolio
+and in the memo's FX Sensitivity section, never blocked.
+
 ### Investor portal (`0005`, `0006`)
 
 | Table | Purpose |

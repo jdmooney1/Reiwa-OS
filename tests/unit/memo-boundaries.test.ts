@@ -94,7 +94,7 @@ describe("the print view", () => {
 describe("empty, composed and edited never look alike", () => {
   const src: MemoSource = {
     opportunity: { name: "A", market: "London", submarket: null, city: "London", country: "UK", assetType: "office", strategy: null, currency: "GBP", sizeSqft: null, sizeSqm: null, summary: null },
-    basis: { kind: "none", case: null }, risks: [], ddItems: [], decision: null, fx: null,
+    basis: { kind: "none", case: null }, risks: [], ddItems: [], decision: null, fx: null, today: "2026-09-01",
   };
   const memo = composeMemo(src);
   const html = (key: "executive_summary" | "location_market", override: string | null, format: "ic" | "teaser" = "teaser", surface: "workspace" | "print" = "workspace") =>

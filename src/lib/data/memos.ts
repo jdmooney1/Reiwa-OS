@@ -15,6 +15,7 @@
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { staffNamesOn, nameOf } from "@/lib/data/directory";
 import { AppError } from "@/lib/errors";
+import { todayUtc } from "@/lib/data/fx-rates";
 import { getOpportunity } from "@/lib/data/opportunities";
 import { approvedVersion, currentVersion } from "@/lib/data/underwriting";
 import { listRisks } from "@/lib/data/opportunity-risks";
@@ -95,6 +96,7 @@ export async function loadMemoSource(session: Session, opportunityId: string): P
       priority: d.priority, finding: d.finding, resolution: d.resolution,
     })),
     decision,
+    today: todayUtc(),
     fx: fxRow ? { currency: fxRow.currency, rateToGbp: Number(fxRow.rate_to_gbp), asOf: fxRow.as_of_date, source: fxRow.source } : null,
   };
 }

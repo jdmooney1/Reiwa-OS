@@ -89,8 +89,10 @@ the latter would have valued a yen position as sterling, roughly a 190x
 overstatement, on the one screen whose job is to state what the portfolio is worth.
 
 A wrong number that renders is worse than a page that fails, because nobody can see
-it is wrong. Rates are still static and still need a live feed; what they no longer
-have is a silent fallback.
+it is wrong. Rates are still entered by hand (an administrator maintains them under Admin →
+Settings, with a required source and date; there is no live feed), and a rate older
+than 30 days is flagged on the portfolio. What they no longer have is a silent
+fallback.
 
 ## AI intelligence layer (provenance-first)
 
