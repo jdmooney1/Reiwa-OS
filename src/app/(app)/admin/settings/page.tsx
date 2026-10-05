@@ -24,9 +24,11 @@ export default async function AdminSettingsPage() {
         <Card>
           <CardHeader eyebrow="Reference data" title="Exchange rates" />
           <div className="border-b border-line px-5 py-3 text-xs leading-relaxed text-ink-muted">
-            These are maintained by hand. There is no live feed: a rate is the number you enter, the source you name and the date
-            it is good for. Every rate needs a source. A rate older than {FX_STALE_AFTER_DAYS} days is flagged on the portfolio
-            and in any memo that uses it; nothing is blocked.
+            These update themselves once a day from the European Central Bank&apos;s published euro reference rates, with the
+            ECB&apos;s own publication date. A rate you enter here is a <strong>manual override</strong>: the daily update leaves it
+            alone until you hand it back, so use it for the exception (the ECB is unreachable, or you are deliberately using a
+            forward or hedge rate instead of spot). Every manual rate needs a source. A rate older than {FX_STALE_AFTER_DAYS} days
+            is flagged on the portfolio and in any memo that uses it; nothing is blocked.
           </div>
           {missing.length > 0 && (
             <p className="border-b border-line px-5 py-3 text-xs text-negative" role="alert">

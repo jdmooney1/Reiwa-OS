@@ -8,6 +8,7 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { FX_CURRENCIES, type FxRateInput } from "@/lib/fx";
+import { ECB_AUTO_SOURCE } from "@/lib/fx-ecb";
 
 export interface FxRateRecord {
   currency: string;
@@ -16,11 +17,17 @@ export interface FxRateRecord {
   source: string;
   updatedAt: string | null;
   updatedByName: string | null;
+  /**
+   * Whose rate is live. `manual`: an administrator wrote it (updated_by is set),
+   * and the daily sync defers to it. `auto`: the sync wrote it. `unmaintained`:
+   * neither, which is the seeded demonstration rate.
+   */
+  mode: "auto" | "manual" | "unmaintained";
 }
 
 interface Row {
   currency: string; rate_to_gbp: string; as_of_date: string; source: string;
-  updated_at: string | null; updated_by_name: string | null;
+  updated_at: string | null; updated_by_name: string | null; manual: boolean;
 }
 
 /** The four currencies, in a fixed order. A currency with no row is simply absent. */
@@ -28,7 +35,7 @@ export async function listFxRates(session: Session): Promise<FxRateRecord[]> {
   return withSession(session, async (tx: Queryable) => {
     const { rows } = await tx.query<Row>(
       `select f.currency, f.rate_to_gbp::text, f.as_of_date::text, f.source, f.updated_at,
-              coalesce(p.name, p.email) as updated_by_name
+              coalesce(p.name, p.email) as updated_by_name, f.updated_by is not null as manual
          from fx_rates f left join profiles p on p.user_id = f.updated_by
         where f.currency = any($1)`, [[...FX_CURRENCIES]]);
     const byCurrency = new Map(rows.map((r) => [r.currency, r]));
@@ -37,6 +44,7 @@ export async function listFxRates(session: Session): Promise<FxRateRecord[]> {
       return r ? [{
         currency: r.currency, rateToGbp: Number(r.rate_to_gbp), asOf: r.as_of_date, source: r.source,
         updatedAt: r.updated_at ? String(r.updated_at) : null, updatedByName: r.updated_by_name,
+        mode: r.manual ? "manual" : r.source === ECB_AUTO_SOURCE ? "auto" : "unmaintained",
       }] : [];
     });
   });

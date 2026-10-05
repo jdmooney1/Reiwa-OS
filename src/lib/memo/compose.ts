@@ -138,6 +138,19 @@ export interface MemoFx {
   source: string;
 }
 
+/**
+ * The rate the committee decided against, recorded by the database at the instant
+ * of approval (migration 0026). A different fact from MemoFx, the rate as it
+ * stands today.
+ */
+export interface MemoFxLock {
+  rateToGbp: number;
+  source: string;
+  asOf: string;
+  /** The date the case was approved (ISO), which is when the rate was locked. */
+  approvedOn: string;
+}
+
 export interface MemoSource {
   opportunity: MemoOpportunity;
   /** The case the memo is based on, and why that one. */
@@ -148,6 +161,8 @@ export interface MemoSource {
   /** The recorded Investment Score, or null when none is complete. */
   score: MemoScore | null;
   fx: MemoFx | null;
+  /** The rate locked when the basis case was approved. Null: not approved, or approved with none recorded. */
+  fxLock: MemoFxLock | null;
   /** The date this memo is being composed on (ISO, UTC). Composition never reads a clock; the age of a rate is measured against this. */
   today: string;
 }
@@ -487,24 +502,49 @@ function exitStrategy(src: MemoSource): ComposedSection {
 function fxSensitivity(src: MemoSource): ComposedSection {
   const blocks: Block[] = [];
   const fx = src.fx;
+  const lock = src.fxLock;
   const flags: string[] = [];
   const cur = src.opportunity.currency;
   blocks.push({ kind: "facts", audience: "internal", source: "Opportunity record", items: [{ label: "Deal currency", value: cur }] });
+
+  // Two different questions, so two labelled figures, never one standing in for
+  // both: what the committee decided against, and what the rate is now.
+  if (lock) {
+    const lockAge = fxStaleness(lock.asOf, lock.approvedOn);
+    blocks.push({ kind: "facts", audience: "internal", source: `fx_rates as locked at approval: ${lock.source}`, items: [
+      { label: `Rate locked at approval (${cur} to GBP)`, value: String(lock.rateToGbp) },
+      { label: "Locked rate as of", value: lock.asOf },
+      { label: "Locked rate source", value: lock.source },
+      { label: "Approved on", value: lock.approvedOn },
+    ] });
+    if (/demo|static/i.test(lock.source)) flags.push("The rate locked at approval was a demonstration value, not a market rate");
+    if (cur !== FX_BASE_CURRENCY && lockAge?.stale) {
+      flags.push(`The rate locked at approval was ${lockAge.ageDays} days old on the day of approval`);
+    }
+  } else if (src.basis.kind === "approved") {
+    flags.push(`No exchange rate was locked at approval (the case predates rate locking, or no ${cur} rate was recorded that day)`);
+  }
+
   if (fx) {
     // The base currency's rate is 1 by definition and cannot go stale.
     const exempt = fx.currency === FX_BASE_CURRENCY;
     const age = exempt ? null : fxStaleness(fx.asOf, src.today);
-    blocks.push({ kind: "facts", audience: "internal", source: `fx_rates: ${fx.source}`, items: [
-      { label: `${fx.currency} to GBP`, value: String(fx.rateToGbp) },
-      { label: "Rate as of", value: fx.asOf },
+    const prefix = lock ? "Current rate (live)" : null;
+    blocks.push({ kind: "facts", audience: "internal", source: `fx_rates${lock ? " (current)" : ""}: ${fx.source}`, items: [
+      { label: prefix ? `${prefix}: ${fx.currency} to GBP` : `${fx.currency} to GBP`, value: String(fx.rateToGbp) },
+      { label: prefix ? "Current rate as of" : "Rate as of", value: fx.asOf },
       ...(age?.stale ? [{ label: "Rate age", value: `${age.ageDays} days` }] : []),
-      { label: "Rate source", value: fx.source },
+      { label: prefix ? "Current rate source" : "Rate source", value: fx.source },
+      ...(lock && cur !== FX_BASE_CURRENCY && lock.rateToGbp > 0
+        ? [{ label: "Movement since approval", value: `${(((fx.rateToGbp / lock.rateToGbp) - 1) * 100).toFixed(2)}%` }]
+        : []),
     ] });
     // The rates table is seeded with static demonstration rates until a live feed
     // exists (migration 0004). A memo must not present them as market data.
     if (/demo|static/i.test(fx.source)) flags.push("Rate is a demonstration value, not a market rate");
-    // Rates are typed in by an administrator, not fed. A rate past the staleness
-    // threshold is stated in the memo, with its age, rather than quietly used.
+    // Rates are updated daily from the ECB, or overridden by an administrator. A
+    // rate past the staleness threshold is stated in the memo, with its age,
+    // rather than quietly used.
     if (!exempt && age === null) {
       flags.push("The date of this rate could not be read, so its age is unknown");
     } else if (age?.stale) {
@@ -522,7 +562,7 @@ function fxSensitivity(src: MemoSource): ComposedSection {
   }
   // Deal currency alone is not a sensitivity. Without a rate or a hedging
   // workstream there is nothing to say beyond what the record already says.
-  if (!fx && dd.length === 0) {
+  if (!fx && !lock && dd.length === 0) {
     return empty(`Only the deal currency (${cur}) is recorded: no exchange rate and no hedging workstream. There is no FX sensitivity model; write this section in the override box.`);
   }
   return composed(blocks, flags);
