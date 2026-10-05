@@ -20,6 +20,8 @@ import { approvedVersion, currentVersion } from "@/lib/data/underwriting";
 import { listRisks } from "@/lib/data/opportunity-risks";
 import { listDdItems } from "@/lib/data/due-diligence";
 import { listDecisions, effectiveDecision } from "@/lib/data/ic-decisions";
+import { latestCompleteScore } from "@/lib/data/scores";
+import { CATEGORY_BY_KEY } from "@/lib/scoring/model";
 import {
   composeMemo, normaliseContent, isOverrideKey, MAX_OVERRIDE_CHARS,
   type ComposedMemo, type MemoSource, type MemoCase, type MemoOverrides, type OverrideKey,
@@ -49,12 +51,13 @@ export async function loadMemoSource(session: Session, opportunityId: string): P
   const opp = await getOpportunity(session, opportunityId);
   if (!opp) return null;
 
-  const [approved, working, risks, ddItems, decisions, fxRow] = await Promise.all([
+  const [approved, working, risks, ddItems, decisions, score, fxRow] = await Promise.all([
     approvedVersion(session, opportunityId),
     currentVersion(session, opportunityId),
     listRisks(session, opportunityId),
     listDdItems(session, opportunityId),
     listDecisions(session, opportunityId),
+    latestCompleteScore(session, opportunityId),
     withSession(session, async (tx: Queryable) => {
       const { rows } = await tx.query<{ currency: string; rate_to_gbp: unknown; as_of_date: string; source: string }>(
         "select currency, rate_to_gbp, as_of_date::text, source from fx_rates where currency = $1", [opp.currency]);
@@ -95,6 +98,16 @@ export async function loadMemoSource(session: Session, opportunityId: string): P
       priority: d.priority, finding: d.finding, resolution: d.resolution,
     })),
     decision,
+    score: score && score.view.overall !== null && score.view.recommendationLabel
+      ? {
+          version: score.version, scoredAt: score.scoredAt, overall: score.view.overall,
+          recommendationLabel: score.view.recommendationLabel,
+          categories: score.categories.map((c) => ({
+            key: c.key, label: CATEGORY_BY_KEY[c.key].label, weight: CATEGORY_BY_KEY[c.key].weight,
+            score: c.score as number, commentary: c.commentary, riskFlag: c.riskFlag,
+          })),
+        }
+      : null,
     fx: fxRow ? { currency: fxRow.currency, rateToGbp: Number(fxRow.rate_to_gbp), asOf: fxRow.as_of_date, source: fxRow.source } : null,
   };
 }
