@@ -65,6 +65,21 @@ export async function loadMemoSource(session: Session, opportunityId: string): P
     loadSnapshotAsset(session, opportunityId),
   ]);
 
+  // The rate the committee decided against, recorded by apply_ic_decision() when it
+  // flipped the case to approved. Only an approved case can carry one.
+  const fxLock = approved
+    ? await withSession(session, async (tx: Queryable) => {
+        const { rows } = await tx.query<{ rate: string | null; source: string | null; as_of: string | null; approved_on: string | null }>(
+          `select fx_rate_to_gbp_at_approval::text as rate, fx_rate_source_at_approval as source,
+                  fx_rate_as_of_at_approval::text as as_of, approved_at::date::text as approved_on
+             from investment_cases where case_id = $1`, [approved.caseId]);
+        const r = rows[0];
+        return r && r.rate !== null && r.source !== null && r.as_of !== null && r.approved_on !== null
+          ? { rateToGbp: Number(r.rate), source: r.source, asOf: r.as_of, approvedOn: r.approved_on }
+          : null;
+      })
+    : null;
+
   const basisCase = approved ?? working;
   const kind = approved ? "approved" : working ? "working" : "none";
 
@@ -101,6 +116,7 @@ export async function loadMemoSource(session: Session, opportunityId: string): P
       priority: d.priority, finding: d.finding, resolution: d.resolution,
     })),
     decision,
+    fxLock,
     today: todayUtc(),
     score: score && score.view.overall !== null && score.view.recommendationLabel
       ? {

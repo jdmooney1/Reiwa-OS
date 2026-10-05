@@ -32,6 +32,7 @@ Optional:
 | Variable | Purpose |
 | --- | --- |
 | `SUPABASE_DB_CA_CERT` | Override the shipped Supabase root CA (`supabase/prod-ca-2021.crt`). A PEM string or a path. TLS verification is always on and is never disabled. |
+| `CRON_SECRET` | **Server only.** Authorises Vercel's daily call to `/api/cron/fx-sync` (Vercel sends it as `Authorization: Bearer ...` once the variable exists). At least 16 characters; use a long random string. With it unset the route refuses every request, so the daily ECB rate update does not run. After setting it, call the route once by hand (`curl -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/cron/fx-sync`) and read the JSON: `status: "ok"` with the currencies written, or `failed` with a reason. |
 | `DATABASE_POOL_MAX` | Local connection pool size (default 8). Raise only if the pooler's own limits allow it. |
 | `GOOGLE_MAPS_SERVER_KEY` | **Server only.** Geocoding and Street View Static API. Needed only by `npm run db:geocode-properties` (and the photo fetch, when built); the portal runs without it. Restricted in Google Cloud to those two APIs. Never give it a `NEXT_PUBLIC_` prefix. |
 | `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY` | Public by design. Maps JavaScript API only, restricted to this app's HTTP referrers. Needed only by pages that render a map. |

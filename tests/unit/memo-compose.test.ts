@@ -41,7 +41,7 @@ const base = (over: Partial<MemoSource> = {}): MemoSource => ({
     assetType: "office", strategy: "value_add", currency: "GBP", sizeSqft: 42_000, sizeSqm: null, summary: "Broker says vendor is motivated.", projected: NO_PROJECTION,
   },
   basis: { kind: "approved", case: CASE },
-  risks: [], ddItems: [], decision: null, score: null, fx: null, today: "2026-09-01", fxJpy: null, asset: NO_ASSET, ...over,
+  risks: [], ddItems: [], decision: null, score: null, fx: null, fxLock: null, today: "2026-09-01", fxJpy: null, asset: NO_ASSET, ...over,
 });
 
 const bare = (): MemoSource => base({ basis: { kind: "none", case: null } });
@@ -274,6 +274,69 @@ describe("one composition rule per section", () => {
       const s = withRate("2026-08-27", "2026-10-05", "Demo static rates");
       expect(s.flags).toContain("Rate is a demonstration value, not a market rate");
       expect(staleFlag(s)).toBeDefined();
+    });
+  });
+
+  describe("fx_sensitivity: the rate locked at approval and the live rate are two figures", () => {
+    const LOCK = { rateToGbp: 0.86, source: "ECB reference rate (auto)", asOf: "2026-09-20", approvedOn: "2026-09-22" };
+    const LIVE = { currency: "EUR", rateToGbp: 0.88, asOf: "2026-09-30", source: "ECB reference rate (auto)" };
+    const eur = (over: Partial<MemoSource>) => section(base({
+      today: "2026-10-02", opportunity: { ...base().opportunity, currency: "EUR" }, ...over,
+    }), "fx_sensitivity");
+
+    it("shows both, each under its own label, with different values", () => {
+      const s = eur({ fxLock: LOCK, fx: LIVE });
+      const t = text(s.blocks);
+      expect(t).toContain("Rate locked at approval (EUR to GBP): 0.86");
+      expect(t).toContain("Locked rate as of: 2026-09-20");
+      expect(t).toContain("Approved on: 2026-09-22");
+      expect(t).toContain("Current rate (live): EUR to GBP: 0.88");
+      expect(t).toContain("Current rate as of: 2026-09-30");
+      // Not one unlabelled rate standing in for both questions.
+      expect(t).not.toMatch(/(^|\n)EUR to GBP: /);
+    });
+
+    it("reports the movement since approval from the two real figures", () => {
+      expect(text(eur({ fxLock: LOCK, fx: LIVE }).blocks)).toContain("Movement since approval: 2.33%");
+      expect(text(eur({ fxLock: LOCK, fx: { ...LIVE, rateToGbp: 0.8 } }).blocks)).toContain("Movement since approval: -6.98%");
+    });
+
+    it("keeps the two blocks apart in provenance too", () => {
+      const sources = eur({ fxLock: LOCK, fx: LIVE }).blocks.map((b) => b.source);
+      expect(sources.some((x) => /locked at approval/.test(x))).toBe(true);
+      expect(sources.some((x) => /\(current\)/.test(x))).toBe(true);
+    });
+
+    it("an approved case with no lock says none was locked, and still shows the live rate", () => {
+      const s = eur({ fxLock: null, fx: LIVE, basis: { kind: "approved", case: CASE } });
+      expect(s.flags.join(" ")).toMatch(/No exchange rate was locked at approval/);
+      expect(text(s.blocks)).toContain("EUR to GBP: 0.88");
+      expect(text(s.blocks)).not.toContain("Rate locked at approval");
+    });
+
+    it("a case that is not approved has no lock and says nothing about one", () => {
+      const s = eur({ fxLock: null, fx: LIVE, basis: { kind: "working", case: CASE } });
+      expect(s.flags.join(" ")).not.toMatch(/locked at approval/);
+    });
+
+    it("flags a locked rate that was a demonstration value, or already stale on the day", () => {
+      expect(eur({ fxLock: { ...LOCK, source: "Demo static rates" }, fx: LIVE }).flags).toContain("The rate locked at approval was a demonstration value, not a market rate");
+      expect(eur({ fxLock: { ...LOCK, asOf: "2026-07-01" }, fx: LIVE }).flags.join(" ")).toMatch(/locked at approval was 83 days old/);
+      expect(eur({ fxLock: LOCK, fx: LIVE }).flags.join(" ")).not.toMatch(/days old/);
+    });
+
+    it("composes from a lock alone when there is no live rate", () => {
+      const s = eur({ fxLock: LOCK, fx: null });
+      expect(s.status).toBe("composed");
+      expect(s.flags).toContain("No exchange rate is recorded for EUR");
+    });
+
+    it("never calls a GBP deal's rate stale or moved", () => {
+      const s = section(base({ today: "2026-12-01", basis: { kind: "approved", case: CASE },
+        fxLock: { rateToGbp: 1, source: "Base currency", asOf: "2026-01-01", approvedOn: "2026-06-01" },
+        fx: { currency: "GBP", rateToGbp: 1, asOf: "2026-01-01", source: "Base currency" } }), "fx_sensitivity");
+      expect(s.flags.join(" ")).not.toMatch(/days old/);
+      expect(text(s.blocks)).not.toContain("Movement since approval");
     });
   });
 

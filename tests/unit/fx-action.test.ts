@@ -13,6 +13,9 @@ const state = vi.hoisted(() => ({
   saved: [] as unknown[][],
   revalidated: [] as string[],
   saveThrows: null as Error | null,
+  loadThrows: null as Error | null,
+  applied: [] as unknown[][],
+  appliedWritten: ["EUR"] as string[],
 }));
 
 vi.mock("@/lib/auth/session", () => ({ requireDbSession: async () => state.session }));
@@ -22,12 +25,18 @@ vi.mock("@/lib/data/fx-rates", () => ({
   saveFxRate: async (...args: unknown[]) => { if (state.saveThrows) throw state.saveThrows; state.saved.push(args); },
 }));
 
+vi.mock("@/lib/db/client", () => ({ withSession: async (_s: unknown, fn: (tx: unknown) => unknown) => fn({}) }));
+vi.mock("@/lib/data/fx-sync", () => ({
+  loadEcbRates: async () => { if (state.loadThrows) throw state.loadThrows; return [{ currency: "EUR", rate: 0.87, source: "ECB reference rate (auto)", asOf: "2026-10-02" }]; },
+  applyEcbRates: async (...args: unknown[]) => { state.applied.push(args); return { written: state.appliedWritten, deferred: [] }; },
+}));
+
 const good = { currency: "EUR", rate: "0.8512", source: "ECB euro reference rate", asOf: "2026-10-03" };
 const run = async (body: unknown) => (await import("@/app/actions/fx")).saveFxRateAction(body);
 
 beforeEach(() => {
   state.session = { userId: "u1", orgIds: [], role: "reiwa_admin", canWrite: true };
-  state.saved = []; state.revalidated = []; state.saveThrows = null;
+  state.saved = []; state.revalidated = []; state.saveThrows = null; state.loadThrows = null; state.applied = []; state.appliedWritten = ["EUR"];
 });
 
 describe("saveFxRateAction", () => {
@@ -73,5 +82,40 @@ describe("saveFxRateAction", () => {
   it("a database fault is not shown to the person as a rule message", async () => {
     state.saveThrows = Object.assign(new Error("connection reset"), { code: "08006" });
     await expect(run(good)).rejects.toThrow("connection reset");
+  });
+});
+
+describe("adoptEcbRateAction (hand a currency back to the daily ECB sync)", () => {
+  const adopt = async (c: unknown) => (await import("@/app/actions/fx")).adoptEcbRateAction(c);
+
+  it("takes over the manual rate for ONE currency, as the administrator", async () => {
+    expect(await adopt("eur")).toEqual({ ok: true });
+    expect(state.applied).toHaveLength(1);
+    expect(state.applied[0][2]).toEqual({ only: ["EUR"], takeOverManual: true });
+    expect(state.revalidated).toEqual(["/admin/settings", "/portfolio"]);
+  });
+
+  it("is refused for anyone who is not an administrator, before the ECB is even asked", async () => {
+    state.session.role = "org_user";
+    expect(await adopt("EUR")).toEqual({ error: "Only a Reiwa administrator can change exchange rates." });
+    expect(state.applied).toEqual([]);
+  });
+
+  it("refuses a currency that is not kept", async () => {
+    expect(await adopt("CHF")).toEqual({ error: "That currency is not kept." });
+    expect(state.applied).toEqual([]);
+  });
+
+  it("leaves the manual rate untouched when the ECB cannot be reached, and says so plainly", async () => {
+    state.loadThrows = new Error("ECONNRESET at 10.0.0.1");
+    const r = await adopt("EUR");
+    expect(r).toMatchObject({ error: expect.stringContaining("current rate was left as it is") });
+    expect(JSON.stringify(r)).not.toContain("ECONNRESET");
+    expect(state.applied).toEqual([]);
+  });
+
+  it("does not report success when nothing was written", async () => {
+    state.appliedWritten = [];
+    expect(await adopt("EUR")).toMatchObject({ error: expect.any(String) });
   });
 });

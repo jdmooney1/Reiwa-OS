@@ -128,7 +128,7 @@ describe("the print view", () => {
 describe("empty, composed and edited never look alike", () => {
   const src: MemoSource = {
     opportunity: { name: "A", market: "London", submarket: null, city: "London", country: "UK", assetType: "office", strategy: null, currency: "GBP", sizeSqft: null, sizeSqm: null, summary: null, projected: NO_PROJECTION },
-    basis: { kind: "none", case: null }, risks: [], ddItems: [], decision: null, score: null, fx: null, today: "2026-09-01", fxJpy: null, asset: NO_ASSET,
+    basis: { kind: "none", case: null }, risks: [], ddItems: [], decision: null, score: null, fx: null, fxLock: null, today: "2026-09-01", fxJpy: null, asset: NO_ASSET,
   };
   const memo = composeMemo(src);
   const html = (key: "executive_summary" | "location_market", override: string | null, format: "ic" | "teaser" = "teaser", surface: "workspace" | "print" = "workspace") =>
