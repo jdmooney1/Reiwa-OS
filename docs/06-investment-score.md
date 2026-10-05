@@ -4,18 +4,28 @@ Every opportunity is scored out of 100 against Reiwa Capital's investment criter
 model lives in `src/lib/scoring/model.ts` (single source of truth for criteria, weights,
 computation and recommendation bands).
 
-> **Status after Phase 0.**
+> **Status.** Built (migration `0024_investment_scores.sql`).
 >
 > | | |
 > | --- | --- |
-> | **Exists today** | Nothing. There is no score screen and no score table. |
-> | **Reusable domain logic** | `src/lib/scoring/model.ts` — the 11 criteria, their weights, `computeOverall`, `recommendationFor` and the bands. Pure, mock-free, unchanged by Phase 0. Presentation survives too: `RadarChart` and `ScoreDial` in `src/components/shared/`, with `scoreTone` / `pillarTone` in `src/lib/domain.ts`. |
-> | **Phase 1 must build** | `investment_scores` + `investment_score_categories` tables keyed on `opportunity_id`, a server action to save a score, and the score screen. |
+> | **Model** | `src/lib/scoring/model.ts` - the 11 criteria, weights, `computeOverall`, `recommendationFor` and the bands. Unchanged. |
+> | **Pure scoring layer** | `src/lib/scoring/score.ts` - `viewScore` (live overall, band, contributions, flagged), `scoreSummary` (deterministic sentence) and `validateScoreSubmission`. |
+> | **Storage** | `investment_scores` + `investment_score_categories`, `org_id`-scoped, standard four RLS policies, staff only (investors never see them). |
+> | **Screen** | Opportunity -> Score (`/opportunities/[id]/score`), shown to staff; read-only for `investor_viewer`. |
+> | **Memo** | The Recommendation section shows the newest *complete* score beside the committee's recorded decision. Neither overwrites the other. Internal audience only. |
 >
-> The score tab rendered at `/deals/[dealId]/score` against fabricated category
-> scores in `src/lib/scoring/samples.ts`. Both that screen and the sample scores
-> were removed in Phase 0. **The criteria and the maths were never the problem
-> and were kept intact.**
+> **Decisions made while building it**
+>
+> - **Append-only versions.** Each save inserts a new `version`; nothing is edited in place, so
+>   the history of how a view moved is kept.
+> - **No `summary` column.** The one-line summary is composed on read from the real score and
+>   flagged criteria. There is no stored or generated IC prose to go stale.
+> - **Overall is NULL until all 11 criteria are scored.** A partial score is saved, but it has no
+>   overall and no recommendation (DB `CHECK`), and the memo ignores it.
+> - **Scores are 1-10 in half points.** A risk flag must carry commentary (DB `CHECK` and app
+>   validation).
+> - **Drift.** The recorded overall is kept as signed off; reads recompute through the current
+>   model and flag when they differ (a re-weighting), rather than silently rewriting history.
 
 ## Criteria & weights (sum = 100)
 
@@ -59,7 +69,7 @@ Because weights sum to 100, the overall is directly out of 100.
 `recommendationFor(overall)` returns the band; the same bands drive the score colour
 (`scoreTone`) used on the dial, pipeline cards and table.
 
-## UI Phase 1 should build (Opportunity → Score)
+## UI (Opportunity → Score)
 
 - **Recommendation card** — overall dial (0–100) via `ScoreDial`, band, descriptor,
   flagged count.
@@ -71,14 +81,13 @@ Because weights sum to 100, the overall is directly out of 100.
 Tone is institutional / IC, not gamified: no badges, streaks or celebratory states —
 just the number, the band, and the reasoning.
 
-An **auto-generated IC summary** was previously shown here as a draft. It was drawn
-from a stored sample string, not composed from the score. Phase 1 should not
-reintroduce it as a placeholder: either it is generated from the real score and
-flagged commentary, or the field is absent.
+An **auto-generated IC summary** was previously shown here as a draft, drawn from a
+stored sample string. It is not reintroduced: the summary line is composed
+deterministically from the real score and flagged criteria, or it is absent.
 
-## Data model Phase 1 should build
+## Data model
 
-`investment_scores` (header: `opportunity_id`, overall, recommendation, summary,
+`investment_scores` (header: `opportunity_id`, `version`, overall, recommendation,
 scored_by, scored_at) + `investment_score_categories` (one row per criterion: score,
 commentary, risk_flag). Both `org_id`-scoped like every other tenant table, with the
 standard four RLS policies.
