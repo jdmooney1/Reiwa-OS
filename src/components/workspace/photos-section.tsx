@@ -298,7 +298,7 @@ export function PhotosSection({
   );
 }
 
-function VisibilitySelect({
+export function VisibilitySelect({
   value, onChange, disabled, full,
 }: { value: PhotoVisibility; onChange: (v: PhotoVisibility) => void; disabled?: boolean; full?: boolean }) {
   return (
@@ -315,7 +315,7 @@ function VisibilitySelect({
   );
 }
 
-function IconButton({
+export function IconButton({
   label, onClick, disabled, children,
 }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (

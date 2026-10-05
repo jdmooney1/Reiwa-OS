@@ -77,7 +77,7 @@ export default async function MemoPrintPage({
             </div>
           )}
           {c.snapshot ? (
-            <AssetSnapshot data={c.snapshot} surface="print" />
+            <AssetSnapshot data={c.snapshot} surface="print" memoId={memo.memoId} />
           ) : (
             <p className="py-10 text-sm text-ink-muted">
               This memo version was composed before the Asset Snapshot existed, so there is no snapshot to print. Create a new version.

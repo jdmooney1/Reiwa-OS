@@ -95,7 +95,7 @@ export function MemoWorkspace({
           {shown.snapshot ? (
             <div className="overflow-x-auto">
               <div className="mx-auto min-w-[860px] max-w-[297mm] rounded border border-line bg-white p-8">
-                <AssetSnapshot data={shown.snapshot} surface="workspace" />
+                <AssetSnapshot data={shown.snapshot} surface="workspace" memoId={memo?.memoId ?? null} />
               </div>
             </div>
           ) : (

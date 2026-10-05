@@ -12,6 +12,8 @@ import { requireEnv } from "./env";
 import { ensureDocumentBucket, DOCUMENT_BUCKET } from "@/lib/documents/storage";
 import { ensurePhotoBucket } from "@/lib/photos/storage";
 import { PHOTO_BUCKET } from "@/lib/photos/constraints";
+import { ensureMemoAssetBucket } from "@/lib/memo/assets-store";
+import { MEMO_ASSET_BUCKET } from "@/lib/memo/assets";
 
 async function main(): Promise<void> {
   requireEnv();
@@ -46,6 +48,23 @@ async function main(): Promise<void> {
     );
   }
   console.log("Photo bucket is private.");
+
+  // Frozen memo assets: the copies of a finalised Asset Snapshot's pictures. The app also
+  // creates this bucket on first use, so a deployment that forgot this step still works; running
+  // it here just makes the first finalisation fast and lets the privacy check run.
+  const frozen = await ensureMemoAssetBucket();
+  console.log(
+    frozen.created
+      ? `Created private bucket ${MEMO_ASSET_BUCKET} on ${project}.`
+      : `Bucket ${MEMO_ASSET_BUCKET} already exists on ${project}.`,
+  );
+  if (frozen.isPublic) {
+    throw new Error(
+      `Bucket ${MEMO_ASSET_BUCKET} is PUBLIC. Frozen memo pictures must not be publicly readable - ` +
+      `set it to private in the Supabase dashboard.`,
+    );
+  }
+  console.log("Memo asset bucket is private.");
 }
 
 main().catch((e) => {

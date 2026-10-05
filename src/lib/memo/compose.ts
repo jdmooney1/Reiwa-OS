@@ -84,8 +84,10 @@ export interface MemoAssetFacts {
   reference: string | null;
   /** Street address, city and postcode as recorded, joined; null when there is no street address. */
   addressLine: string | null;
-  /** The headline photograph staff have cleared for investors; null when none is cleared. */
+  /** The building photograph staff have cleared for investors (live, as of now); null when none is cleared. */
   photoId: string | null;
+  /** The map image staff have cleared for investors (live, as of now); null when none is cleared. */
+  mapId: string | null;
 }
 
 /** The underwriting version a memo is based on (an investment_cases row). */
@@ -279,7 +281,10 @@ export interface ComposedSnapshot {
   submarket: string | null;
   assetType: string;
   addressLine: string | null;
-  photoId: string | null;
+  /** The building photograph. Live while the memo is a draft; FROZEN into a private copy when it is finalised. */
+  photo: SnapshotImage | null;
+  /** The map image, handled exactly like the photograph. */
+  map: SnapshotImage | null;
   currency: string;
   price: number | null;
   /** The price in yen, from the live rates. Null when either rate is missing, or the deal is in yen. */
@@ -298,6 +303,20 @@ export interface ComposedSnapshot {
   /** What the template has a place for and the record cannot fill. The workspace lists them; a printed copy never mentions them. */
   gaps: { key: string; label: string; why: string }[];
 }
+
+/**
+ * A picture on the Snapshot, in one of two states.
+ *
+ *   live    a reference to a property_photos row. A DRAFT keeps these, so staff
+ *           see current photographs while they iterate.
+ *   frozen  a path in the private `memo-assets` bucket, keyed by the memo (not the
+ *           photograph), written when the memo is finalised. It resolves to the
+ *           memo's own copy and never back to property_photos, so deleting or
+ *           re-tagging the source later cannot change a document already sent.
+ */
+export type SnapshotImage =
+  | { source: "live"; photoId: string }
+  | { source: "frozen"; path: string };
 
 export interface SnapshotAllocation {
   land: number;
@@ -871,7 +890,6 @@ export function composeSnapshot(src: MemoSource): ComposedSnapshot {
     { key: "property_facts", label: "Property facts", why: "Build year, refurbishment, floors, use, planning and seller are not captured." },
     { key: "property_notes", label: "Property notes", why: "Tenure, energy rating, heritage, lease profile and rent basis are not captured." },
     { key: "transport", label: "Transport", why: "No transport data is captured." },
-    { key: "map", label: "Map", why: "No map image is captured." },
   ];
   if (!allocation) {
     const entered = c ? [c.landValue, c.buildingValue].filter((x) => x !== null).length : 0;
@@ -883,6 +901,9 @@ export function composeSnapshot(src: MemoSource): ComposedSnapshot {
     });
   } else if (!allocation.depreciation) {
     gaps.push({ key: "depreciation_basis", label: "Depreciation basis", why: "No depreciation life is entered, so there is no annual charge." });
+  }
+  if (!src.asset.mapId) {
+    gaps.push({ key: "map", label: "Map", why: "No map has been cleared for investors. Add one on the asset and mark it for diligence investors to use it here." });
   }
   if (!src.asset.photoId) {
     gaps.unshift({ key: "photo", label: "Photograph", why: "No photograph has been cleared for investors. Mark one as diligence on the asset to use it here." });
@@ -897,7 +918,8 @@ export function composeSnapshot(src: MemoSource): ComposedSnapshot {
     name: o.name, city: o.city, country: o.country, submarket: o.submarket,
     assetType: ASSET_TYPE_LABEL[o.assetType as AssetType] ?? o.assetType,
     addressLine: src.asset.addressLine,
-    photoId: src.asset.photoId,
+    photo: src.asset.photoId ? { source: "live", photoId: src.asset.photoId } : null,
+    map: src.asset.mapId ? { source: "live", photoId: src.asset.mapId } : null,
     currency: o.currency,
     price, priceJpy, niyPct, passingRent, erv,
     occupancyPct: c ? c.occupancyPct : null,
@@ -1011,10 +1033,19 @@ export function unreviewedExternalText(
  */
 export function finaliseNotices(memo: ComposedMemo, format: OutputFormat): string[] {
   if (format !== "snapshot" || !memo.snapshot) return [];
-  const carries = [memo.snapshot.addressLine ? "the street address" : null, memo.snapshot.photoId ? "a photograph" : null]
+  const carries = [
+    memo.snapshot.addressLine ? "the street address" : null,
+    memo.snapshot.photo ? "a photograph" : null,
+    memo.snapshot.map ? "a map" : null,
+  ]
     .filter((x): x is string => x !== null);
   if (carries.length === 0) return [];
-  return [`This Snapshot carries ${carries.join(" and ")}. The Investment Portal shows ${carries.length === 2 ? "those" : "that"} to an investor only at the diligence tier; the PDF gives ${carries.length === 2 ? "them" : "it"} to whoever you send it to.`];
+  const list = carries.length > 1 ? `${carries.slice(0, -1).join(", ")} and ${carries[carries.length - 1]}` : carries[0];
+  const photoLike = carries.filter((c) => c !== "the street address").length;
+  const frozen = [memo.snapshot.photo, memo.snapshot.map].some((i) => i?.source === "live")
+    ? " Finalising keeps a private copy of each picture, so the document will not change if the originals are later removed or re-marked."
+    : "";
+  return [`This Snapshot carries ${list}. The Investment Portal shows ${carries.length > 1 || photoLike === 0 ? "those" : "that"} to an investor only at the diligence tier; the PDF gives ${carries.length > 1 || photoLike === 0 ? "them" : "it"} to whoever you send it to.${frozen}`];
 }
 
 // ---- Reading a stored memo back ------------------------------------------------
@@ -1044,7 +1075,21 @@ export function normaliseContent(raw: unknown): ComposedMemo | null {
     basis: r.basis ?? { kind: "none", caseId: null, version: null, caseStatus: null },
     sections,
     // A memo saved before the Snapshot existed has none: absent, never invented.
-    snapshot: isSnapshot(r.snapshot) ? r.snapshot : undefined,
+    snapshot: isSnapshot(r.snapshot) ? upgradeSnapshot(r.snapshot) : undefined,
+  };
+}
+
+/**
+ * A snapshot stored before pictures became `photo` / `map` carried a bare `photoId`
+ * (a live reference). Read it as the live photograph it was; never invent a map.
+ */
+function upgradeSnapshot(s: ComposedSnapshot): ComposedSnapshot {
+  const legacy = s as ComposedSnapshot & { photoId?: string | null };
+  const { photoId, ...rest } = legacy;
+  return {
+    ...rest,
+    photo: s.photo ?? (typeof photoId === "string" ? { source: "live", photoId } : null),
+    map: s.map ?? null,
   };
 }
 

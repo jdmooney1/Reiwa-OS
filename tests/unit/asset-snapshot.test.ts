@@ -22,7 +22,7 @@ const EMPTY = composeSnapshot(snapshotSource({
 }));
 const PARTIAL = composeSnapshot(snapshotSource({
   basis: { kind: "working", case: { ...snapshotSource().basis.case!, occupancyPct: null, erv: null, capex: null, grossRentalIncome: null, status: "current" } },
-  asset: { reference: null, addressLine: null, photoId: null },
+  asset: { reference: null, addressLine: null, photoId: null, mapId: null },
   fxJpy: null,
 }));
 
@@ -73,8 +73,8 @@ describe("a printed copy claims only what is recorded", () => {
     expect(t).toContain("Reiwa Capital does not provide tax or legal advice.");
   });
 
-  it("does not claim anything the record cannot back: no WAULT, facts, notes, transport, map, allocation, or gap list", () => {
-    for (const absent of ["WAULT", "REV. YIELD", "Property Facts", "Property Notes", "Transport", "Map", "Value Allocation", "Land Value", "Depreciation", "Not yet captured", "Build Year", "Tenure"]) {
+  it("does not claim anything the record cannot back: no WAULT, facts, notes, transport, allocation, or gap list", () => {
+    for (const absent of ["WAULT", "REV. YIELD", "Property Facts", "Property Notes", "Transport", "Value Allocation", "Land Value", "Depreciation", "Not yet captured", "Build Year", "Tenure"]) {
       expect(t.toLowerCase(), absent).not.toContain(absent.toLowerCase());
     }
   });
@@ -85,9 +85,10 @@ describe("a printed copy claims only what is recorded", () => {
   });
 
   it("the photograph block is simply absent when none is cleared", () => {
-    const html = render({ ...FULL, photoId: null }, "print");
+    const html = render({ ...FULL, photo: null, map: null }, "print");
     expect(html).not.toContain("/api/asset-photos/");
     expect(html).not.toContain('data-block="photo"');
+    expect(html).not.toContain('data-block="map"');
   });
 
   it("flags a stale rate in the FX line", () => {

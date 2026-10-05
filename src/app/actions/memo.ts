@@ -18,9 +18,10 @@ import { runAction } from "@/lib/actions/run-action";
 import type { ActionResult } from "@/lib/actions/result";
 import { isUuid } from "@/lib/data/portal-feed";
 import {
-  loadMemoSource, latestMemo, createMemoDraft, recomposeDraft, setOverride, finalizeMemo,
+  loadMemoSource, latestMemo, createMemoDraft, recomposeDraft, setOverride,
 } from "@/lib/data/memos";
 import { composeMemo, isOverrideKey } from "@/lib/memo/compose";
+import { finaliseMemoFreezingAssets } from "@/lib/data/memo-assets";
 import type { Session } from "@/lib/db/client";
 
 function refresh(opportunityId: string) {
@@ -88,7 +89,8 @@ export async function finalizeMemoAction(
     if (formData.get("confirm") !== "yes") throw new AppError("Confirm that you want to finalise this memo. It cannot be undone.");
     const latest = await latestMemo(session, opportunityId);
     if (!latest || latest.memoId !== memoId) throw new AppError("That is not the current memo for this opportunity.");
-    await finalizeMemo(session, memoId);
+    // Freezes the Snapshot's pictures into the memo's own private copy in the same transaction.
+    await finaliseMemoFreezingAssets(session, memoId);
     refresh(opportunityId);
   }, { ruleMessage: "This memo could not be finalised." });
 }

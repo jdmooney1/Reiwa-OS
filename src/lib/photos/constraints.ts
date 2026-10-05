@@ -60,6 +60,16 @@ export const DEFAULT_PHOTO_VISIBILITY: PhotoVisibility = "internal";
 export const isPhotoVisibility = (v: unknown): v is PhotoVisibility =>
   typeof v === "string" && (PHOTO_VISIBILITIES as readonly string[]).includes(v);
 
+/**
+ * What a stored picture of a property IS: a photograph of the building, or a map.
+ * Same lifecycle, same table (migration 0028); a map is never a headline and never
+ * reaches an investor.
+ */
+export type PhotoKind = "building" | "map";
+export const PHOTO_KINDS: readonly PhotoKind[] = ["building", "map"];
+export const isPhotoKind = (v: unknown): v is PhotoKind =>
+  typeof v === "string" && (PHOTO_KINDS as readonly string[]).includes(v);
+
 export type PhotoCheck =
   | { ok: true; mimeType: string; sizeBytes: number }
   | { ok: false; reason: string };

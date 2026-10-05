@@ -17,6 +17,9 @@
 //     visibility parameter on upload.
 //   * If the row does not land, neither object survives it.
 //
+// A MAP is a second kind of the same row (migration 0028), uploaded through the same
+// action with kind=map: same validation, same re-encode, same internal-until-cleared.
+//
 // ONE photograph per call. The browser sends them one at a time (it also shrinks
 // them first, see components/workspace/photos-section.tsx) so each request stays
 // small enough for the platform's request-body ceiling.
@@ -30,7 +33,7 @@ import { getOpportunity } from "@/lib/data/opportunities";
 import {
   recordPhoto, setHeadline, setPhotoVisibility, reorderPhotos, deletePhotoRow,
 } from "@/lib/data/property-photos";
-import { checkPhoto, STORED_PHOTO_TYPE } from "@/lib/photos/constraints";
+import { checkPhoto, isPhotoKind, STORED_PHOTO_TYPE } from "@/lib/photos/constraints";
 import { reencodePhoto } from "@/lib/photos/process";
 import { newPhotoObjectPath, putPhotoObject, deletePhotoObject, thumbPathFor } from "@/lib/photos/storage";
 import { isUuid } from "@/lib/data/portal-feed";
@@ -61,6 +64,11 @@ export async function uploadPhotoAction(
   const session = await requireDbSession();
   return runAction("workspace.photo.upload", { opportunityId }, async () => {
     const propertyId = await propertyOf(session, opportunityId);
+    // A building photograph (the default) or a map: the same upload, the same checks,
+    // the same internal-until-cleared start. Anything else is refused, not defaulted.
+    const rawKind = formData.get("kind");
+    const kind = rawKind === null || rawKind === "" ? "building" : rawKind;
+    if (!isPhotoKind(kind)) throw new AppError("That is not a kind of picture this property can hold.");
 
     const file = formData.get("file");
     if (!(file instanceof File) || file.size === 0) throw new AppError("Choose a photograph to upload.");
@@ -85,6 +93,7 @@ export async function uploadPhotoAction(
       await recordPhoto(session, {
         propertyId, objectPath, mimeType: STORED_PHOTO_TYPE,
         asHeadline: formData.get("headline") === "1",
+        kind,
       });
     } catch (e) {
       // An object with no row is unreachable and unaccounted for: remove both,

@@ -31,13 +31,21 @@ export function joinAddress(address: unknown, city: unknown, postcode: unknown):
 
 export async function loadSnapshotAsset(session: Session, opportunityId: string): Promise<MemoAssetFacts> {
   return withSession(session, async (tx: Queryable) => {
-    const { rows } = await tx.query<{ reference: string | null; address: string | null; city: string | null; postcode: string | null; photo_id: string | null }>(
+    const { rows } = await tx.query<{ reference: string | null; address: string | null; city: string | null; postcode: string | null; photo_id: string | null; map_id: string | null }>(
+      // The same query shape for each kind: the first picture staff have cleared for
+      // diligence investors, headline first, then gallery order. Photographs and maps
+      // are never mixed (a map is never a headline, and never competes with a photo).
       `select o.reference, p.address, p.city, p.postcode,
               (select pp.photo_id
                  from property_photos pp
-                where pp.property_id = o.property_id and pp.visibility = 'diligence'
+                where pp.property_id = o.property_id and pp.kind = 'building' and pp.visibility = 'diligence'
                 order by pp.is_headline desc, pp.sort_order, pp.created_at, pp.photo_id
-                limit 1) as photo_id
+                limit 1) as photo_id,
+              (select pp.photo_id
+                 from property_photos pp
+                where pp.property_id = o.property_id and pp.kind = 'map' and pp.visibility = 'diligence'
+                order by pp.sort_order, pp.created_at, pp.photo_id
+                limit 1) as map_id
          from opportunities o
          left join properties p on p.property_id = o.property_id
         where o.opportunity_id = $1`, [opportunityId]);
@@ -46,6 +54,7 @@ export async function loadSnapshotAsset(session: Session, opportunityId: string)
       reference: clean(r?.reference),
       addressLine: joinAddress(r?.address, r?.city, r?.postcode),
       photoId: r?.photo_id ?? null,
+      mapId: r?.map_id ?? null,
     };
   });
 }
