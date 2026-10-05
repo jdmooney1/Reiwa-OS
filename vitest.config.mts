@@ -2,6 +2,8 @@ import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
 
 export default defineConfig({
+  // `jsx: preserve` is Next's setting; a test that renders a page needs vitest told how to read it.
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },

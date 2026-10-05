@@ -33,6 +33,7 @@ export default async function MemoPage({
       live={live}
       format={parseFormat(searchParams.format)}
       canWrite={auth.role !== "investor_viewer"}
+      canShare={auth.role === "reiwa_admin"}
     />
   );
 }
