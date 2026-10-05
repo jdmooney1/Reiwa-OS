@@ -27,6 +27,7 @@ export function snapshotSource(over: Partial<MemoSource> = {}): MemoSource {
     basis: { kind: "approved", case: SNAP_CASE },
     risks: [], ddItems: [], decision: null, score: null,
     fx: { currency: "GBP", rateToGbp: 1, asOf: "2026-08-27", source: "Base currency" },
+    fxLock: null,
     fxJpy: { currency: "JPY", rateToGbp: 0.0052, asOf: "2026-08-27", source: "ECB reference rate (auto)" },
     today: "2026-09-01",
     asset: { reference: "RC-LON-0012", addressLine: "58 Queens Gate, London, SW7 5JW", photoId: "11111111-1111-4111-8111-111111111111" },

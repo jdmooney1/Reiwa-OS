@@ -172,14 +172,43 @@ date are surfaced on the portfolio screen. There is no fallback rate table in
 application code: `portfolioAggregate` requires an explicit rate map and raises
 rather than assume a missing currency.
 
-`0025_fx_rates_admin_write.sql` makes the rates maintainable: Reiwa administrators
-(`app.is_admin()`) can insert or update a rate from **Admin → Settings**, nobody else
-can, and nothing can delete one. A rate must have a non-blank `source` and be above
-zero (table checks); the action also refuses placeholder sources such as the seeded
-"Demo static rates". `updated_by` and `updated_at` record who last changed it. This
-is **not a live feed**: a rate is what was typed, from the source named, as of the
-date given. Any rate older than 30 days (`src/lib/fx.ts`) is flagged on the portfolio
-and in the memo's FX Sensitivity section, never blocked.
+`0025_fx_rates_admin_write.sql` lets Reiwa administrators (`app.is_admin()`) insert or
+update a rate from **Admin -> Settings**; nobody else can, and nothing can delete one. A
+rate must have a non-blank `source` and be above zero (table checks); the action also
+refuses placeholder sources such as the seeded "Demo static rates". `updated_by` and
+`updated_at` record who last changed it. Any rate older than 30 days (`src/lib/fx.ts`)
+is flagged on the portfolio and in the memo's FX Sensitivity section, never blocked.
+
+**Rates update themselves.** `vercel.json` runs `/api/cron/fx-sync` once a day. It
+fetches the ECB's published euro reference rates (`eurofxref-daily.xml`), converts them
+from EUR-based to GBP-based (`src/lib/fx-ecb.ts`: EUR is the feed's own EUR->GBP; USD
+and JPY are EUR->GBP divided by EUR->X; GBP is forced to 1), stamps each row with the
+feed's own publication date and `source = 'ECB reference rate (auto)'`, and writes
+through the same `validateRateSubmission()` gate a person's entry passes. The route is
+not public: it requires `Authorization: Bearer $CRON_SECRET` and refuses every request
+when `CRON_SECRET` is unset. A fetch or parse failure writes nothing and returns 502;
+the staleness flag then makes the skipped day visible.
+
+**A person always wins.** A row with `updated_by` set was written by an administrator and
+is a manual override (a forward or hedge rate, or the ECB being unreachable): the sync
+defers to it and logs that it did, decided in the upsert's own `WHERE`, so a save made
+mid-run is not overwritten either. Settings shows per currency whether the live rate is
+automatic, a named administrator's override, or the unmaintained seed, and "Return to the
+daily ECB rate" hands a currency back.
+
+### FX rate locked at approval (`0026_fx_rate_lock_at_approval.sql`)
+
+`investment_cases.fx_rate_to_gbp_at_approval`, `fx_rate_source_at_approval` and
+`fx_rate_as_of_at_approval` are filled by `app.apply_ic_decision()` in the same statement
+that flips a case to `approved`, from the `fx_rates` row for the **opportunity's**
+currency (a case has no currency of its own). They are NULL for drafts, for cases approved
+before 0026 (not backfilled: today's rate against a past approval would be a number the
+committee never saw), and when no rate existed (approval is not blocked). They move
+together (CHECK) and only exist on approved or superseded cases. They are immutable
+through the existing `app.block_if_approved_case()`, which compares whole rows and names
+only the columns that may move. The memo shows the locked rate and the live rate as two
+labelled figures, with the movement between them. Locking at capital deployment is not
+built: there is no drawdown object yet.
 
 ### Investor portal (`0005`, `0006`)
 

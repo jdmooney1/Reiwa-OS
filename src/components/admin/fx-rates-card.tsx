@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { saveFxRateAction } from "@/app/actions/fx";
+import { saveFxRateAction, adoptEcbRateAction } from "@/app/actions/fx";
 import type { FxRateRecord } from "@/lib/data/fx-rates";
 import { fxStaleness, FX_BASE_CURRENCY, FX_STALE_AFTER_DAYS } from "@/lib/fx";
 import { ActionError } from "@/components/workspace/primitives";
@@ -25,6 +25,14 @@ function RateRow({ rate, today }: { rate: FxRateRecord; today: string }) {
   const isBase = rate.currency === FX_BASE_CURRENCY;
   const age = isBase ? null : fxStaleness(rate.asOf, today);
 
+  function adopt() {
+    setError(undefined); setSaved(false);
+    startTransition(async () => {
+      const res = await adoptEcbRateAction(rate.currency);
+      if (res.error) setError(res.error); else setSaved(true);
+    });
+  }
+
   function save() {
     setError(undefined); setSaved(false);
     startTransition(async () => {
@@ -40,9 +48,16 @@ function RateRow({ rate, today }: { rate: FxRateRecord; today: string }) {
           <span className="font-medium">{rate.currency}</span>
           <span className="ml-2 tabular text-ink-muted">1 {rate.currency} = {rate.rateToGbp} GBP</span>
         </div>
-        <div className="text-2xs text-ink-faint">
-          {rate.source} · as at {formatDate(rate.asOf)}
-          {rate.updatedByName && rate.updatedAt ? ` · set by ${rate.updatedByName}, ${formatDate(rate.updatedAt)}` : ""}
+        <div className="text-right text-2xs text-ink-faint" data-mode={rate.mode}>
+          <div className="font-medium text-ink-muted">
+            {rate.mode === "auto" && "Automatic: updated daily from the ECB"}
+            {rate.mode === "manual" && `Manual override${rate.updatedByName ? ` by ${rate.updatedByName}` : ""}: the daily update defers to it`}
+            {rate.mode === "unmaintained" && "Seeded value: not yet updated by anyone"}
+          </div>
+          <div>
+            {rate.mode === "auto" ? "" : `${rate.source} · `}as at {formatDate(rate.asOf)}
+            {rate.mode === "manual" && rate.updatedAt ? ` · set ${formatDate(rate.updatedAt)}` : ""}
+          </div>
         </div>
       </div>
       {isBase && <p className="mt-1 text-xs text-ink-faint">The base currency: always 1, so it is never flagged as stale.</p>}
@@ -70,9 +85,15 @@ function RateRow({ rate, today }: { rate: FxRateRecord; today: string }) {
         </label>
         <button type="button" disabled={pending} onClick={save} aria-label={`Save ${rate.currency} rate`}
           className="h-8 rounded bg-purple px-3.5 text-xs font-semibold text-surface hover:bg-purple-70 disabled:opacity-50">
-          {pending ? "Saving..." : "Save rate"}
+          {pending ? "Saving..." : "Save as manual override"}
         </button>
       </div>
+      {rate.mode === "manual" && (
+        <button type="button" disabled={pending} onClick={adopt} aria-label={`Return ${rate.currency} to the ECB rate`}
+          className="mt-2 text-2xs font-medium text-ink-muted underline hover:text-ink disabled:opacity-50">
+          Return to the daily ECB rate
+        </button>
+      )}
       <div className="mt-2 space-y-1">
         <ActionError message={error} />
         {saved && <p className="text-2xs text-positive" role="status">Saved.</p>}
