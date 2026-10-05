@@ -17,16 +17,18 @@ let viewer: Session;
 let aoyama: Session;
 let meiji: string;
 let n = 0;
+// A distinct street per run as well as per deal, so a reused database does not hand a new test an old property's pictures.
+const RUN = String(Date.now()).slice(-6);
 
 async function deal(over: Record<string, unknown> = {}) {
   const opp = await createOpportunity(session, {
     orgId: meiji, name: `Snapshot ${++n}`, city: "London", country: "United Kingdom", market: "London",
     assetType: "office", strategy: "value_add", currency: "GBP",
     // A distinct street per deal: the same address is the same PROPERTY, and a property has one headline.
-    address: `${100 + n} Queens Gate`, postcode: "SW7 5JW", ...over,
+    address: `${RUN}${100 + n} Queens Gate`, postcode: "SW7 5JW", ...over,
   });
   const property = (await adminQuery<{ property_id: string }>("select property_id from opportunities where opportunity_id = $1", [opp]))[0].property_id;
-  return { opp, property, address: `${100 + n} Queens Gate, London, SW7 5JW` };
+  return { opp, property, address: `${RUN}${100 + n} Queens Gate, London, SW7 5JW` };
 }
 
 const photo = (property: string, o: { visibility: string; headline?: boolean; sort?: number; created?: string }) => adminQuery<{ photo_id: string }>(
@@ -104,7 +106,7 @@ describe("RLS still decides who sees any of it", () => {
   it("another organisation reads no address, no reference and no photograph", async () => {
     const { opp, property } = await deal();
     await photo(property, { visibility: "diligence", headline: true });
-    expect(await loadSnapshotAsset(aoyama, opp)).toEqual({ reference: null, addressLine: null, photoId: null });
+    expect(await loadSnapshotAsset(aoyama, opp)).toEqual({ reference: null, addressLine: null, photoId: null, mapId: null });
   });
 
   it("the loader for the whole memo returns null to them", async () => {
@@ -129,7 +131,7 @@ describe("a whole snapshot from the real loader", () => {
     const snap = composeMemo((await loadMemoSource(session, opp))!).snapshot!;
     expect(snap).toMatchObject({
       price: 26_000_000, niyPct: 5.25, passingRent: 1_400_000, erv: 1_600_000, occupancyPct: 90, capex: 900_000,
-      addressLine: address, photoId: p, basisLabel: "Reiwa underwriting v1 (working version, not yet approved)",
+      addressLine: address, photo: { source: "live", photoId: p }, map: null, basisLabel: "Reiwa underwriting v1 (working version, not yet approved)",
     });
     expect(snap.priceJpy).toBeCloseTo(26_000_000 / 0.0052, 0);
     expect(snap.area!.tsubo).toBeCloseTo(2500 / 3.30578, 6);

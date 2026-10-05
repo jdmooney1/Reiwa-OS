@@ -278,7 +278,7 @@ describe("what a memo is allowed to carry", () => {
     }
     // And the Snapshot carries the address and nothing location-shaped beyond it.
     expect(asset.addressLine).toContain(o.address!);
-    expect(Object.keys(asset).sort()).toEqual(["addressLine", "photoId", "reference"]);
+    expect(Object.keys(asset).sort()).toEqual(["addressLine", "mapId", "photoId", "reference"]);
     for (const text of ["Secret Broker LLP", "Distressed Vendor Ltd", "51.123456", "-0.123456"]) {
       expect(JSON.stringify(composed.snapshot), text).not.toContain(text);
     }

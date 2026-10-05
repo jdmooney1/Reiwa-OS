@@ -116,10 +116,38 @@ describe("1. only a short allowlist of investor files mentions a photograph", ()
 });
 
 describe("2. the table is reached only through the three functions", () => {
-  it("only migrations 0019 and 0020 mention it", () => {
+  it("only migrations 0019, 0020 and 0028 mention it", () => {
     const dir = join(ROOT, "supabase/migrations");
     const mentions = readdirSync(dir).filter((f) => /property_photos/.test(stripSqlComments(read(`supabase/migrations/${f}`))));
-    expect(mentions).toEqual(["0019_property_photos.sql", "0020_investor_photos.sql"]);
+    expect(mentions).toEqual(["0019_property_photos.sql", "0020_investor_photos.sql", "0028_property_photo_kind.sql"]);
+  });
+
+  describe("0028 (kind: building | map) closes the one way a map could reach an investor", () => {
+    const m28 = stripSqlComments(read("supabase/migrations/0028_property_photo_kind.sql"));
+    const fn = (src: string, name: string) => {
+      const i = src.indexOf(`create or replace function app.${name}(`);
+      return src.slice(i, src.indexOf("$fn$;", i)).replace(/\s+/g, " ");
+    };
+
+    it.each(["investor_photo", "investor_publication_photos"])("app.%s is 0020's function with ONE added line, pp.kind = 'building'", (name) => {
+      const before = fn(sql, name);
+      const after = fn(m28, name);
+      expect(after).toContain("pp.kind = 'building'");
+      expect(after.replace(" and pp.kind = 'building'", "")).toBe(before);
+    });
+
+    it("changes no policy, creates no table or function beyond those two, and grants the investor nothing new", () => {
+      expect(m28).not.toMatch(/create\s+policy|create\s+table|drop\s+policy/i);
+      expect([...m28.matchAll(/create or replace function (app\.\w+)/g)].map((x) => x[1]).sort()).toEqual(["app.investor_photo", "app.investor_publication_photos"]);
+      expect(m28).not.toMatch(/grant[^;]*\b(anon|public)\b/i);
+      expect(m28).toMatch(/revoke execute on function app\.investor_photo\(uuid\) from public, anon/);
+      expect(m28).toMatch(/grant\s+execute on function app\.investor_publication_photos\(uuid\) to authenticated/);
+    });
+
+    it("a map can never be a headline, and every existing row is a building photograph", () => {
+      expect(m28).toMatch(/check \(kind = 'building' or not is_headline\)/);
+      expect(m28).toMatch(/add column if not exists kind text not null default 'building'/);
+    });
   });
 
   const sql = stripSqlComments(read("supabase/migrations/0020_investor_photos.sql"));

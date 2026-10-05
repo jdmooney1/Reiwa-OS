@@ -94,10 +94,16 @@ describe("the Asset Snapshot is the one place a memo may carry an address or a p
     expect(src).not.toMatch(/latitude|longitude|geocode|formatted_address|street_view|broker|vendor|source_contact|triage|referral/i);
   });
 
-  it("the component makes no outside call and reaches photographs only through the staff-only delivery route", () => {
+  it("the component makes no outside call and takes every picture URL from snapshot-images.ts", () => {
     const c = code("src/components/memo/asset-snapshot.tsx");
     expect(c).not.toMatch(/\bfetch\(|XMLHttpRequest|axios|@\/lib\/(db|data|photos|geo)/);
-    expect([...c.matchAll(/\/api\/[\w-]+/g)].map((m) => m[0])).toEqual(["/api/asset-photos"]);
+    expect(c).not.toMatch(/\/api\//);
+    expect(c).toContain("snapshotImageUrl(");
+  });
+
+  it("a picture is fetched only through the two staff-only routes: the live photograph route, or the memo's own frozen copy", () => {
+    const u = code("src/lib/memo/snapshot-images.ts");
+    expect([...u.matchAll(/\/api\/[\w-]+/g)].map((m) => m[0]).sort()).toEqual(["/api/asset-photos", "/api/memo-assets"]);
   });
 
   it("no investor-facing file reads the snapshot source or renders the snapshot", () => {

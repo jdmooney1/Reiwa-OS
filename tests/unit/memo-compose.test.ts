@@ -616,7 +616,7 @@ describe("what a memo can see: the boundary that keeps location and photographs 
   const FORBIDDEN = /address|latitude|longitude|geocode|formatted|place_?id|photo|street.?view|broker|vendor|triage|sourceContact|referral/i;
   // The ONE sanctioned exception: the Asset Snapshot (decision: JD). Everything that
   // may name an address or a photograph is one of these declarations, and nothing else.
-  const SANCTIONED = new Set(["MemoAssetFacts", "ComposedSnapshot", "composeSnapshot", "finaliseNotices", "isSnapshot"]);
+  const SANCTIONED = new Set(["MemoAssetFacts", "ComposedSnapshot", "SnapshotImage", "composeSnapshot", "finaliseNotices", "isSnapshot", "upgradeSnapshot"]);
 
   it("the composition module names no address, coordinate, geocode, photograph, broker, vendor or triage field outside the Snapshot's own declarations", () => {
     const decls = raw.split(/^(?=export |function |const |interface |type )/m);
@@ -637,11 +637,12 @@ describe("what a memo can see: the boundary that keeps location and photographs 
   });
 
   it("an address and a photograph reach the Snapshot and NO prose section or other format's content", () => {
-    const m = composeMemo(base({ asset: { reference: "RC-LON-0012", addressLine: "58 Queens Gate, London, SW7 5JW", photoId: "photo-123" } }));
-    expect(m.snapshot).toMatchObject({ addressLine: "58 Queens Gate, London, SW7 5JW", photoId: "photo-123", ref: "RC-LON-0012" });
+    const m = composeMemo(base({ asset: { reference: "RC-LON-0012", addressLine: "58 Queens Gate, London, SW7 5JW", photoId: "photo-123", mapId: "map-456" } }));
+    expect(m.snapshot).toMatchObject({ addressLine: "58 Queens Gate, London, SW7 5JW", photo: { source: "live", photoId: "photo-123" }, map: { source: "live", photoId: "map-456" }, ref: "RC-LON-0012" });
     const prose = JSON.stringify(m.sections);
     expect(prose).not.toContain("Queens Gate, London, SW7");
     expect(prose).not.toContain("photo-123");
+    expect(prose).not.toContain("map-456");
     expect(prose).not.toContain("RC-LON-0012");
   });
 });

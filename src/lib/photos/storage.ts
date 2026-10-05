@@ -82,3 +82,16 @@ export async function deletePhotoObject(objectPath: string): Promise<void> {
   const admin = createSupabaseAdminClient();
   await admin.storage.from(PHOTO_BUCKET).remove([objectPath, thumbPathFor(objectPath)]);
 }
+
+/**
+ * The stored bytes of one photograph (the full image), for a server-side copy. Null when
+ * the object is gone. Reads through a short-lived signed URL, the same way a browser would
+ * be served it, so there is one way a byte leaves this bucket.
+ */
+export async function getPhotoObjectBytes(objectPath: string): Promise<Uint8Array | null> {
+  const url = await signPhotoObject(objectPath);
+  if (!url) return null;
+  const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) return null;
+  return new Uint8Array(await res.arrayBuffer());
+}

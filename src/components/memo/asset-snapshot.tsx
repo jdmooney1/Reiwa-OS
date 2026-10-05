@@ -2,6 +2,7 @@ import type { ComposedSnapshot } from "@/lib/memo/compose";
 import { ReiwaLockup } from "@/components/brand/reiwa-lockup";
 import { formatMoneyUnits, formatDate, currencySymbol } from "@/lib/format";
 import type { Currency } from "@/types/database";
+import { snapshotImageUrl } from "@/lib/memo/snapshot-images";
 import { METHOD_LABEL } from "@/lib/underwriting/allocation";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +50,15 @@ function Cell({
   );
 }
 
-export function AssetSnapshot({ data, surface }: { data: ComposedSnapshot; surface: Surface }) {
+export function AssetSnapshot({
+  data, surface, memoId = null,
+}: {
+  data: ComposedSnapshot; surface: Surface;
+  /** The stored memo this is drawn from. A FROZEN picture is fetched through it. */
+  memoId?: string | null;
+}) {
+  const photoUrl = snapshotImageUrl(data.photo, memoId, "photo");
+  const mapUrl = snapshotImageUrl(data.map, memoId, "map");
   const cur = asCurrency(data.currency);
   const money = (n: number | null) => (n === null ? null : formatMoneyUnits(n, cur));
   const place = [data.city, data.country].filter(Boolean).join(", ");
@@ -91,26 +100,14 @@ export function AssetSnapshot({ data, surface }: { data: ComposedSnapshot; surfa
         </p>
       </div>
 
-      <div className="mt-5 grid gap-6 [grid-template-columns:minmax(0,5fr)_minmax(0,6fr)]">
-        {/* Left: photograph, address. */}
-        <div className="space-y-4">
-          {(data.photoId || showGaps) && (
-            <div
-              className={cn("relative h-[250px] overflow-hidden rounded border", data.photoId ? "border-line bg-surface-sunken" : "border-dashed border-line bg-surface-sunken")}
-              data-block="photo"
-            >
-              <span className="absolute left-2 top-2 z-10 rounded bg-purple px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-surface">
-                Asset <span lang="ja">物件</span>
-              </span>
-              {data.photoId ? (
-                // A plain <img>: the route answers with a short-lived redirect, which the
-                // optimiser would try to cache and which a printed page must not rewrite.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={`/api/asset-photos/${data.photoId}`} alt={data.name} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center px-6 text-center text-xs text-ink-faint">Not yet captured</div>
-              )}
-            </div>
+      <div className="mt-4 grid gap-6 [grid-template-columns:minmax(0,5fr)_minmax(0,6fr)]">
+        {/* Left: photograph, map, address (the template's order). */}
+        <div className="space-y-3">
+          {(photoUrl || showGaps) && (
+            <Picture url={photoUrl} label="Asset" ja="物件" alt={data.name} block="photo" height={205} />
+          )}
+          {(mapUrl || showGaps) && (
+            <Picture url={mapUrl} label="Map" ja="地図" alt={`Map of ${data.name}`} block="map" height={150} />
           )}
           {data.addressLine ? (
             <div className="rounded border border-line px-4 py-3" data-block="address">
@@ -122,11 +119,6 @@ export function AssetSnapshot({ data, surface }: { data: ComposedSnapshot; surfa
           ) : showGaps && (
             <div className="rounded border border-dashed border-line px-4 py-3 text-[11px] text-ink-faint" data-block="address">
               Address <span lang="ja">所在地</span>: not yet captured
-            </div>
-          )}
-          {showGaps && (
-            <div className="rounded border border-dashed border-line px-4 py-6 text-center text-[11px] text-ink-faint" data-block="map">
-              Map <span lang="ja">地図</span>: not yet captured
             </div>
           )}
         </div>
@@ -184,7 +176,7 @@ export function AssetSnapshot({ data, surface }: { data: ComposedSnapshot; surfa
         </div>
       </div>
 
-      <footer className="mt-5 flex items-end justify-between gap-6 border-t border-line pt-3">
+      <footer className="mt-4 flex items-end justify-between gap-6 border-t border-line pt-3">
         <p className="max-w-[60%] text-[8.5px] leading-snug text-ink-faint">
           This document is for preliminary discussion purposes only. Figures are based on information available at the time of
           preparation and remain subject to verification, due diligence, tax advice and legal review. Reiwa Capital does not
@@ -194,6 +186,30 @@ export function AssetSnapshot({ data, surface }: { data: ComposedSnapshot; surfa
           <span className="font-semibold text-ink">Reiwa Capital</span> · Confidential · {formatDate(data.preparedOn)}{data.ref ? ` · ${data.ref}` : ""}
         </p>
       </footer>
+    </div>
+  );
+}
+
+/** A picture slot: the image when there is one, a dashed "not yet captured" box in the workspace when not. */
+function Picture({
+  url, label, ja, alt, block, height,
+}: { url: string | null; label: string; ja: string; alt: string; block: string; height: number }) {
+  return (
+    <div
+      className={cn("relative overflow-hidden rounded border", url ? "border-line bg-surface-sunken" : "border-dashed border-line bg-surface-sunken")}
+      style={{ height }} data-block={block}
+    >
+      <span className="absolute left-2 top-2 z-10 rounded bg-purple px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-surface">
+        {label} <span lang="ja">{ja}</span>
+      </span>
+      {url ? (
+        // A plain <img>: the routes answer with a short-lived redirect, which the
+        // optimiser would try to cache and which a printed page must not rewrite.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={alt} className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full items-center justify-center px-6 text-center text-xs text-ink-faint">Not yet captured</div>
+      )}
     </div>
   );
 }

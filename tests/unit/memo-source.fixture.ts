@@ -2,7 +2,7 @@
 import type { MemoCase, MemoSource } from "@/lib/memo/compose";
 
 export const NO_PROJECTION = { price: null, niyPct: null, passingRent: null, erv: null, capex: null };
-export const NO_ASSET = { reference: null, addressLine: null, photoId: null };
+export const NO_ASSET = { reference: null, addressLine: null, photoId: null, mapId: null };
 
 export const SNAP_CASE: MemoCase = {
   caseId: "c1", version: 3, status: "approved", strategy: "Value-add",
@@ -30,7 +30,7 @@ export function snapshotSource(over: Partial<MemoSource> = {}): MemoSource {
     fxLock: null,
     fxJpy: { currency: "JPY", rateToGbp: 0.0052, asOf: "2026-08-27", source: "ECB reference rate (auto)" },
     today: "2026-09-01",
-    asset: { reference: "RC-LON-0012", addressLine: "58 Queens Gate, London, SW7 5JW", photoId: "11111111-1111-4111-8111-111111111111" },
+    asset: { reference: "RC-LON-0012", addressLine: "58 Queens Gate, London, SW7 5JW", photoId: "11111111-1111-4111-8111-111111111111", mapId: "22222222-2222-4222-8222-222222222222" },
     ...over,
   };
 }

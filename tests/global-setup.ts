@@ -26,6 +26,7 @@ import { resetDatabase } from "@/lib/db/reset";
 import { assertSupabaseProjectReachable } from "./supabase-preflight";
 import { ensureDocumentBucket } from "@/lib/documents/storage";
 import { ensurePhotoBucket } from "@/lib/photos/storage";
+import { ensureMemoAssetBucket } from "@/lib/memo/assets-store";
 
 export default async function setup(): Promise<void> {
   // Refuses here — before requireEnv(), before any pool exists, before any
@@ -59,6 +60,8 @@ export default async function setup(): Promise<void> {
   const bucket = await ensureDocumentBucket();
   // tests/photo-delivery.test.ts uploads real photographs: same rule, same gate.
   await ensurePhotoBucket();
+  // tests/memo-assets.test.ts finalises a Snapshot, which copies its pictures into this bucket.
+  await ensureMemoAssetBucket();
 
   console.log(
     `[tests] applied ${applied.length} migration(s), seeded demonstration data, ` +

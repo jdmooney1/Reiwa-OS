@@ -87,6 +87,18 @@ diligence tier.
 
 ## The One-Page Asset Snapshot
 
+**Pictures are frozen at finalisation.** A draft keeps live references to the photograph and
+the map, so staff see current pictures while they iterate (Recompose picks up changes). The
+moment the memo is finalised, each picture is copied into the private `memo-assets` bucket at
+`memos/<memoId>/<photo|map>-<hash>.jpg` and the memo's content is rewritten to point at the copy,
+in the same transaction that flips the memo to final (`src/lib/data/memo-assets.ts`). Nothing in a
+final memo refers to `property_photos` any more, so deleting or re-marking the original cannot
+change a document that has been sent. A reprint is served by `/api/memo-assets/<memoId>/<slot>`:
+staff only, the path read from the memo row, a sixty-second signed URL, never a path in the
+browser. Finalising is refused (and nothing is locked) if a picture in the draft has since been
+deleted or withdrawn from investors; recompose, then finalise. The bucket is created on first use
+and by `npm run db:storage`.
+
 Reiwa Capital's bilingual (EN/JA) landscape A4 sheet, composed as `ComposedMemo.snapshot`
 and drawn by `src/components/memo/asset-snapshot.tsx` (one component for the workspace and
 the print view). Printed through the browser's own print dialog, set to landscape, like
@@ -99,7 +111,7 @@ the other formats.
 | NIY, Passing Rent, ERV, Occupancy, Capex | the basis case (`entry_yield_pct`, `gross_rental_income`, `erv`, `occupancy_pct`, `capex`) |
 | Total Area | the opportunity's sq ft and sq m; tsubo is sq m / 3.30578 (`src/lib/units.ts`) |
 | Address, City, Country, Submarket, Asset Type, Ref | `properties` and `opportunities` |
-| Photograph | a `diligence`-cleared `property_photos` row (above) |
+| Photograph, Map | a `diligence`-cleared `property_photos` row of kind `building` / `map` (above). A map is uploaded exactly like a photograph (a second `kind` of the same row, migration 0028), starts internal, is never a headline, and never reaches an investor |
 | Value allocation, Depreciation Basis | the case's `land_value`, `building_value`, `depreciation_years` (migration 0027). Building % = building / (land + building); the annual charge is building / years, straight-line, converted to yen like the price. All **derived on read, never stored** (`src/lib/underwriting/allocation.ts`). Absent until land AND building are entered; the depreciation cell is absent until a life is |
 | FX footer | the stored rates with their source and date, and `This rate is N days old.` when the oldest used is past 30 days |
 

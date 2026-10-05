@@ -21,7 +21,9 @@ describe("a full record", () => {
       ref: "RC-LON-0012", name: "58 Queens Gate", city: "London", country: "United Kingdom", submarket: "South Kensington",
       assetType: "Office", currency: "GBP",
       price: 64_000_000, niyPct: 2.97, passingRent: 2_048_000, erv: 2_200_000, occupancyPct: 93.1, capex: 1_000_000,
-      addressLine: "58 Queens Gate, London, SW7 5JW", photoId: "11111111-1111-4111-8111-111111111111",
+      addressLine: "58 Queens Gate, London, SW7 5JW",
+      photo: { source: "live", photoId: "11111111-1111-4111-8111-111111111111" },
+      map: { source: "live", photoId: "22222222-2222-4222-8222-222222222222" },
       preparedOn: "2026-09-01", basisLabel: "Reiwa underwriting v3 (approved)",
     });
   });
@@ -51,7 +53,8 @@ describe("a full record", () => {
 
   it("lists what the template has a place for and the record cannot fill", () => {
     expect(s.gaps.map((g) => g.key)).toEqual(
-      expect.arrayContaining(["rev_yield", "wault", "value_allocation", "property_facts", "property_notes", "transport", "map"]));
+      expect.arrayContaining(["rev_yield", "wault", "value_allocation", "property_facts", "property_notes", "transport"]));
+    // This record has a cleared photograph AND a cleared map, so neither is a gap.
     expect(s.gaps.map((g) => g.key)).not.toContain("photo");
     expect(s.gaps.map((g) => g.key)).not.toContain("address");
   });
@@ -113,7 +116,7 @@ describe("a partial record", () => {
       asset: NO_ASSET,
     });
     expect(s).toMatchObject({ price: 25_000_000, niyPct: 5, passingRent: 1_250_000, erv: null, capex: null, occupancyPct: null,
-      basisLabel: "Reiwa opportunity record", addressLine: null, photoId: null, ref: null });
+      basisLabel: "Reiwa opportunity record", addressLine: null, photo: null, map: null, ref: null });
     expect(s.area!.tsubo).toBeCloseTo(1000 / 3.30578, 9);
     expect(s.gaps.map((g) => g.key)).toEqual(expect.arrayContaining(["photo", "address"]));
   });
@@ -131,7 +134,7 @@ describe("a partial record", () => {
       asset: NO_ASSET, fx: null, fxJpy: null,
     }));
     expect(s).toMatchObject({ price: null, priceJpy: null, niyPct: null, passingRent: null, erv: null, occupancyPct: null, capex: null,
-      area: null, fx: null, basisLabel: null, addressLine: null, photoId: null });
+      area: null, fx: null, basisLabel: null, addressLine: null, photo: null, map: null });
   });
 
   it("a working (unapproved) underwriting says so in the source label", () => {
@@ -167,11 +170,13 @@ describe("the format and the stored memo", () => {
 
   it("finalising warns that the Snapshot carries the address and a photograph, and only then", () => {
     const m = composeMemo(snapshotSource());
-    expect(finaliseNotices(m, "snapshot")[0]).toMatch(/street address and a photograph/);
+    expect(finaliseNotices(m, "snapshot")[0]).toMatch(/the street address, a photograph and a map\./);
+    expect(finaliseNotices(m, "snapshot")[0]).toMatch(/private copy of each picture/);
     expect(finaliseNotices(m, "snapshot")[0]).toMatch(/diligence tier/);
     expect(finaliseNotices(m, "teaser")).toEqual([]);
     expect(finaliseNotices(composeMemo(snapshotSource({ asset: NO_ASSET })), "snapshot")).toEqual([]);
-    expect(finaliseNotices(composeMemo(snapshotSource({ asset: { ...NO_ASSET, photoId: "p" } })), "snapshot")[0]).toMatch(/a photograph\./);
+    expect(finaliseNotices(composeMemo(snapshotSource({ asset: { ...NO_ASSET, photoId: "p" } })), "snapshot")[0]).toMatch(/carries a photograph\. The Investment Portal shows that/);
+    expect(finaliseNotices(composeMemo(snapshotSource({ asset: { ...NO_ASSET, mapId: "m" } })), "snapshot")[0]).toMatch(/carries a map\./);
   });
 });
 
