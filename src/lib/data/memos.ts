@@ -16,6 +16,7 @@ import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { staffNamesOn, nameOf } from "@/lib/data/directory";
 import { AppError } from "@/lib/errors";
 import { todayUtc } from "@/lib/data/fx-rates";
+import { loadSnapshotAsset } from "@/lib/data/snapshot-source";
 import { getOpportunity } from "@/lib/data/opportunities";
 import { approvedVersion, currentVersion } from "@/lib/data/underwriting";
 import { listRisks } from "@/lib/data/opportunity-risks";
@@ -52,18 +53,16 @@ export async function loadMemoSource(session: Session, opportunityId: string): P
   const opp = await getOpportunity(session, opportunityId);
   if (!opp) return null;
 
-  const [approved, working, risks, ddItems, decisions, score, fxRow] = await Promise.all([
+  const [approved, working, risks, ddItems, decisions, score, fxRow, jpyRow, asset] = await Promise.all([
     approvedVersion(session, opportunityId),
     currentVersion(session, opportunityId),
     listRisks(session, opportunityId),
     listDdItems(session, opportunityId),
     listDecisions(session, opportunityId),
     latestCompleteScore(session, opportunityId),
-    withSession(session, async (tx: Queryable) => {
-      const { rows } = await tx.query<{ currency: string; rate_to_gbp: unknown; as_of_date: string; source: string }>(
-        "select currency, rate_to_gbp, as_of_date::text, source from fx_rates where currency = $1", [opp.currency]);
-      return rows[0] ?? null;
-    }),
+    fxRowFor(session, opp.currency),
+    fxRowFor(session, "JPY"),
+    loadSnapshotAsset(session, opportunityId),
   ]);
 
   const basisCase = approved ?? working;
@@ -87,6 +86,9 @@ export async function loadMemoSource(session: Session, opportunityId: string): P
       name: opp.name, market: opp.market, submarket: opp.submarket, city: opp.city, country: opp.country,
       assetType: opp.assetType, strategy: opp.strategy, currency: opp.currency,
       sizeSqft: opp.sizeSqft, sizeSqm: opp.sizeSqm, summary: opp.summary,
+      projected: {
+        price: opp.targetPrice, niyPct: opp.niy, passingRent: opp.passingRent, erv: opp.erv, capex: opp.capexBudget,
+      },
     },
     basis: { kind, case: basisCase ? toMemoCase(basisCase) : null },
     risks: risks.map((r) => ({
@@ -110,8 +112,24 @@ export async function loadMemoSource(session: Session, opportunityId: string): P
           })),
         }
       : null,
-    fx: fxRow ? { currency: fxRow.currency, rateToGbp: Number(fxRow.rate_to_gbp), asOf: fxRow.as_of_date, source: fxRow.source } : null,
+    fx: toMemoFx(fxRow),
+    fxJpy: toMemoFx(jpyRow),
+    asset,
   };
+}
+
+interface FxRow { currency: string; rate_to_gbp: unknown; as_of_date: string; source: string }
+
+async function fxRowFor(session: Session, currency: string): Promise<FxRow | null> {
+  return withSession(session, async (tx: Queryable) => {
+    const { rows } = await tx.query<FxRow>(
+      "select currency, rate_to_gbp, as_of_date::text, source from fx_rates where currency = $1", [currency]);
+    return rows[0] ?? null;
+  });
+}
+
+function toMemoFx(r: FxRow | null): MemoSource["fx"] {
+  return r ? { currency: r.currency, rateToGbp: Number(r.rate_to_gbp), asOf: r.as_of_date, source: r.source } : null;
 }
 
 // ---- Stored memos ---------------------------------------------------------------

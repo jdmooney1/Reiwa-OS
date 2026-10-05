@@ -64,7 +64,8 @@ export interface OutputFormatDef {
   japanese?: boolean;
 }
 
-// "japanese" is a single-section Japanese-language summary handled specially.
+// "japanese" is a single-section Japanese-language summary handled specially, and
+// "snapshot" is a one-page data grid with its own renderer.
 export const OUTPUT_FORMATS: OutputFormatDef[] = [
   {
     key: "ic",
@@ -84,8 +85,10 @@ export const OUTPUT_FORMATS: OutputFormatDef[] = [
   {
     key: "snapshot",
     label: "One-Page Asset Snapshot",
-    description: "A single-page snapshot of the asset and headline metrics.",
-    sections: ["executive_summary", "key_metrics", "asset_overview"],
+    description: "A branded one-page data sheet of the asset, in English and Japanese, for printing to PDF.",
+    // Not a subset of the prose sections: the Snapshot is a purpose-built grid with
+    // its own renderer, composed as ComposedMemo.snapshot (see compose.ts).
+    sections: [],
   },
   {
     key: "japanese",

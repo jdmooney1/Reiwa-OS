@@ -21,6 +21,24 @@ export function formatMoneyCompact(
   return `${sym}${value.toLocaleString("en-GB")}`;
 }
 
+/**
+ * Money as a document headline reads it: £12.5M, ¥1.20B, €850K. Billions are
+ * always two decimals; millions take two below 10M and one above, so a rent of
+ * 1.25M is not rounded to 1.3M and a price of 42.5M is not padded to 42.50M.
+ */
+export function formatMoneyUnits(
+  value: number | null | undefined,
+  currency: Currency = "GBP",
+): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const sym = CURRENCY_SYMBOL[currency];
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000_000) return `${sym}${(value / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 1_000_000) return `${sym}${(value / 1_000_000).toFixed(abs < 10_000_000 ? 2 : 1)}M`;
+  if (abs >= 1_000) return `${sym}${(value / 1_000).toFixed(0)}K`;
+  return `${sym}${Math.round(value).toLocaleString("en-GB")}`;
+}
+
 /** Full money with thousands separators, e.g. £42,500,000. */
 export function formatMoney(
   value: number | null | undefined,

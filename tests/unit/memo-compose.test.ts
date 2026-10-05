@@ -5,6 +5,7 @@
 // one the first memo generator was deleted for breaking (docs/07): an empty
 // section and a wrong section must never look the same, and nothing is invented.
 // ============================================================================
+import { NO_PROJECTION, NO_ASSET } from "./memo-source.fixture";
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -37,10 +38,10 @@ const risk = (over: Partial<MemoRisk>): MemoRisk => ({
 const base = (over: Partial<MemoSource> = {}): MemoSource => ({
   opportunity: {
     name: "58 Queens Gate", market: "London", submarket: "South Kensington", city: "London", country: "United Kingdom",
-    assetType: "office", strategy: "value_add", currency: "GBP", sizeSqft: 42_000, sizeSqm: null, summary: "Broker says vendor is motivated.",
+    assetType: "office", strategy: "value_add", currency: "GBP", sizeSqft: 42_000, sizeSqm: null, summary: "Broker says vendor is motivated.", projected: NO_PROJECTION,
   },
   basis: { kind: "approved", case: CASE },
-  risks: [], ddItems: [], decision: null, score: null, fx: null, today: "2026-09-01", ...over,
+  risks: [], ddItems: [], decision: null, score: null, fx: null, today: "2026-09-01", fxJpy: null, asset: NO_ASSET, ...over,
 });
 
 const bare = (): MemoSource => base({ basis: { kind: "none", case: null } });
@@ -448,7 +449,8 @@ describe("a person's override always wins", () => {
 describe("formats are lenses on one record", () => {
   it("the section lists are the ones sections.ts defines, in memo order", () => {
     expect(sectionsFor("teaser")).toEqual(FORMAT_BY_KEY.teaser.sections);
-    expect(sectionsFor("snapshot")).toEqual(["executive_summary", "key_metrics", "asset_overview"]);
+    // The Snapshot is a purpose-built grid (ComposedMemo.snapshot), not a subset of the prose sections.
+    expect(sectionsFor("snapshot")).toEqual([]);
     expect(sectionsFor("ic")).toHaveLength(17);
   });
 
@@ -496,7 +498,7 @@ describe("formats are lenses on one record", () => {
   it("with a full underwriting, the teaser still lists thesis and business plan as printing blank: they are internal by default", () => {
     const m = composeMemo(base());
     expect(emptySectionsFor(m, {}, "teaser")).toEqual(["executive_summary", "investment_thesis", "business_plan"]);
-    expect(emptySectionsFor(m, {}, "snapshot")).toEqual(["executive_summary"]);
+    expect(emptySectionsFor(m, {}, "snapshot")).toEqual([]);
     expect(emptySectionsFor(m, { executive_summary: "s", investment_thesis: "t", business_plan: "b" }, "teaser")).toEqual([]);
     expect(emptySectionsFor(m, {}, "ic")).not.toContain("investment_thesis");
   });
@@ -546,14 +548,37 @@ describe("metric formatting", () => {
 });
 
 describe("what a memo can see: the boundary that keeps location and photographs out", () => {
-  const code = readFileSync(join(process.cwd(), "src/lib/memo/compose.ts"), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+  const raw = readFileSync(join(process.cwd(), "src/lib/memo/compose.ts"), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+  const FORBIDDEN = /address|latitude|longitude|geocode|formatted|place_?id|photo|street.?view|broker|vendor|triage|sourceContact|referral/i;
+  // The ONE sanctioned exception: the Asset Snapshot (decision: JD). Everything that
+  // may name an address or a photograph is one of these declarations, and nothing else.
+  const SANCTIONED = new Set(["MemoAssetFacts", "ComposedSnapshot", "composeSnapshot", "finaliseNotices", "isSnapshot"]);
 
-  it("the composition module has no address, coordinate, geocode, photograph, broker, vendor or triage field", () => {
-    expect(code).not.toMatch(/address|latitude|longitude|geocode|formatted|place_?id|photo|street.?view|broker|vendor|triage|sourceContact|referral/i);
+  it("the composition module names no address, coordinate, geocode, photograph, broker, vendor or triage field outside the Snapshot's own declarations", () => {
+    const decls = raw.split(/^(?=export |function |const |interface |type )/m);
+    const offenders = decls
+      .filter((d) => FORBIDDEN.test(d))
+      .map((d) => /^(?:export\s+)?(?:async\s+)?(?:function|const|interface|type)\s+(\w+)/.exec(d)?.[1] ?? "(preamble)")
+      .filter((n) => !SANCTIONED.has(n));
+    expect(offenders).toEqual([]);
+  });
+
+  it("the seventeen prose sections cannot read the Snapshot's property facts at all", () => {
+    const section = raw.slice(raw.indexOf("function keyMetrics"), raw.indexOf("export function composeSnapshot"));
+    expect(section).not.toMatch(/src\.asset|\.asset\b|photoId|addressLine/);
   });
 
   it("and no server, database or model import", () => {
-    expect(code).not.toMatch(/from "@\/lib\/(db|data|supabase|auth)|from "pg"|anthropic|openai|fetch\(/);
+    expect(raw).not.toMatch(/from "@\/lib\/(db|data|supabase|auth)|from "pg"|anthropic|openai|fetch\(/);
+  });
+
+  it("an address and a photograph reach the Snapshot and NO prose section or other format's content", () => {
+    const m = composeMemo(base({ asset: { reference: "RC-LON-0012", addressLine: "58 Queens Gate, London, SW7 5JW", photoId: "photo-123" } }));
+    expect(m.snapshot).toMatchObject({ addressLine: "58 Queens Gate, London, SW7 5JW", photoId: "photo-123", ref: "RC-LON-0012" });
+    const prose = JSON.stringify(m.sections);
+    expect(prose).not.toContain("Queens Gate, London, SW7");
+    expect(prose).not.toContain("photo-123");
+    expect(prose).not.toContain("RC-LON-0012");
   });
 });
 

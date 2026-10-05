@@ -41,7 +41,7 @@ Section keys are stable (`MemoSectionKey`); labels and ordering live in
 | --- | --- |
 | **Internal IC Memo** | all 17 |
 | **Investor Teaser** | Executive Summary, Key Metrics, Asset Overview, Location and Market, Investment Thesis, Business Plan, Exit Strategy |
-| **One-Page Asset Snapshot** | Executive Summary, Key Metrics, Asset Overview |
+| **One-Page Asset Snapshot** | none of the prose sections: a purpose-built landscape data grid (see below) |
 | **Japanese Language Summary** | a single 日本語 investor summary, handled specially |
 
 Defined as `OUTPUT_FORMATS` / `FORMAT_BY_KEY`.
@@ -69,11 +69,48 @@ finding, a risk's mitigation), carried verbatim and attributed to its source.
 | Recommendation | the newest **complete** Investment Score ([`06`](06-investment-score.md)) and the investment committee's **recorded** decision, side by side. Neither overwrites the other; if only one exists the section says so, and if neither does it says what to record. Internal audience only |
 | Further DD Required | open diligence workstreams grouped by section |
 
-**What a memo can see.** `MemoSource` is a whitelist. It has no street address, no
-coordinates, no geocode, no photographs, no broker or vendor, no source contact and no
-triage note. A memo is a document that gets forwarded, and the location pin and
-photographs are diligence-tier for an investor (migrations 0018, 0020): a memo must not
-be the way round that. Tests hold the line.
+**What a memo can see.** `MemoSource` is a whitelist. It has no coordinates, no geocode,
+no broker or vendor, no source contact and no triage note, and **the seventeen prose
+sections can see no street address and no photograph.** A memo is a document that gets
+forwarded, and the location pin and photographs are diligence-tier for an investor
+(migrations 0018, 0020): a memo must not be the way round that. Tests hold the line.
+
+**The one exception: the Asset Snapshot** (decision: JD). It is a branded one-pager that
+staff review and then send themselves, and it carries the street address and a
+photograph. Those travel in one named object, `MemoSource.asset`, read only by
+`composeSnapshot()` and loaded only by `src/lib/data/snapshot-source.ts`; the boundary
+tests allow-list exactly those declarations. The photograph follows the investor teaser
+card's rule: only a photo staff have cleared as `diligence`, headline first, then gallery
+order; an `internal` photo is never used. Finalising a Snapshot tells the person it
+carries the address and a photograph, which the portal shows an investor only at the
+diligence tier.
+
+## The One-Page Asset Snapshot
+
+Reiwa Capital's bilingual (EN/JA) landscape A4 sheet, composed as `ComposedMemo.snapshot`
+and drawn by `src/components/memo/asset-snapshot.tsx` (one component for the workspace and
+the print view). Printed through the browser's own print dialog, set to landscape, like
+the other formats.
+
+| Template field | Source |
+| --- | --- |
+| Price Guidance | the basis case's `acquisition_price` (not the valuation); the opportunity's projection of it only when there is no case |
+| JPY Equivalent | price x the deal currency's `rate_to_gbp` / the JPY `rate_to_gbp` (`convertViaGbp`); none for a yen deal |
+| NIY, Passing Rent, ERV, Occupancy, Capex | the basis case (`entry_yield_pct`, `gross_rental_income`, `erv`, `occupancy_pct`, `capex`) |
+| Total Area | the opportunity's sq ft and sq m; tsubo is sq m / 3.30578 (`src/lib/units.ts`) |
+| Address, City, Country, Submarket, Asset Type, Ref | `properties` and `opportunities` |
+| Photograph | a `diligence`-cleared `property_photos` row (above) |
+| FX footer | the stored rates with their source and date, and `This rate is N days old.` when the oldest used is past 30 days |
+
+**What is not shown, and why.** Nothing the record cannot back: WAULT, every Property
+Facts and Property Notes row, transport and the map have no source, and the land and
+building value and depreciation basis arrive with Phase 2. **Reversionary yield is not
+shown either**: the opportunity's `reversionary_yield` column is a copy of the case's
+*exit* yield (migration 0009), a different quantity, and printing it under that name
+would state a number nobody underwrote. A printed copy drops each missing cell and closes
+the grid up; the workspace shows "Not yet captured" in its place and lists what is
+missing. Neither ever shows the template's bracketed placeholder text or "TBC"
+(`tests/unit/asset-snapshot.test.ts`).
 
 **Audience.** Every block is `external` or `internal`. The Investor Teaser and the
 One-Page Snapshot show external blocks only (price, targets, market, asset type, size,

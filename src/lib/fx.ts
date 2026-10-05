@@ -84,6 +84,24 @@ export function fxSetNote(staleness: FxStaleness | null): string | null {
     : null;
 }
 
+// ---- Converting an amount ---------------------------------------------------
+
+/**
+ * An amount in one currency expressed in another, through GBP. `rateToGbp` is GBP
+ * per 1 unit of the currency, as fx_rates holds it, so:
+ *
+ *   amount (in FROM) x rate(FROM)  = GBP        GBP / rate(TO)  = amount (in TO)
+ *
+ * The base currency's rate is 1 by definition and needs no row. Null when either
+ * rate is missing or not a positive number: a rate that cannot be read is never
+ * assumed.
+ */
+export function convertViaGbp(amount: number | null | undefined, fromRateToGbp: number | null | undefined, toRateToGbp: number | null | undefined): number | null {
+  const ok = (n: number | null | undefined): n is number => typeof n === "number" && Number.isFinite(n) && n > 0;
+  if (typeof amount !== "number" || !Number.isFinite(amount) || !ok(fromRateToGbp) || !ok(toRateToGbp)) return null;
+  return (amount * fromRateToGbp) / toRateToGbp;
+}
+
 // ---- Saving a rate ----------------------------------------------------------
 
 export interface FxRateInput { currency: FxCurrency; rate: number; source: string; asOf: string }

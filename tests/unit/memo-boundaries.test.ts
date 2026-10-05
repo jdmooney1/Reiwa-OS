@@ -13,6 +13,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { composeMemo, resolveSection, type MemoSource } from "@/lib/memo/compose";
 import { SectionBody } from "@/components/memo/memo-blocks";
+import { NO_PROJECTION, NO_ASSET } from "./memo-source.fixture";
 
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
@@ -75,6 +76,39 @@ describe("what a memo can read from the opportunity", () => {
   });
 });
 
+describe("the Asset Snapshot is the one place a memo may carry an address or a photograph", () => {
+  const src = code("src/lib/data/snapshot-source.ts");
+
+  it("the two reads live in one dedicated file, which only the memo loader imports", () => {
+    const importers = walk(join(ROOT, "src")).filter((f) => /@\/lib\/data\/snapshot-source/.test(code(f)));
+    expect(importers).toEqual(["src/lib/data/memos.ts"]);
+  });
+
+  it("a photograph is chosen only from those staff cleared for investors, in the investor card's order", () => {
+    expect(src).toMatch(/pp\.visibility = 'diligence'/);
+    expect(src).toMatch(/order by pp\.is_headline desc, pp\.sort_order, pp\.created_at, pp\.photo_id/);
+    expect(src).not.toMatch(/visibility\s*(=|in|<>|!=)\s*'internal'|object_path/);
+  });
+
+  it("it reads no coordinates, geocode, broker, vendor, source contact or triage note", () => {
+    expect(src).not.toMatch(/latitude|longitude|geocode|formatted_address|street_view|broker|vendor|source_contact|triage|referral/i);
+  });
+
+  it("the component makes no outside call and reaches photographs only through the staff-only delivery route", () => {
+    const c = code("src/components/memo/asset-snapshot.tsx");
+    expect(c).not.toMatch(/\bfetch\(|XMLHttpRequest|axios|@\/lib\/(db|data|photos|geo)/);
+    expect([...c.matchAll(/\/api\/[\w-]+/g)].map((m) => m[0])).toEqual(["/api/asset-photos"]);
+  });
+
+  it("no investor-facing file reads the snapshot source or renders the snapshot", () => {
+    const investorFiles = [
+      ...walk(join(ROOT, "src/app/(portal)")), ...walk(join(ROOT, "src/components/portal")), ...walk(join(ROOT, "src/lib/portal")),
+      "src/lib/data/portal-feed.ts", "src/lib/data/investor-portal.ts",
+    ];
+    for (const f of investorFiles) expect(code(f), f).not.toMatch(/snapshot-source|asset-snapshot|AssetSnapshot|composeSnapshot/);
+  });
+});
+
 describe("the print view", () => {
   it("is behind the same session check as the application, and reads the stored memo, not today's rows", () => {
     expect(code("src/app/(print)/layout.tsx")).toContain("redirect(\"/sign-in\")");
@@ -93,8 +127,8 @@ describe("the print view", () => {
 
 describe("empty, composed and edited never look alike", () => {
   const src: MemoSource = {
-    opportunity: { name: "A", market: "London", submarket: null, city: "London", country: "UK", assetType: "office", strategy: null, currency: "GBP", sizeSqft: null, sizeSqm: null, summary: null },
-    basis: { kind: "none", case: null }, risks: [], ddItems: [], decision: null, score: null, fx: null, today: "2026-09-01",
+    opportunity: { name: "A", market: "London", submarket: null, city: "London", country: "UK", assetType: "office", strategy: null, currency: "GBP", sizeSqft: null, sizeSqm: null, summary: null, projected: NO_PROJECTION },
+    basis: { kind: "none", case: null }, risks: [], ddItems: [], decision: null, score: null, fx: null, today: "2026-09-01", fxJpy: null, asset: NO_ASSET,
   };
   const memo = composeMemo(src);
   const html = (key: "executive_summary" | "location_market", override: string | null, format: "ic" | "teaser" = "teaser", surface: "workspace" | "print" = "workspace") =>

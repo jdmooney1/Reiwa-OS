@@ -14,6 +14,15 @@
 // An empty section and a wrong one must never look alike: a section with nothing
 // behind it has status "empty" and a reason that names what would create it.
 //
+// THE ONE EXCEPTION is the One-Page Asset Snapshot (decision: JD, Asset Snapshot
+// brief). It is a branded one-pager that staff review and then send themselves, and
+// it carries the street address and the property's headline photograph. Those two
+// travel in ONE named object, MemoSource.asset, read by composeSnapshot() and by
+// nothing else in this file; the seventeen prose sections cannot see them. The
+// photograph is chosen from the photos staff have cleared for investors
+// (visibility 'diligence'), the same rule as the investor teaser card, never from
+// an internal-only one. tests/unit/memo-boundaries.test.ts holds that line.
+//
 // WHAT THIS FILE CAN SEE IS THE WHOLE LIST OF WHAT A MEMO CAN SAY. MemoSource is
 // deliberately narrow. It has no street address, no coordinates, no geocode, no
 // photographs, no broker or vendor, no source contact and no triage note. A memo
@@ -32,7 +41,8 @@
 // ============================================================================
 import type { MemoSectionKey, OutputFormat } from "@/lib/memo/sections";
 import { MEMO_SECTIONS, FORMAT_BY_KEY } from "@/lib/memo/sections";
-import { fxStaleness, FX_BASE_CURRENCY, FX_STALE_AFTER_DAYS } from "@/lib/fx";
+import { fxStaleness, oldestStaleness, convertViaGbp, FX_BASE_CURRENCY, FX_STALE_AFTER_DAYS } from "@/lib/fx";
+import { areaFrom, type Area } from "@/lib/units";
 import { DD_STATUS_LABEL, ASSET_TYPE_LABEL, STRATEGY_LABEL, isDdOpen, isDdIssue } from "@/lib/domain";
 import { RECOMMENDATION_LABEL } from "@/lib/scoring/score";
 import type { AssetType, DdSection, DdStatus, Recommendation, Strategy } from "@/types/database";
@@ -55,6 +65,26 @@ export interface MemoOpportunity {
   sizeSqm: number | null;
   /** Free text from the opportunity record. Internal: it is not reviewed for investors. */
   summary: string | null;
+  /**
+   * The opportunity's own copy of the case figures. These columns are a trigger-
+   * maintained PROJECTION of the authoritative case (migration 0009), so they are
+   * read only for the Snapshot, and only when there is no case to read instead.
+   */
+  projected: { price: number | null; niyPct: number | null; passingRent: number | null; erv: number | null; capex: number | null };
+}
+
+/**
+ * What only the One-Page Asset Snapshot may carry about the property itself. See
+ * the header: this is deliberately separate from MemoOpportunity so no other
+ * section can reach it.
+ */
+export interface MemoAssetFacts {
+  /** The opportunity's own reference ("RC-LON-0012"), when one is recorded. */
+  reference: string | null;
+  /** Street address, city and postcode as recorded, joined; null when there is no street address. */
+  addressLine: string | null;
+  /** The headline photograph staff have cleared for investors; null when none is cleared. */
+  photoId: string | null;
 }
 
 /** The underwriting version a memo is based on (an investment_cases row). */
@@ -150,6 +180,10 @@ export interface MemoSource {
   fx: MemoFx | null;
   /** The date this memo is being composed on (ISO, UTC). Composition never reads a clock; the age of a rate is measured against this. */
   today: string;
+  /** The JPY row of fx_rates, for the Snapshot's yen figures. */
+  fxJpy: MemoFx | null;
+  /** Property facts for the Snapshot only. */
+  asset: MemoAssetFacts;
 }
 
 // ---- What composition returns ------------------------------------------------
@@ -206,6 +240,53 @@ export interface ComposedMemo {
   assetName: string;
   basis: MemoBasis;
   sections: Record<MemoSectionKey, ComposedSection>;
+  /**
+   * The One-Page Asset Snapshot's own data grid. Absent on a memo composed before
+   * the Snapshot existed: that is "not composed", never an empty snapshot.
+   */
+  snapshot?: ComposedSnapshot;
+}
+
+/** A figure the Snapshot shows: the number, and nothing about how it is written. */
+export interface ComposedSnapshot {
+  ref: string | null;
+  /** The date this was composed on (ISO). */
+  preparedOn: string;
+  name: string;
+  city: string | null;
+  country: string | null;
+  submarket: string | null;
+  assetType: string;
+  addressLine: string | null;
+  photoId: string | null;
+  currency: string;
+  price: number | null;
+  /** The price in yen, from the live rates. Null when either rate is missing, or the deal is in yen. */
+  priceJpy: number | null;
+  niyPct: number | null;
+  passingRent: number | null;
+  erv: number | null;
+  occupancyPct: number | null;
+  capex: number | null;
+  area: Area | null;
+  fx: SnapshotFx | null;
+  /** Where the figures come from, in words: "Reiwa underwriting v3 (approved)". Null when from nothing. */
+  basisLabel: string | null;
+  /** What the template has a place for and the record cannot fill. The workspace lists them; a printed copy never mentions them. */
+  gaps: { key: string; label: string; why: string }[];
+}
+
+export interface SnapshotFx {
+  /** Yen per 1 pound, derived from the stored JPY rate. */
+  jpyPerGbp: number;
+  jpySource: string;
+  jpyAsOf: string;
+  /** For a deal not in pounds: pounds per 1 unit of the deal currency. */
+  dealRateToGbp: number | null;
+  dealSource: string | null;
+  dealAsOf: string | null;
+  /** "This rate is N days old." when the oldest rate used is past the staleness threshold. */
+  staleNote: string | null;
 }
 
 /** The key under which a hand-written Japanese summary is stored in `overrides`. */
@@ -651,6 +732,91 @@ const COMPOSERS: Record<MemoSectionKey, (src: MemoSource) => ComposedSection> = 
   further_dd: furtherDd,
 };
 
+// ---- The One-Page Asset Snapshot ------------------------------------------------
+
+/**
+ * The Snapshot's data grid, composed from the same rows as the rest of the memo.
+ *
+ * Every figure is a recorded one or a unit conversion of a recorded one; nothing is
+ * estimated and nothing is defaulted. What the record cannot fill is NULL, and the
+ * renderer drops it from a printed copy. Specifically not here, because nothing in
+ * the schema holds it: land and building value and the depreciation line, WAULT,
+ * every Property Facts and Property Notes row, transport and the map. And not the
+ * "reversionary yield" on the opportunity row: that column is a copy of the case's
+ * EXIT yield (migration 0009), which is a different quantity, and labelling it
+ * reversionary on a document an investor reads would state a number nobody
+ * underwrote under that name.
+ */
+export function composeSnapshot(src: MemoSource): ComposedSnapshot {
+  const o = src.opportunity;
+  const c = src.basis.case;
+  const p = o.projected;
+
+  // The case when there is one; the opportunity's projection of it only when there
+  // is not. One rule, so a figure never comes from two places.
+  const price = c ? c.acquisitionPrice : p.price;
+  const niyPct = c ? c.entryYieldPct : p.niyPct;
+  const passingRent = c ? c.grossRentalIncome : p.passingRent;
+  const erv = c ? c.erv : p.erv;
+  const capex = c ? c.capex : p.capex;
+
+  // Yen figures: through GBP, from the stored rates. A rate that is absent leaves
+  // the figure absent; the base currency's rate is 1 by definition.
+  const jpy = src.fxJpy;
+  const dealRate = o.currency === FX_BASE_CURRENCY ? 1 : src.fx && src.fx.currency === o.currency ? src.fx.rateToGbp : null;
+  const dealIsYen = o.currency === "JPY";
+  const priceJpy = dealIsYen ? null : convertViaGbp(price, dealRate, jpy?.rateToGbp);
+  const canQuoteYen = !dealIsYen && dealRate !== null && jpy !== null && jpy.rateToGbp > 0;
+
+  let fx: SnapshotFx | null = null;
+  if (canQuoteYen && jpy) {
+    const dealMatters = o.currency !== FX_BASE_CURRENCY && src.fx;
+    const stale = oldestStaleness([jpy.asOf, ...(dealMatters ? [src.fx!.asOf] : [])], src.today);
+    fx = {
+      jpyPerGbp: 1 / jpy.rateToGbp, jpySource: jpy.source, jpyAsOf: jpy.asOf,
+      dealRateToGbp: dealMatters ? src.fx!.rateToGbp : null,
+      dealSource: dealMatters ? src.fx!.source : null,
+      dealAsOf: dealMatters ? src.fx!.asOf : null,
+      staleNote: stale?.stale ? stale.note : null,
+    };
+  }
+
+  const label = c
+    ? `Reiwa underwriting v${c.version}${src.basis.kind === "approved" ? " (approved)" : " (working version, not yet approved)"}`
+    : price !== null || niyPct !== null || passingRent !== null || erv !== null || capex !== null
+      ? "Reiwa opportunity record" : null;
+
+  const area = areaFrom(o.sizeSqft, o.sizeSqm);
+  const gaps: ComposedSnapshot["gaps"] = [
+    { key: "rev_yield", label: "Reversionary yield", why: "The record's reversionary yield is the exit yield, a different quantity, so it is not shown under this name. It needs its own underwriting input." },
+    { key: "wault", label: "WAULT", why: "No lease data is captured." },
+    { key: "value_allocation", label: "Value allocation and depreciation basis", why: "Land value, building value and depreciation are not captured." },
+    { key: "property_facts", label: "Property facts", why: "Build year, refurbishment, floors, use, planning and seller are not captured." },
+    { key: "property_notes", label: "Property notes", why: "Tenure, energy rating, heritage, lease profile and rent basis are not captured." },
+    { key: "transport", label: "Transport", why: "No transport data is captured." },
+    { key: "map", label: "Map", why: "No map image is captured." },
+  ];
+  if (!src.asset.photoId) {
+    gaps.unshift({ key: "photo", label: "Photograph", why: "No photograph has been cleared for investors. Mark one as diligence on the asset to use it here." });
+  }
+  if (!src.asset.addressLine) gaps.unshift({ key: "address", label: "Street address", why: "No street address is recorded." });
+  if (!jpy && !dealIsYen) gaps.push({ key: "jpy", label: "Yen equivalent", why: "No JPY exchange rate is recorded." });
+  else if (!dealIsYen && dealRate === null) gaps.push({ key: "jpy", label: "Yen equivalent", why: `No ${o.currency} exchange rate is recorded.` });
+
+  return {
+    ref: src.asset.reference,
+    preparedOn: src.today,
+    name: o.name, city: o.city, country: o.country, submarket: o.submarket,
+    assetType: ASSET_TYPE_LABEL[o.assetType as AssetType] ?? o.assetType,
+    addressLine: src.asset.addressLine,
+    photoId: src.asset.photoId,
+    currency: o.currency,
+    price, priceJpy, niyPct, passingRent, erv,
+    occupancyPct: c ? c.occupancyPct : null,
+    capex, area, fx, basisLabel: label, gaps,
+  };
+}
+
 export function composeMemo(src: MemoSource): ComposedMemo {
   const c = src.basis.case;
   const sections = Object.fromEntries(
@@ -666,6 +832,7 @@ export function composeMemo(src: MemoSource): ComposedMemo {
       caseStatus: c?.status ?? null,
     },
     sections,
+    snapshot: composeSnapshot(src),
   };
 }
 
@@ -747,6 +914,21 @@ export function unreviewedExternalText(
   });
 }
 
+/**
+ * Things a person should be told before locking a memo that are not an empty or
+ * unreviewed SECTION. Today: the Snapshot carries the street address and a
+ * photograph, which the Investment Portal reveals to an investor only at the
+ * diligence tier. Staff are entitled to send it anyway (that is the point of the
+ * document); they are not entitled to do it without having been told.
+ */
+export function finaliseNotices(memo: ComposedMemo, format: OutputFormat): string[] {
+  if (format !== "snapshot" || !memo.snapshot) return [];
+  const carries = [memo.snapshot.addressLine ? "the street address" : null, memo.snapshot.photoId ? "a photograph" : null]
+    .filter((x): x is string => x !== null);
+  if (carries.length === 0) return [];
+  return [`This Snapshot carries ${carries.join(" and ")}. The Investment Portal shows ${carries.length === 2 ? "those" : "that"} to an investor only at the diligence tier; the PDF gives ${carries.length === 2 ? "them" : "it"} to whoever you send it to.`];
+}
+
 // ---- Reading a stored memo back ------------------------------------------------
 
 const MISSING_SECTION: ComposedSection = {
@@ -773,7 +955,15 @@ export function normaliseContent(raw: unknown): ComposedMemo | null {
     assetName: typeof r.assetName === "string" ? r.assetName : "",
     basis: r.basis ?? { kind: "none", caseId: null, version: null, caseStatus: null },
     sections,
+    // A memo saved before the Snapshot existed has none: absent, never invented.
+    snapshot: isSnapshot(r.snapshot) ? r.snapshot : undefined,
   };
+}
+
+function isSnapshot(v: unknown): v is ComposedSnapshot {
+  const s = v as Partial<ComposedSnapshot> | null;
+  return !!s && typeof s === "object" && typeof s.name === "string" && typeof s.preparedOn === "string"
+    && typeof s.currency === "string" && Array.isArray(s.gaps);
 }
 
 /** Override keys a client may send. Anything else is refused. */
@@ -798,5 +988,9 @@ export function sameContent(a: ComposedMemo, b: ComposedMemo): boolean {
     }
     return JSON.stringify(v ?? null);
   };
-  return canon(a.sections) === canon(b.sections) && canon(a.basis) === canon(b.basis);
+  // The Snapshot is compared without its prepared-on date, which moves every day
+  // and would otherwise call every saved draft stale by tomorrow.
+  const snap = (m: ComposedMemo) => (m.snapshot ? { ...m.snapshot, preparedOn: "" } : null);
+  return canon(a.sections) === canon(b.sections) && canon(a.basis) === canon(b.basis)
+    && canon(snap(a)) === canon(snap(b));
 }
