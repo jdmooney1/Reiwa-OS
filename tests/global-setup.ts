@@ -25,6 +25,7 @@ import { closePool } from "@/lib/db/client";
 import { resetDatabase } from "@/lib/db/reset";
 import { assertSupabaseProjectReachable } from "./supabase-preflight";
 import { ensureDocumentBucket } from "@/lib/documents/storage";
+import { ensurePhotoBucket } from "@/lib/photos/storage";
 
 export default async function setup(): Promise<void> {
   // Refuses here — before requireEnv(), before any pool exists, before any
@@ -56,6 +57,8 @@ export default async function setup(): Promise<void> {
   // project has no bucket, so provision it here — inside the gate, against the
   // declared test project, never as a side effect of an operator command.
   const bucket = await ensureDocumentBucket();
+  // tests/photo-delivery.test.ts uploads real photographs: same rule, same gate.
+  await ensurePhotoBucket();
 
   console.log(
     `[tests] applied ${applied.length} migration(s), seeded demonstration data, ` +

@@ -14,8 +14,12 @@
 import { randomUUID } from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
-  PHOTO_BUCKET, PHOTO_SIGNED_URL_TTL_SECONDS, MAX_PHOTO_BYTES, ALLOWED_PHOTO_TYPES,
+  PHOTO_BUCKET, PHOTO_SIGNED_URL_TTL_SECONDS, MAX_PHOTO_BYTES, ALLOWED_PHOTO_TYPES, thumbPathFor,
 } from "@/lib/photos/constraints";
+
+// Pure, so it lives in constraints.ts where a test can reach it without the
+// Supabase client; re-exported here because this is where callers look.
+export { thumbPathFor };
 
 /** A fresh, unguessable path. The property id is a folder for legibility only. */
 export function newPhotoObjectPath(propertyId: string, mimeType: string): string {
@@ -68,8 +72,13 @@ export async function signPhotoObject(objectPath: string): Promise<string | null
   return data.signedUrl;
 }
 
-/** Remove an object, so a deleted photograph leaves nothing behind in the store. */
+/**
+ * Remove a photograph's objects - the full image AND its thumbnail - so a
+ * deleted photograph leaves nothing behind in the store. Removing a path that
+ * does not exist is not an error, so this is safe for an upload that failed
+ * half way and for a photograph stored before thumbnails existed.
+ */
 export async function deletePhotoObject(objectPath: string): Promise<void> {
   const admin = createSupabaseAdminClient();
-  await admin.storage.from(PHOTO_BUCKET).remove([objectPath]);
+  await admin.storage.from(PHOTO_BUCKET).remove([objectPath, thumbPathFor(objectPath)]);
 }

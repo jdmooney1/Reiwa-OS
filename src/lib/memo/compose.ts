@@ -34,7 +34,8 @@ import type { MemoSectionKey, OutputFormat } from "@/lib/memo/sections";
 import { MEMO_SECTIONS, FORMAT_BY_KEY } from "@/lib/memo/sections";
 import { fxStaleness, FX_BASE_CURRENCY, FX_STALE_AFTER_DAYS } from "@/lib/fx";
 import { DD_STATUS_LABEL, ASSET_TYPE_LABEL, STRATEGY_LABEL, isDdOpen, isDdIssue } from "@/lib/domain";
-import type { AssetType, DdSection, DdStatus, Strategy } from "@/types/database";
+import { RECOMMENDATION_LABEL } from "@/lib/scoring/score";
+import type { AssetType, DdSection, DdStatus, Recommendation, Strategy } from "@/types/database";
 
 // ---- What a memo is composed from -------------------------------------------
 
@@ -117,6 +118,19 @@ export interface MemoDecision {
   rationale: string | null;
 }
 
+/**
+ * The newest COMPLETE Investment Score (investment_scores), read back through the
+ * scoring model so its overall and band are today's. A part-finished score is not
+ * a verdict and never reaches a memo.
+ */
+export interface MemoScore {
+  version: number;
+  scoredAt: string;
+  overall: number;
+  recommendationLabel: string;
+  categories: { key: string; label: string; weight: number; score: number; commentary: string; riskFlag: boolean }[];
+}
+
 export interface MemoFx {
   currency: string;
   rateToGbp: number;
@@ -131,6 +145,8 @@ export interface MemoSource {
   risks: MemoRisk[];
   ddItems: MemoDdItem[];
   decision: MemoDecision | null;
+  /** The recorded Investment Score, or null when none is complete. */
+  score: MemoScore | null;
   fx: MemoFx | null;
   /** The date this memo is being composed on (ISO, UTC). Composition never reads a clock; the age of a rate is measured against this. */
   today: string;
@@ -540,26 +556,61 @@ function riskMitigation(src: MemoSource): ComposedSection {
   return blocks.length ? composed(blocks) : empty("No open risks are registered and no diligence issue is flagged.");
 }
 
+/**
+ * Two different questions with two different answers, shown side by side and never
+ * one over the other:
+ *   - what the SCORING MODEL says (the recorded Investment Score, composed through
+ *     the model), and
+ *   - what the COMMITTEE DECIDED (the recorded ic_decisions row).
+ * Either may exist without the other, and the section says which is missing.
+ * Internal only: nothing about the recommendation becomes external.
+ */
 function recommendation(src: MemoSource): ComposedSection {
+  const sc = src.score;
   const d = src.decision;
-  // The Investment Score model (scoring/model.ts) defines the criteria but no
-  // category scores are stored against an opportunity, so there is no score to
-  // show. The recommendation a memo can honestly carry is the one the committee
-  // RECORDED.
-  if (!d) {
-    return empty("No investment committee decision is recorded. The Investment Score model exists but stores no scores per opportunity, so none is shown. Record a decision on the Decision tab.");
+  if (!sc && !d) {
+    return empty("No Investment Score and no investment committee decision are recorded. Score the opportunity on the Score tab, and record the committee's decision on the Decision tab.");
   }
-  const blocks: Block[] = [{
-    kind: "facts", audience: "internal", source: `Investment committee decision, ${d.decisionDate}`,
-    items: [
-      { label: "Outcome", value: d.outcome },
-      ...(d.recommendation ? [{ label: "Recommendation recorded", value: d.recommendation }] : []),
-      { label: "Decision date", value: d.decisionDate },
-    ],
-  }];
-  if (hasText(d.rationale)) blocks.push({ kind: "text", audience: "internal", source: "Investment committee decision", label: "Rationale", text: d.rationale });
-  if (hasText(d.conditions)) blocks.push({ kind: "text", audience: "internal", source: "Investment committee decision", label: "Conditions", text: d.conditions });
-  return composed(blocks);
+  const blocks: Block[] = [];
+  const flags: string[] = [];
+
+  if (sc) {
+    const flagged = sc.categories.filter((c) => c.riskFlag);
+    blocks.push({
+      kind: "facts", audience: "internal", source: `Investment Score v${sc.version}, ${sc.scoredAt.slice(0, 10)}`,
+      items: [
+        { label: "Overall score", value: `${sc.overall.toFixed(1)} / 100` },
+        { label: "Model recommendation", value: sc.recommendationLabel },
+        { label: "Criteria flagged as risks", value: String(flagged.length) },
+      ],
+    });
+    blocks.push({
+      kind: "list", audience: "internal", source: `Investment Score v${sc.version}`, label: "Criteria",
+      items: sc.categories.map((c) => ({
+        title: c.label,
+        tags: [`${c.score}/10`, `weight ${c.weight}`, ...(c.riskFlag ? ["risk flagged"] : [])],
+        detail: hasText(c.commentary) ? c.commentary : null,
+      })),
+    });
+  } else {
+    flags.push("No Investment Score is recorded");
+  }
+
+  if (d) {
+    blocks.push({
+      kind: "facts", audience: "internal", source: `Investment committee decision, ${d.decisionDate}`,
+      items: [
+        { label: "Committee outcome", value: d.outcome },
+        ...(d.recommendation ? [{ label: "Recommendation recorded", value: RECOMMENDATION_LABEL[d.recommendation as Recommendation] ?? d.recommendation }] : []),
+        { label: "Decision date", value: d.decisionDate },
+      ],
+    });
+    if (hasText(d.rationale)) blocks.push({ kind: "text", audience: "internal", source: "Investment committee decision", label: "Rationale", text: d.rationale });
+    if (hasText(d.conditions)) blocks.push({ kind: "text", audience: "internal", source: "Investment committee decision", label: "Conditions", text: d.conditions });
+  } else {
+    flags.push("No investment committee decision is recorded");
+  }
+  return composed(blocks, flags);
 }
 
 function furtherDd(src: MemoSource): ComposedSection {

@@ -66,7 +66,7 @@ finding, a risk's mitigation), carried verbatim and attributed to its source.
 | Planning/Heritage/ESG, Japan Rationale, Tax and Structuring | their **diligence workstreams** (status, finding, resolution). No dedicated schema exists for these |
 | FX Sensitivity | deal currency, the `fx_rates` row **with its source**, and the currency-risk diligence workstreams. There is no hedge data; the section says so. A rate more than 30 days old is flagged with its age ("This rate is N days old"), measured against the date the memo is composed on |
 | Risk and Mitigation | the risk register ranked by severity then impact, plus flagged diligence issues not yet promoted |
-| Recommendation | the investment committee's **recorded** decision. The Investment Score model stores no scores per opportunity, so none is shown |
+| Recommendation | the newest **complete** Investment Score ([`06`](06-investment-score.md)) and the investment committee's **recorded** decision, side by side. Neither overwrites the other; if only one exists the section says so, and if neither does it says what to record. Internal audience only |
 | Further DD Required | open diligence workstreams grouped by section |
 
 **What a memo can see.** `MemoSource` is a whitelist. It has no street address, no
@@ -111,8 +111,6 @@ English figures shown beside it to work from. It is never machine-translated.
 - **A rich-text editor.** Per-section plain textareas.
 - **Typeset PDF.** Revisit once a real Teaser has been seen printed.
 - **Street address or map in a memo.** Deliberately absent; see "What a memo can see".
-- **Investment Score in the Recommendation.** No scores are stored; the committee's
-  recorded decision is used instead.
 
 ## If an LLM is wired in later
 

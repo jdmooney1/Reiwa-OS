@@ -5,6 +5,7 @@ import {
   headlineMetrics, opportunityMetrics, locationLabel, assetTypeLabel, strategyLabel,
 } from "@/lib/portal/metrics";
 import { SaveButton, CompareButton } from "@/components/portal/portal-actions";
+import { visibleHeadlinePhoto } from "@/lib/portal/photos";
 
 // ============================================================================
 // The investor feed, set as a memorandum rather than a dashboard.
@@ -32,6 +33,25 @@ function Attributes({ o }: { o: PortalOpportunity }) {
         </span>
       ))}
     </span>
+  );
+}
+
+/**
+ * The teaser photograph: only when the database cleared one for this investor's
+ * tier (headline_photo_id is NULL otherwise) and visibleHeadlinePhoto() agrees.
+ * A thumbnail, requested by id; nothing at all when there is none.
+ */
+function TeaserPhoto({ o, className }: { o: PortalOpportunity; className?: string }) {
+  const id = visibleHeadlinePhoto(o);
+  if (!id) return null;
+  return (
+    <Link href={href(o)} tabIndex={-1} aria-hidden="true" className={className}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/portal/photos/${id}?variant=thumb`} alt="" loading="lazy"
+        className="aspect-[16/9] w-full rounded border border-line object-cover"
+      />
+    </Link>
   );
 }
 
@@ -72,6 +92,7 @@ export function FeaturedOpportunity({
     <article>
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         <div>
+          <TeaserPhoto o={o} className="mb-6 block max-w-md" />
           <h2 className="text-3xl leading-tight tracking-[-0.02em] text-ink">
             <Link href={href(o)} className="hover:text-purple">{o.title}</Link>
           </h2>
@@ -153,6 +174,7 @@ export function OpportunityCard({
     <article className="border-b border-line py-7">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         <div>
+          <TeaserPhoto o={o} className="mb-4 block max-w-xs" />
           <h3 className="text-xl leading-snug tracking-[-0.01em] text-ink">
             <Link href={href(o)} className="hover:text-purple">{o.title}</Link>
           </h3>

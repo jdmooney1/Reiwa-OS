@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   composeMemo, resolveSection, sameContent, normaliseContent, sectionsFor, emptySectionsFor, unreviewedExternalText, JAPANESE_KEY,
-  type MemoSource, type MemoCase, type MemoDdItem, type MemoRisk, type MemoOverrides, type Block,
+  type MemoSource, type MemoCase, type MemoDdItem, type MemoRisk, type MemoOverrides, type MemoScore, type Block,
 } from "@/lib/memo/compose";
 import { blockText, formatMetric, visibleMetrics, NOT_RECORDED } from "@/lib/memo/render";
 import { MEMO_SECTIONS, FORMAT_BY_KEY, type MemoSectionKey } from "@/lib/memo/sections";
@@ -40,7 +40,7 @@ const base = (over: Partial<MemoSource> = {}): MemoSource => ({
     assetType: "office", strategy: "value_add", currency: "GBP", sizeSqft: 42_000, sizeSqm: null, summary: "Broker says vendor is motivated.",
   },
   basis: { kind: "approved", case: CASE },
-  risks: [], ddItems: [], decision: null, fx: null, today: "2026-09-01", ...over,
+  risks: [], ddItems: [], decision: null, score: null, fx: null, today: "2026-09-01", ...over,
 });
 
 const bare = (): MemoSource => base({ basis: { kind: "none", case: null } });
@@ -300,13 +300,62 @@ describe("one composition rule per section", () => {
     expect(section(base(), "risk_mitigation").status).toBe("empty");
   });
 
-  it("recommendation: the committee's RECORDED decision only; with none it is empty and explains there is no stored score", () => {
-    const s = section(base({ decision: { decisionDate: "2026-09-10", outcome: "approved_with_conditions", recommendation: "proceed", rationale: "Strong income", conditions: "Capex cap 1.2m" } }), "recommendation");
-    expect(text(s.blocks)).toContain("Outcome: approved_with_conditions");
-    expect(text(s.blocks)).toContain("Capex cap 1.2m");
-    const none = section(base(), "recommendation");
-    expect(none.status).toBe("empty");
-    expect(none.emptyReason).toMatch(/stores no scores/);
+  const SCORE: MemoScore = {
+    version: 2, scoredAt: "2026-09-20T10:00:00.000Z", overall: 72.4, recommendationLabel: "Proceed",
+    categories: [
+      { key: "location_quality", label: "Location Quality", weight: 15, score: 9, commentary: "Prime micro-location.", riskFlag: false },
+      { key: "capex_risk", label: "Capex Risk", weight: 10, score: 4, commentary: "QS range is wide.", riskFlag: true },
+    ],
+  };
+  const DECISION = { decisionDate: "2026-09-10", outcome: "approved_with_conditions", recommendation: "proceed_with_caution", rationale: "Strong income", conditions: "Capex cap 1.2m" };
+
+  it("recommendation: with BOTH a score and a decision, shows both, side by side, neither overwriting the other", () => {
+    const s = section(base({ score: SCORE, decision: DECISION }), "recommendation");
+    expect(s.status).toBe("composed");
+    expect(s.flags).toEqual([]);
+    const t = text(s.blocks);
+    expect(t).toContain("Overall score: 72.4 / 100");
+    expect(t).toContain("Model recommendation: Proceed");
+    expect(t).toContain("Criteria flagged as risks: 1");
+    expect(t).toContain("Capex Risk | 4/10 | weight 10 | risk flagged");
+    expect(t).toContain("QS range is wide.");
+    expect(t).toContain("Committee outcome: approved_with_conditions");
+    expect(t).toContain("Recommendation recorded: Proceed with Caution");   // the committee's, labelled, distinct from the model's
+    expect(t).toContain("Capex cap 1.2m");
+    expect(t.indexOf("Model recommendation")).toBeLessThan(t.indexOf("Committee outcome"));
+    expect(s.blocks.every((b) => b.audience === "internal")).toBe(true);
+    expect(s.blocks.map((b) => b.source)).toEqual(expect.arrayContaining(["Investment Score v2", "Investment committee decision, 2026-09-10"]));
+  });
+
+  it("recommendation: a score with no decision shows the score and says no decision is recorded", () => {
+    const s = section(base({ score: SCORE }), "recommendation");
+    expect(s.status).toBe("composed");
+    expect(text(s.blocks)).toContain("Overall score: 72.4 / 100");
+    expect(text(s.blocks)).not.toContain("Committee outcome");
+    expect(s.flags).toEqual(["No investment committee decision is recorded"]);
+  });
+
+  it("recommendation: a decision with no score shows the decision and says no score is recorded", () => {
+    const s = section(base({ decision: DECISION }), "recommendation");
+    expect(s.status).toBe("composed");
+    expect(text(s.blocks)).toContain("Committee outcome: approved_with_conditions");
+    expect(text(s.blocks)).not.toContain("Overall score");
+    expect(s.flags).toEqual(["No Investment Score is recorded"]);
+  });
+
+  it("recommendation: neither is EMPTY and the reason names both as missing", () => {
+    const s = section(base(), "recommendation");
+    expect(s.status).toBe("empty");
+    expect(s.emptyReason).toMatch(/No Investment Score and no investment committee decision/);
+    expect(s.emptyReason).toMatch(/Score tab/);
+    expect(s.emptyReason).toMatch(/Decision tab/);
+  });
+
+  it("recommendation stays INTERNAL: the teaser and snapshot cannot show a score or a decision (they do not list it, and a resolved view withholds it)", () => {
+    const m = composeMemo(base({ score: SCORE, decision: DECISION }));
+    const r = resolveSection(m.sections.recommendation, null, "teaser");
+    expect(r.state).toBe("empty");
+    expect(text(r.blocks)).toBe("");
   });
 
   it("further_dd: open workstreams grouped by section; cleared and not-applicable ones are left out", () => {

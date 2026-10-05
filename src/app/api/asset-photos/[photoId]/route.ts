@@ -1,7 +1,10 @@
 // ============================================================================
 // Asset photograph delivery endpoint.
 // ----------------------------------------------------------------------------
-// GET /api/asset-photos/<photoId>
+// GET /api/asset-photos/<photoId>[?variant=thumb]
+//
+// `variant=thumb` serves the 480 px rendition for lists and the board; anything
+// else, or nothing, serves the full image. Authorisation is identical for both.
 //
 // The photograph twin of /opportunities/<id>/documents/<id>, and the same shape:
 // the URL carries an id and nothing else - no bucket, no object path, no
@@ -38,7 +41,7 @@ function refuse(): NextResponse {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { photoId: string } },
 ): Promise<NextResponse> {
   const auth = await getSession();
@@ -46,7 +49,9 @@ export async function GET(
 
   let signedUrl: string | null;
   try {
-    signedUrl = await issuePhotoDownload(toDbSession(auth), params.photoId);
+    signedUrl = await issuePhotoDownload(
+      toDbSession(auth), params.photoId,
+      request.nextUrl.searchParams.get("variant") === "thumb" ? "thumb" : "full");
   } catch (e) {
     reportError("workspace.photo.download", e, { photoId: params.photoId, userId: auth.userId });
     return refuse();
