@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { PortfolioDashboard } from "@/components/asset-intelligence/portfolio-dashboard";
 import { formatDate } from "@/lib/format";
+import { fxSetNote, oldestStaleness } from "@/lib/fx";
+import { todayUtc } from "@/lib/data/fx-rates";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +13,8 @@ export default async function PortfolioPage() {
   const auth = await requireAuth();
   const { files, fx } = await getPortfolioData(toDbSession(auth));
   const fxNote = `FX: ${fx.source}${fx.asOf ? ` as at ${formatDate(fx.asOf)}` : ""}`;
+
+  const fxStale = fxSetNote(fx.asOf ? oldestStaleness([fx.asOf], todayUtc()) : null);
 
   return (
     <div className="min-h-full">
@@ -20,7 +24,7 @@ export default async function PortfolioPage() {
         description="Where should management focus? Aggregated live from each asset record."
         actions={<Badge tone="accent">Demo data</Badge>}
       />
-      <PortfolioDashboard files={files} rates={fx.rates} fxNote={fxNote} />
+      <PortfolioDashboard files={files} rates={fx.rates} fxNote={fxNote} fxStale={fxStale ?? undefined} />
     </div>
   );
 }

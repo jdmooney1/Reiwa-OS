@@ -32,6 +32,7 @@
 // ============================================================================
 import type { MemoSectionKey, OutputFormat } from "@/lib/memo/sections";
 import { MEMO_SECTIONS, FORMAT_BY_KEY } from "@/lib/memo/sections";
+import { fxStaleness, FX_BASE_CURRENCY, FX_STALE_AFTER_DAYS } from "@/lib/fx";
 import { DD_STATUS_LABEL, ASSET_TYPE_LABEL, STRATEGY_LABEL, isDdOpen, isDdIssue } from "@/lib/domain";
 import { RECOMMENDATION_LABEL } from "@/lib/scoring/score";
 import type { AssetType, DdSection, DdStatus, Recommendation, Strategy } from "@/types/database";
@@ -147,6 +148,8 @@ export interface MemoSource {
   /** The recorded Investment Score, or null when none is complete. */
   score: MemoScore | null;
   fx: MemoFx | null;
+  /** The date this memo is being composed on (ISO, UTC). Composition never reads a clock; the age of a rate is measured against this. */
+  today: string;
 }
 
 // ---- What composition returns ------------------------------------------------
@@ -488,14 +491,25 @@ function fxSensitivity(src: MemoSource): ComposedSection {
   const cur = src.opportunity.currency;
   blocks.push({ kind: "facts", audience: "internal", source: "Opportunity record", items: [{ label: "Deal currency", value: cur }] });
   if (fx) {
+    // The base currency's rate is 1 by definition and cannot go stale.
+    const exempt = fx.currency === FX_BASE_CURRENCY;
+    const age = exempt ? null : fxStaleness(fx.asOf, src.today);
     blocks.push({ kind: "facts", audience: "internal", source: `fx_rates: ${fx.source}`, items: [
       { label: `${fx.currency} to GBP`, value: String(fx.rateToGbp) },
       { label: "Rate as of", value: fx.asOf },
+      ...(age?.stale ? [{ label: "Rate age", value: `${age.ageDays} days` }] : []),
       { label: "Rate source", value: fx.source },
     ] });
     // The rates table is seeded with static demonstration rates until a live feed
     // exists (migration 0004). A memo must not present them as market data.
     if (/demo|static/i.test(fx.source)) flags.push("Rate is a demonstration value, not a market rate");
+    // Rates are typed in by an administrator, not fed. A rate past the staleness
+    // threshold is stated in the memo, with its age, rather than quietly used.
+    if (!exempt && age === null) {
+      flags.push("The date of this rate could not be read, so its age is unknown");
+    } else if (age?.stale) {
+      flags.push(`${age.note} It is dated ${fx.asOf}; rates over ${FX_STALE_AFTER_DAYS} days old are flagged. Ask an administrator to update it before relying on this section`);
+    }
   } else {
     flags.push(`No exchange rate is recorded for ${cur}`);
   }

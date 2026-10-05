@@ -40,7 +40,7 @@ const base = (over: Partial<MemoSource> = {}): MemoSource => ({
     assetType: "office", strategy: "value_add", currency: "GBP", sizeSqft: 42_000, sizeSqm: null, summary: "Broker says vendor is motivated.",
   },
   basis: { kind: "approved", case: CASE },
-  risks: [], ddItems: [], decision: null, score: null, fx: null, ...over,
+  risks: [], ddItems: [], decision: null, score: null, fx: null, today: "2026-09-01", ...over,
 });
 
 const bare = (): MemoSource => base({ basis: { kind: "none", case: null } });
@@ -233,6 +233,47 @@ describe("one composition rule per section", () => {
     expect(s.status).toBe("composed");
     expect(s.flags).toContain("No hedging workstream is recorded; there is no hedge data in the system");
     expect(s.flags).not.toContain("Rate is a demonstration value, not a market rate");
+  });
+
+  describe("fx_sensitivity: a rate that has gone stale says so", () => {
+    const withRate = (asOf: string, today: string, source = "ECB euro reference rate") =>
+      section(base({ today, fx: { currency: "EUR", rateToGbp: 0.85, asOf, source } }), "fx_sensitivity");
+    const staleFlag = (s: ReturnType<typeof withRate>) => s.flags.find((f) => /days old/.test(f));
+
+    it("flags a rate older than 30 days, with its age and date, and still composes the section", () => {
+      const s = withRate("2026-08-27", "2026-10-05");
+      expect(s.status).toBe("composed");
+      expect(staleFlag(s)).toContain("This rate is 39 days old.");
+      expect(staleFlag(s)).toContain("2026-08-27");
+      expect(text(s.blocks)).toContain("Rate age: 39 days");
+    });
+
+    it("does not flag a rate of exactly 30 days, and does flag 31", () => {
+      expect(staleFlag(withRate("2026-09-05", "2026-10-05"))).toBeUndefined();
+      expect(text(withRate("2026-09-05", "2026-10-05").blocks)).not.toContain("Rate age");
+      expect(staleFlag(withRate("2026-09-04", "2026-10-05"))).toContain("31 days old");
+    });
+
+    it("measures against the date the memo is composed on, not the clock", () => {
+      expect(staleFlag(withRate("2026-08-27", "2026-09-10"))).toBeUndefined();
+      expect(staleFlag(withRate("2026-08-27", "2026-12-01"))).toContain("96 days old");
+    });
+
+    it("says the age is unknown when the date cannot be read, rather than calling the rate fresh", () => {
+      expect(withRate("last Tuesday", "2026-10-05").flags).toContain("The date of this rate could not be read, so its age is unknown");
+    });
+
+    it("never calls the base currency stale: GBP to GBP is 1 whatever its date", () => {
+      const s = section(base({ today: "2026-12-01", fx: { currency: "GBP", rateToGbp: 1, asOf: "2026-08-27", source: "Base currency" } }), "fx_sensitivity");
+      expect(s.flags.find((f) => /days old|could not be read/.test(f))).toBeUndefined();
+      expect(text(s.blocks)).not.toContain("Rate age");
+    });
+
+    it("keeps the demo-rate flag alongside the staleness flag", () => {
+      const s = withRate("2026-08-27", "2026-10-05", "Demo static rates");
+      expect(s.flags).toContain("Rate is a demonstration value, not a market rate");
+      expect(staleFlag(s)).toBeDefined();
+    });
   });
 
   it("risk_mitigation: the register ranked by severity then impact, closed excluded, flagged DD issues not already promoted", () => {

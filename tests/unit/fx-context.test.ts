@@ -86,3 +86,17 @@ describe("Staleness is reported deterministically", () => {
     expect(fxContextFrom(mixed)).toEqual(fxContextFrom(mixed));
   });
 });
+
+describe("the portfolio's as-of date is about the rates that are not GBP", () => {
+  it("ignores GBP's own date, which is 1 by definition", () => {
+    const fx = fxContextFrom([
+      row({ currency: "GBP", rate_to_gbp: "1.000000", as_of_date: "2026-01-01" }),
+      row({ currency: "EUR", as_of_date: "2026-10-01" }),
+    ]);
+    expect(fx.asOf).toBe("2026-10-01");
+  });
+
+  it("has no as-of when only GBP is recorded", () => {
+    expect(fxContextFrom([row({ currency: "GBP", rate_to_gbp: "1.000000" })]).asOf).toBeNull();
+  });
+});
