@@ -54,6 +54,7 @@ export function WorkspaceNav({
     },
     { href: `${base}/documents`, label: "Documents" },
     { href: `${base}/decision`, label: "Decision" },
+    { href: `${base}/memo`, label: "Memo" },
     { href: `${base}/publication`, label: "Publication" },
   ];
 
