@@ -6,6 +6,7 @@ import { resolveSection, sectionsFor, JAPANESE_KEY } from "@/lib/memo/compose";
 import { FORMAT_BY_KEY, SECTION_LABEL, type OutputFormat } from "@/lib/memo/sections";
 import { TARGETS_DISCLAIMER, isExternalFormat } from "@/lib/memo/render";
 import { SectionBody } from "@/components/memo/memo-blocks";
+import { AssetSnapshot } from "@/components/memo/asset-snapshot";
 import { PrintNowButton } from "@/components/memo/memo-controls";
 import { formatDate } from "@/lib/format";
 
@@ -54,6 +55,38 @@ export default async function MemoPrintPage({
   const external = isExternalFormat(format);
   const isDraft = memo.status === "draft";
   const jp = memo.overrides[JAPANESE_KEY];
+
+  // The Asset Snapshot is its own landscape one-pager, not a run of sections.
+  if (format === "snapshot") {
+    return (
+      <>
+        <style>{`@page { size: A4 landscape; margin: 9mm 10mm; }`}</style>
+        <div className="print:hidden border-b border-line bg-surface px-6 py-3">
+          <div className="mx-auto flex max-w-[297mm] flex-wrap items-center justify-between gap-3">
+            <Link href={`${back}?format=${format}`} className="text-xs text-ink-muted hover:text-ink">Back to the memo</Link>
+            <div className="flex items-center gap-4">
+              <span className="text-2xs text-ink-faint">Choose Save as PDF and set the layout to landscape. Turn off headers and footers for a clean page.</span>
+              <PrintNowButton />
+            </div>
+          </div>
+        </div>
+        <article className="memo-sheet snapshot-sheet mx-auto my-8 max-w-[297mm] bg-white px-[10mm] py-[8mm] shadow-sm print:my-0">
+          {isDraft && (
+            <div className="mb-3 border border-negative px-3 py-1 text-center text-[10px] font-semibold uppercase tracking-label text-negative">
+              Draft, version {memo.version}. Not for distribution.
+            </div>
+          )}
+          {c.snapshot ? (
+            <AssetSnapshot data={c.snapshot} surface="print" />
+          ) : (
+            <p className="py-10 text-sm text-ink-muted">
+              This memo version was composed before the Asset Snapshot existed, so there is no snapshot to print. Create a new version.
+            </p>
+          )}
+        </article>
+      </>
+    );
+  }
 
   return (
     <>

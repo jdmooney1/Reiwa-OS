@@ -57,13 +57,14 @@ export function RecomposeButton({ opportunityId, memoId }: { opportunityId: stri
  * as it stands.
  */
 export function FinalizeForm({
-  opportunityId, memoId, formatLabel, empty, unreviewed,
+  opportunityId, memoId, formatLabel, empty, unreviewed, notices = [],
 }: {
   opportunityId: string;
   memoId: string;
   formatLabel: string;
   empty: MemoSectionKey[];
   unreviewed: MemoSectionKey[];
+  notices?: string[];
 }) {
   const [state, action] = useFormState(finalizeMemoAction.bind(null, opportunityId, memoId), ACTION_IDLE);
   const labels = (ks: MemoSectionKey[]) => ks.map((k) => SECTION_LABEL[k]).join(", ");
@@ -74,6 +75,7 @@ export function FinalizeForm({
         const lines = [
           "Finalise this memo? This cannot be undone. It becomes a permanent record and a later change to the underwriting will not alter it.",
           empty.length ? `\nIn the ${formatLabel} these sections will print with nothing in them: ${labels(empty)}.` : "",
+          ...notices.map((n) => `\n${n}`),
           unreviewed.length ? `\nThese sections carry text from the underwriting exactly as the analyst wrote it: ${labels(unreviewed)}. Confirm it is fit to leave the building.` : "",
         ];
         if (!window.confirm(lines.join(""))) e.preventDefault();

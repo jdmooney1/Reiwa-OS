@@ -264,11 +264,23 @@ describe("what a memo is allowed to carry", () => {
     await adminQuery(
       "update opportunities set broker_name = 'Secret Broker LLP', vendor_name = 'Distressed Vendor Ltd' where opportunity_id = $1", [o.opportunity_id]);
     await adminQuery("update properties set latitude = 51.123456, longitude = -0.123456 where property_id = (select property_id from opportunities where opportunity_id = $1)", [o.opportunity_id]);
-    const src = JSON.stringify(await loadMemoSource(writer, o.opportunity_id));
-    const memo = JSON.stringify(composeMemo((await loadMemoSource(writer, o.opportunity_id))!));
+    const loaded = (await loadMemoSource(writer, o.opportunity_id))!;
+    // The Asset Snapshot is the one document that carries the street address (decision: JD),
+    // in one named object. Everything ELSE a memo is composed from must still be clean, and
+    // so must every prose section of the composed memo.
+    const { asset, ...rest } = loaded;
+    const composed = composeMemo(loaded);
+    const src = JSON.stringify(rest);
+    const prose = JSON.stringify(composed.sections);
     for (const text of [o.address!, "Secret Broker LLP", "Distressed Vendor Ltd", "51.123456", "-0.123456"]) {
       expect(src, text).not.toContain(text);
-      expect(memo, text).not.toContain(text);
+      expect(prose, text).not.toContain(text);
+    }
+    // And the Snapshot carries the address and nothing location-shaped beyond it.
+    expect(asset.addressLine).toContain(o.address!);
+    expect(Object.keys(asset).sort()).toEqual(["addressLine", "photoId", "reference"]);
+    for (const text of ["Secret Broker LLP", "Distressed Vendor Ltd", "51.123456", "-0.123456"]) {
+      expect(JSON.stringify(composed.snapshot), text).not.toContain(text);
     }
   });
 });

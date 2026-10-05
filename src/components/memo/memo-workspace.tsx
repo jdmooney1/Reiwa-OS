@@ -1,12 +1,13 @@
 import Link from "next/link";
 import type { StoredMemo } from "@/lib/data/memos";
 import {
-  resolveSection, sectionsFor, emptySectionsFor, unreviewedExternalText, sameContent, JAPANESE_KEY,
+  resolveSection, sectionsFor, emptySectionsFor, unreviewedExternalText, finaliseNotices, sameContent, JAPANESE_KEY,
   type ComposedMemo, type MemoOverrides,
 } from "@/lib/memo/compose";
 import { OUTPUT_FORMATS, FORMAT_BY_KEY, SECTION_LABEL, type OutputFormat } from "@/lib/memo/sections";
 import { Section, Provenance } from "@/components/workspace/primitives";
 import { SectionBody } from "@/components/memo/memo-blocks";
+import { AssetSnapshot } from "@/components/memo/asset-snapshot";
 import {
   StartMemoButton, RecomposeButton, FinalizeForm, PrintLink, OverrideEditor,
 } from "@/components/memo/memo-controls";
@@ -44,6 +45,7 @@ export function MemoWorkspace({
   const basis = shown.basis;
   const empties = emptySectionsFor(shown, overrides, format);
   const unreviewed = unreviewedExternalText(shown, overrides, format);
+  const notices = finaliseNotices(shown, format);
 
   return (
     <div>
@@ -88,7 +90,24 @@ export function MemoWorkspace({
         )}
       </Section>
 
-      {format === "japanese" ? (
+      {format === "snapshot" ? (
+        <Section title="One-page Asset Snapshot" action={<StateTag state={shown.snapshot ? "composed" : "empty"} />}>
+          {shown.snapshot ? (
+            <div className="overflow-x-auto">
+              <div className="mx-auto min-w-[860px] max-w-[297mm] rounded border border-line bg-white p-8">
+                <AssetSnapshot data={shown.snapshot} surface="workspace" />
+              </div>
+            </div>
+          ) : (
+            <div className="border border-dashed border-line px-4 py-4">
+              <p className="text-sm text-ink-muted">No data recorded</p>
+              <p className="mt-1 text-2xs text-ink-faint">
+                This memo was composed before the Asset Snapshot existed. Recompose the draft, or create a new version, to compose it.
+              </p>
+            </div>
+          )}
+        </Section>
+      ) : format === "japanese" ? (
         <JapaneseSummary
           opportunityId={opportunityId} memo={memo} live={shown} overrides={overrides} editable={editable}
         />
@@ -134,7 +153,7 @@ export function MemoWorkspace({
           </p>
           <FinalizeForm
             opportunityId={opportunityId} memoId={memo!.memoId} formatLabel={fmt.label}
-            empty={empties} unreviewed={unreviewed}
+            empty={empties} unreviewed={unreviewed} notices={notices}
           />
         </Section>
       )}
