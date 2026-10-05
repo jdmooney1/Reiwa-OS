@@ -1,0 +1,27 @@
+-- ============================================================================
+-- 0022 - Withdraw EXECUTE from two trigger functions that were created without it
+-- ----------------------------------------------------------------------------
+-- 0007 revoked EXECUTE from PUBLIC on every function then in schema `app` and set
+-- a default so later ones would follow, but the default is attached to the role
+-- that ran THAT migration. app.guard_deal_load_raw() (0014) and
+-- app.guard_email_thread_link() (0015) were created afterwards and still carry
+-- Postgres's built-in grant of EXECUTE to PUBLIC, which reaches `anon` and
+-- `authenticated`. tests/privileges.test.ts, which requires every function in
+-- the schema to be classified and PUBLIC/anon to hold nothing, was failing on
+-- exactly these two.
+--
+-- They are TRIGGER functions. Postgres checks EXECUTE on a trigger function when
+-- the trigger is CREATED, never when it fires, and a trigger function cannot be
+-- called as an ordinary function at all. No application code, policy or view
+-- calls either one (checked: the only references in the repository are their
+-- definitions and the CREATE TRIGGER statements). So nobody needs the privilege
+-- and the tightest grant that still works is none: it is withdrawn from
+-- `authenticated` as well as PUBLIC and anon. The owner keeps it, so migrations
+-- and the privileged connection are unaffected, and both triggers keep firing for
+-- every writer - the immutability guard on deal_load_rows.raw_row and the
+-- "not a deal" guard on opportunity_email_threads are untouched.
+--
+-- Idempotent: revoking a privilege that is not held is not an error.
+-- ============================================================================
+revoke execute on function app.guard_deal_load_raw()     from public, anon, authenticated;
+revoke execute on function app.guard_email_thread_link() from public, anon, authenticated;

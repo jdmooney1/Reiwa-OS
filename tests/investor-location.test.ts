@@ -90,9 +90,10 @@ describe("a standard-tier entitlement NEVER sees it", () => {
   });
 
   it("the tier is per publication, not per investor: Kitano is diligence on one and standard on another", async () => {
-    const [qg, hg] = await Promise.all([feedLocation(kitano, queensGate.publicationId), feedLocation(kitano, herengracht.publicationId)]);
+    // (Herengracht is a DRAFT in the seed, so it has no feed row; Fenchurch is the published standard one.)
+    const [qg, fen] = await Promise.all([feedLocation(kitano, queensGate.publicationId), feedLocation(kitano, fenchurch.publicationId)]);
     expect(qg[0].latitude).not.toBeNull();
-    expect(hg[0].latitude).toBeNull();
+    expect(fen[0].latitude).toBeNull();
   });
 
   it("Sakura is standard on 120 Fenchurch Street: null", async () => {
