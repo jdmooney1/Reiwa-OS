@@ -7,8 +7,6 @@ person, expiring, revocable. No account, no password, no portal shell.
 
 > **Do not use it on a real prospect until counsel has confirmed whether and how it may be used**
 > (UK financial promotions, Japan FIEA solicitation rules). This is built; that is a separate gate.
-> The on-screen disclaimer wording (`PROSPECT_DISCLAIMER`, `src/lib/deal-share/policy.ts`) is a
-> placeholder for counsel's text, in one constant.
 
 ## Why a third surface
 
@@ -65,8 +63,8 @@ metadata and the picture route): `Cache-Control: private, no-store, max-age=0`,
 `X-Robots-Tag: noindex, nofollow`, `Referrer-Policy: no-referrer` (plus the app-wide
 `X-Frame-Options: DENY`). The title is "Reiwa Capital"; "Reiwa OS" never reaches a prospect.
 
-**Disclaimer.** On screen, above the documents and again below them, plus the Snapshot's and the
-Teaser's own footers.
+**No separate disclaimer.** The page adds none of its own. Whatever the two documents carry in their
+own footers (the Snapshot's, and the Teaser's targets statement) is shown as finalised.
 
 ## Boundary (what the tests hold)
 
