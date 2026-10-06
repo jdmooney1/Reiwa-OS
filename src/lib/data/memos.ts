@@ -29,6 +29,7 @@ import {
   type ComposedMemo, type MemoSource, type MemoCase, type MemoOverrides, type OverrideKey,
 } from "@/lib/memo/compose";
 import type { UnderwritingVersion } from "@/lib/data/underwriting-types";
+import { parseJaOverrides, type JaOverrides } from "@/lib/memo-translation/sections";
 
 function toMemoCase(c: UnderwritingVersion): MemoCase {
   return {
@@ -162,6 +163,8 @@ export interface StoredMemo {
   composedAt: string;
   /** What people wrote. Kept apart from `content` so composed and typed text stay distinguishable. */
   overrides: MemoOverrides;
+  /** Accepted Japanese text per Teaser section (migration 0031). Read-only here: only an accept action writes it. */
+  jaOverrides: JaOverrides;
   createdByName: string | null;
   createdAt: string;
   finalizedByName: string | null;
@@ -178,6 +181,7 @@ async function mapMemos(tx: Queryable, rows: Record<string, any>[]): Promise<Sto
       memoId: r.memo_id, opportunityId: r.opportunity_id, version: Number(r.version), status: r.status,
       content, composedAt: new Date(r.composed_at).toISOString(),
       overrides: (r.overrides ?? {}) as MemoOverrides,
+      jaOverrides: parseJaOverrides(r.ja_overrides),
       createdByName: nameOf(directory, r.created_by ?? null), createdAt: new Date(r.created_at).toISOString(),
       finalizedByName: nameOf(directory, r.finalized_by ?? null),
       finalizedAt: r.finalized_at ? new Date(r.finalized_at).toISOString() : null,

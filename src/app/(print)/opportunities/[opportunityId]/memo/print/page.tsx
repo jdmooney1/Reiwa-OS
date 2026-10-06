@@ -8,6 +8,7 @@ import { TARGETS_DISCLAIMER, isExternalFormat } from "@/lib/memo/render";
 import { SectionBody } from "@/components/memo/memo-blocks";
 import { AssetSnapshot } from "@/components/memo/asset-snapshot";
 import { PrintNowButton } from "@/components/memo/memo-controls";
+import { japaneseView } from "@/lib/memo-translation/japanese";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +55,7 @@ export default async function MemoPrintPage({
   const c = memo.content;
   const external = isExternalFormat(format);
   const isDraft = memo.status === "draft";
-  const jp = memo.overrides[JAPANESE_KEY];
+  const ja = japaneseView(memo.jaOverrides, memo.overrides[JAPANESE_KEY]);
 
   // The Asset Snapshot is its own landscape one-pager, not a run of sections.
   if (format === "snapshot") {
@@ -118,14 +119,25 @@ export default async function MemoPrintPage({
         </header>
 
         {format === "japanese" ? (
-          <section className="memo-block mt-8">
-            <h2 className="memo-heading text-2xs font-medium uppercase tracking-eyebrow">日本語の投資サマリー</h2>
-            {jp ? (
-              <p lang="ja" className="mt-3 whitespace-pre-line text-sm leading-relaxed">{jp}</p>
-            ) : (
-              <div className="mt-3 border border-dashed border-line px-4 py-4"><p className="text-sm text-ink-muted">No data recorded</p></div>
-            )}
-          </section>
+          ja.mode === "summary" ? (
+            <section className="memo-block mt-8">
+              <h2 className="memo-heading text-2xs font-medium uppercase tracking-eyebrow">日本語の投資サマリー</h2>
+              {ja.text ? (
+                <p lang="ja" className="mt-3 whitespace-pre-line text-sm leading-relaxed">{ja.text}</p>
+              ) : (
+                <div className="mt-3 border border-dashed border-line px-4 py-4"><p className="text-sm text-ink-muted">No data recorded</p></div>
+              )}
+            </section>
+          ) : (
+            // The translated Teaser. A section with no Japanese is not printed at all: a
+            // printed copy does not claim what the record does not hold.
+            ja.sections.filter((s) => s.text).map((s) => (
+              <section key={s.key} className="memo-block mt-8">
+                <h2 className="memo-heading section-rule text-2xs font-medium uppercase tracking-eyebrow">{s.label}</h2>
+                <p lang="ja" className="mt-3 whitespace-pre-line text-sm leading-relaxed">{s.text}</p>
+              </section>
+            ))
+          )
         ) : (
           sectionsFor(format).map((key) => (
             <section key={key} className="mt-8">

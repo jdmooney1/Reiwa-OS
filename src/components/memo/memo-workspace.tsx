@@ -12,6 +12,8 @@ import {
   StartMemoButton, RecomposeButton, FinalizeForm, PrintLink, OverrideEditor,
 } from "@/components/memo/memo-controls";
 import { ReviewPanel } from "@/components/memo-review/review-panel";
+import { TranslationPanel } from "@/components/memo-translation/translation-panel";
+import { japaneseView } from "@/lib/memo-translation/japanese";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +26,7 @@ import { cn } from "@/lib/utils";
  * moved on. A final memo is read-only and is never recomposed.
  */
 export function MemoWorkspace({
-  opportunityId, memo, live, format, canWrite, canShare = false, canReview = false,
+  opportunityId, memo, live, format, canWrite, canShare = false, canReview = false, canTranslate = false,
 }: {
   opportunityId: string;
   /** The stored memo (latest version), or null when none has been started. */
@@ -37,6 +39,8 @@ export function MemoWorkspace({
   canShare?: boolean;
   /** A Reiwa administrator, who may run the optional pre-finalisation check. */
   canReview?: boolean;
+  /** A Reiwa administrator, who may draft a Japanese translation of a draft Teaser (never saved without acceptance). */
+  canTranslate?: boolean;
 }) {
   const shown: ComposedMemo = memo ? memo.content : live;
   const overrides: MemoOverrides = memo ? memo.overrides : {};
@@ -121,6 +125,7 @@ export function MemoWorkspace({
       ) : format === "japanese" ? (
         <JapaneseSummary
           opportunityId={opportunityId} memo={memo} live={shown} overrides={overrides} editable={editable}
+          canTranslate={canTranslate}
         />
       ) : (
         sectionsFor(format).map((key) => {
@@ -154,6 +159,12 @@ export function MemoWorkspace({
             </Section>
           );
         })
+      )}
+
+      {editable && canTranslate && format === "teaser" && memo && (
+        <Section eyebrow="Japanese" title="Draft a Japanese translation">
+          <TranslationPanel opportunityId={opportunityId} memoId={memo.memoId} saved={memo.jaOverrides} />
+        </Section>
       )}
 
       {editable && canReview && (
@@ -213,21 +224,68 @@ function StateTag({ state }: { state: "edited" | "composed" | "empty" }) {
 }
 
 /**
- * The Japanese-language summary: one hand-written text, not a grid of sections.
- * There is NO machine translation. A wrong translation of an investment term is
- * a worse failure than no translation, so the English figures are shown beside
- * the box for the author to work from, and nothing is filled in.
+ * The Japanese version of the memo.
+ *
+ * Two shapes, chosen by what is saved (lib/memo-translation/japanese.ts):
+ *   * nothing accepted from a translation yet: the earlier single hand-written summary,
+ *     exactly as it always was;
+ *   * any section accepted: the Investor Teaser, section by section in Japanese.
+ *
+ * NOTHING HERE TRANSLATES. A model can only DRAFT, from the Investor Teaser tab and for an
+ * administrator, and a draft appears in this view only after a person accepts it. The
+ * English figures are shown beside the legacy box for the author to work from.
  */
 function JapaneseSummary({
-  opportunityId, memo, live, overrides, editable,
+  opportunityId, memo, live, overrides, editable, canTranslate,
 }: {
   opportunityId: string;
   memo: StoredMemo | null;
   live: ComposedMemo;
   overrides: MemoOverrides;
   editable: boolean;
+  canTranslate: boolean;
 }) {
   const text = overrides[JAPANESE_KEY] ?? "";
+  const view = japaneseView(memo?.jaOverrides ?? {}, text);
+
+  if (view.mode === "teaser") {
+    return (
+      <>
+        {view.sections.map((s) => (
+          <Section key={s.key} title={s.label} action={<StateTag state={s.text ? "edited" : "empty"} />}>
+            {s.text ? (
+              <>
+                <p lang="ja" className="memo-text max-w-measure whitespace-pre-line text-sm leading-relaxed text-ink">{s.text}</p>
+                {s.fromHandWrittenSummary && (
+                  <Provenance>This is the hand-written Japanese summary, standing in until this section is translated.</Provenance>
+                )}
+              </>
+            ) : (
+              <div className="border border-dashed border-line px-4 py-4">
+                <p className="text-sm text-ink-muted">No Japanese text yet</p>
+                <p className="mt-1 text-2xs text-ink-faint">
+                  Nothing is printed for this section in the Japanese version until a translation of it is accepted.
+                </p>
+              </div>
+            )}
+          </Section>
+        ))}
+        {(text || (editable && memo)) && (
+          <Section eyebrow="Earlier format" title="Hand-written Japanese summary">
+            <p className="mb-3 max-w-measure text-2xs text-ink-faint">
+              The single summary written by hand before translations existed. It is kept as it was and fills the
+              executive summary above until a translated executive summary is accepted.
+            </p>
+            {text && <p lang="ja" className="memo-text max-w-measure whitespace-pre-line text-sm leading-relaxed text-ink">{text}</p>}
+            {editable && memo && (
+              <OverrideEditor opportunityId={opportunityId} memoId={memo.memoId} sectionKey={JAPANESE_KEY} initial={text} />
+            )}
+          </Section>
+        )}
+      </>
+    );
+  }
+
   const metrics = resolveSection(live.sections.key_metrics, null, "teaser");
   return (
     <Section title="日本語の投資サマリー" action={<StateTag state={text ? "edited" : "empty"} />}>
@@ -237,7 +295,8 @@ function JapaneseSummary({
         <div className="border border-dashed border-line px-4 py-4">
           <p className="text-sm text-ink-muted">No data recorded</p>
           <p className="mt-1 text-2xs text-ink-faint">
-            No Japanese summary has been written. It is never translated automatically; write it in the box below.
+            No Japanese summary has been written. Write it in the box below
+            {canTranslate && editable ? ", or draft a translation of the whole Teaser from the Investor Teaser tab (a draft is kept only when you accept it)" : ""}.
           </p>
         </div>
       )}
