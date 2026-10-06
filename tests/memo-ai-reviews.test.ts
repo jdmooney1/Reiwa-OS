@@ -122,8 +122,9 @@ describe("one row per review, holding what came back", () => {
   });
 
   it("a second run is a second row: a review is never overwritten", async () => {
+    // Two runs have been recorded by the tests above (one with findings, one empty).
     const all = await listReviews(adminSession, draftMemo);
-    expect(all.length).toBeGreaterThanOrEqual(3);
+    expect(all.length).toBeGreaterThanOrEqual(2);
     expect(new Set(all.map((r) => r.reviewId)).size).toBe(all.length);
   });
 
