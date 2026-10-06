@@ -114,7 +114,7 @@ describe("the activity write can never fail a view", () => {
 });
 
 describe("the event can only be emitted from where bytes were just delivered", () => {
-  const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+  const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8").replace(/\r\n/g, "\n").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
   const delivery = read("src/lib/photos/portal-delivery.ts");
 
   it("the writer is private, called once, and only after a signed URL exists", () => {
@@ -134,7 +134,7 @@ describe("the event can only be emitted from where bytes were just delivered", (
     const events = read("src/lib/activity-events.ts");
     expect(events).toContain('"photo_viewed"');
     expect(read("src/lib/activity-labels.ts")).toContain('photo_viewed: "Viewed photograph"');
-    const sql = readFileSync(join(process.cwd(), "supabase/migrations/0021_investor_photo_events.sql"), "utf8").replace(/--.*$/gm, "");
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/0021_investor_photo_events.sql"), "utf8").replace(/\r\n/g, "\n").replace(/--.*$/gm, "");
     expect(sql).toContain("'document_downloaded', 'information_requested',\n    'photo_viewed'");
     expect(sql).toMatch(/add column if not exists photo_id uuid;/);
     // not a foreign key: an investor-writable table must not be able to probe the internal photo register
@@ -142,7 +142,7 @@ describe("the event can only be emitted from where bytes were just delivered", (
   });
 
   it("the migration touches no policy or privilege: the trail stays append-only", () => {
-    const sql = readFileSync(join(process.cwd(), "supabase/migrations/0021_investor_photo_events.sql"), "utf8").replace(/--.*$/gm, "");
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/0021_investor_photo_events.sql"), "utf8").replace(/\r\n/g, "\n").replace(/--.*$/gm, "");
     expect(sql).not.toMatch(/create\s+policy|drop\s+policy|grant|revoke|disable\s+row/i);
   });
 });

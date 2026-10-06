@@ -158,7 +158,7 @@ describe("thumbPathFor", () => {
 });
 
 describe("the upload path uses it, always", () => {
-  const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+  const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8").replace(/\r\n/g, "\n").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
   const action = read("src/app/actions/photos.ts");
   const upload = action.slice(action.indexOf("export async function uploadPhotoAction"), action.indexOf("export async function makeHeadlinePhotoAction"));
 
@@ -202,6 +202,6 @@ describe("the upload path uses it, always", () => {
   });
 
   it("sharp is a server-external package, so the platform bundles its binary", () => {
-    expect(readFileSync(join(process.cwd(), "next.config.mjs"), "utf8")).toMatch(/serverComponentsExternalPackages: \["pg", "sharp"\]/);
+    expect(readFileSync(join(process.cwd(), "next.config.mjs"), "utf8").replace(/\r\n/g, "\n")).toMatch(/serverComponentsExternalPackages: \["pg", "sharp"\]/);
   });
 });
