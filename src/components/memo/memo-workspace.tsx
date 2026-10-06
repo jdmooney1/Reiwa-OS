@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
  * moved on. A final memo is read-only and is never recomposed.
  */
 export function MemoWorkspace({
-  opportunityId, memo, live, format, canWrite,
+  opportunityId, memo, live, format, canWrite, canShare = false,
 }: {
   opportunityId: string;
   /** The stored memo (latest version), or null when none has been started. */
@@ -32,6 +32,8 @@ export function MemoWorkspace({
   live: ComposedMemo;
   format: OutputFormat;
   canWrite: boolean;
+  /** A Reiwa administrator, who may make a prospect link from a finalised memo. */
+  canShare?: boolean;
 }) {
   const shown: ComposedMemo = memo ? memo.content : live;
   const overrides: MemoOverrides = memo ? memo.overrides : {};
@@ -58,6 +60,12 @@ export function MemoWorkspace({
             {isFinal && <StartMemoButton opportunityId={opportunityId} label={`Create version ${memo!.version + 1}`} />}
             {isDraft && <RecomposeButton opportunityId={opportunityId} memoId={memo!.memoId} />}
             {memo && <PrintLink href={`${base}/print?format=${format}`} />}
+            {canShare && memo && (
+              <Link href={`/admin/deal-shares/new?opportunityId=${opportunityId}`}
+                className="rounded border border-line px-3 py-2 text-xs font-medium text-ink-muted hover:text-ink">
+                Share with a prospect
+              </Link>
+            )}
           </div>
         )}
       >

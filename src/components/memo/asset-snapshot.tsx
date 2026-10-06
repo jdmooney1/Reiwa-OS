@@ -2,7 +2,7 @@ import type { ComposedSnapshot } from "@/lib/memo/compose";
 import { ReiwaLockup } from "@/components/brand/reiwa-lockup";
 import { formatMoneyUnits, formatDate, currencySymbol } from "@/lib/format";
 import type { Currency } from "@/types/database";
-import { snapshotImageUrl } from "@/lib/memo/snapshot-images";
+import { snapshotImageUrl, type SnapshotSlot } from "@/lib/memo/snapshot-images";
 import { METHOD_LABEL } from "@/lib/underwriting/allocation";
 import { cn } from "@/lib/utils";
 
@@ -51,14 +51,19 @@ function Cell({
 }
 
 export function AssetSnapshot({
-  data, surface, memoId = null,
+  data, surface, memoId = null, imageUrl,
 }: {
   data: ComposedSnapshot; surface: Surface;
   /** The stored memo this is drawn from. A FROZEN picture is fetched through it. */
   memoId?: string | null;
+  /**
+   * Where a picture comes from when it is NOT the staff routes: the prospect page serves
+   * a frozen picture through its own link. Absent, the staff routes in snapshot-images.ts apply.
+   */
+  imageUrl?: (slot: SnapshotSlot) => string | null;
 }) {
-  const photoUrl = snapshotImageUrl(data.photo, memoId, "photo");
-  const mapUrl = snapshotImageUrl(data.map, memoId, "map");
+  const photoUrl = data.photo ? (imageUrl ? imageUrl("photo") : snapshotImageUrl(data.photo, memoId, "photo")) : null;
+  const mapUrl = data.map ? (imageUrl ? imageUrl("map") : snapshotImageUrl(data.map, memoId, "map")) : null;
   const cur = asCurrency(data.currency);
   const money = (n: number | null) => (n === null ? null : formatMoneyUnits(n, cur));
   const place = [data.city, data.country].filter(Boolean).join(", ");

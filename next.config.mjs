@@ -36,6 +36,17 @@ const nextConfig = {
         source: "/(access|portal)",
         headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
       },
+      {
+        // A prospect's deal link. The token in the path is the credential, so: never cached
+        // anywhere, never indexed, never disclosed through a referrer. This is the headers
+        // half; the page's own metadata says the same.
+        source: "/deal/:path*",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store, max-age=0" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+        ],
+      },
     ];
   },
 };

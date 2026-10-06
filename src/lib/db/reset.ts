@@ -104,6 +104,9 @@ function assertAuthorised(authorization: ResetAuthorization): void {
 
 /** Application tables in dependency order (children first). */
 const TABLES = [
+  // Prospect deal shares (0029)
+  "deal_share_views",
+  "deal_shares",
   // Investor access (P3)
   "investor_invites",
   // Investment Portal (P1)
