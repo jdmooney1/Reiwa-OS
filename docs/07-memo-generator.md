@@ -149,14 +149,18 @@ text), Finalise (confirm, irreversible). Export is a print-optimised page that t
 browser prints to PDF: no PDF library. A draft prints with a DRAFT banner; empty sections
 print as "No data recorded".
 
-**Japanese Language Summary** is one hand-written text under its own key, with the
-English figures shown beside it to work from. It is never machine-translated.
+**Japanese Language Summary** began as one hand-written text under its own key, with the
+English figures shown beside it to work from, and that still stands. Since migration 0031 an
+administrator can also ask a model to DRAFT a Japanese version of the Teaser's sections; a
+draft is kept only when a person accepts it, the memo module itself still contains no model,
+and the hand-written summary is never altered. See `docs/22-memo-ja-translation.md`.
 
 ## Not in Phase 1
 
 - **A language model.** Out of scope.
-- **Machine translation.** A wrong translation of an investment term is a worse failure
-  than no translation. A decision for a later phase.
+- **Unreviewed machine translation.** A wrong translation of an investment term is a worse
+  failure than no translation. Drafting exists (doc 22), but nothing it writes is kept
+  without a person accepting it, and the figures are checked.
 - **A rich-text editor.** Per-section plain textareas.
 - **Typeset PDF.** Revisit once a real Teaser has been seen printed.
 - **Street address or map in a memo.** Deliberately absent; see "What a memo can see".

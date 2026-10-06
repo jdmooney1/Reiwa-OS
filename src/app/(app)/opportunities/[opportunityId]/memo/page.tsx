@@ -35,6 +35,7 @@ export default async function MemoPage({
       canWrite={auth.role !== "investor_viewer"}
       canShare={auth.role === "reiwa_admin"}
       canReview={auth.role === "reiwa_admin"}
+      canTranslate={auth.role === "reiwa_admin"}
     />
   );
 }
