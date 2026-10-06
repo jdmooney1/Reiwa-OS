@@ -11,6 +11,7 @@ import { AssetSnapshot } from "@/components/memo/asset-snapshot";
 import {
   StartMemoButton, RecomposeButton, FinalizeForm, PrintLink, OverrideEditor,
 } from "@/components/memo/memo-controls";
+import { ReviewPanel } from "@/components/memo-review/review-panel";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
  * moved on. A final memo is read-only and is never recomposed.
  */
 export function MemoWorkspace({
-  opportunityId, memo, live, format, canWrite, canShare = false,
+  opportunityId, memo, live, format, canWrite, canShare = false, canReview = false,
 }: {
   opportunityId: string;
   /** The stored memo (latest version), or null when none has been started. */
@@ -34,6 +35,8 @@ export function MemoWorkspace({
   canWrite: boolean;
   /** A Reiwa administrator, who may make a prospect link from a finalised memo. */
   canShare?: boolean;
+  /** A Reiwa administrator, who may run the optional pre-finalisation check. */
+  canReview?: boolean;
 }) {
   const shown: ComposedMemo = memo ? memo.content : live;
   const overrides: MemoOverrides = memo ? memo.overrides : {};
@@ -151,6 +154,12 @@ export function MemoWorkspace({
             </Section>
           );
         })
+      )}
+
+      {editable && canReview && (
+        <Section eyebrow="Before you finalise" title="Optional check">
+          <ReviewPanel opportunityId={opportunityId} memoId={memo!.memoId} format={format} />
+        </Section>
       )}
 
       {editable && (
