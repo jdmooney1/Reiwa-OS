@@ -259,7 +259,7 @@ describe("what a memo is allowed to carry", () => {
     const o = (await adminQuery<{ opportunity_id: string; address: string | null; broker_name: string | null; vendor_name: string | null; city: string | null }>(
       `select o.opportunity_id, p.address, o.broker_name, o.vendor_name, p.city
          from opportunities o join properties p on p.property_id = o.property_id
-        where o.org_id = $1 and p.address is not null limit 1`, [meiji]))[0];
+        where o.org_id = $1 and p.address is not null order by o.name limit 1`, [meiji]))[0];
     expect(o).toBeTruthy();
     await adminQuery(
       "update opportunities set broker_name = 'Secret Broker LLP', vendor_name = 'Distressed Vendor Ltd' where opportunity_id = $1", [o.opportunity_id]);
