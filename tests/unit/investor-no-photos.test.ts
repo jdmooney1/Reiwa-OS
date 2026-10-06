@@ -31,14 +31,20 @@ import { describe, it, expect, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { visiblePhotos, visibleHeadlinePhoto, PHOTO_TIER } from "@/lib/portal/photos";
 import { PhotoGallery } from "@/components/portal/photo-gallery";
 import { OpportunityCard } from "@/components/portal/opportunity-cards";
 import type { PortalOpportunity } from "@/lib/data/portal-feed";
 
 const ROOT = process.cwd();
-const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
+// Repo-relative on either platform. The old idiom here stripped the prefix with
+// a string replace of ROOT plus a forward slash, which matches nothing on
+// Windows, where the separator is a backslash. Every path therefore stayed
+// absolute, join(ROOT, <absolute>) then produced nonsense, and these boundary
+// assertions stopped reading the files they name.
+const rel = (p: string) => relative(ROOT, p).split(sep).join("/");
+const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8").replace(/\r\n/g, "\n");
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
 const stripSqlComments = (s: string) => s.replace(/--.*$/gm, "");
 
@@ -71,7 +77,7 @@ const investorFiles = [
   join(ROOT, "src/app/actions/portal.ts"),
   join(ROOT, "src/app/actions/portal-access.ts"),
   join(ROOT, "src/lib/documents/secure-delivery.ts"),
-].map((f) => f.replace(ROOT + "/", ""));
+].map(rel);
 
 // Anything that says "a photograph" in investor code.
 const PHOTO = /photo|headline_photo_id|headlinePhotoId|asset-photos|property-photos|PHOTO_BUCKET/i;

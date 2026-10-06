@@ -26,11 +26,17 @@
 // ============================================================================
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { GEOCODE_TTL_DAYS } from "@/lib/geo/freshness";
 
 const ROOT = process.cwd();
-const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
+// Repo-relative on either platform. The old idiom here stripped the prefix with
+// a string replace of ROOT plus a forward slash, which matches nothing on
+// Windows, where the separator is a backslash. Every path therefore stayed
+// absolute, join(ROOT, <absolute>) then produced nonsense, and these boundary
+// assertions stopped reading the files they name.
+const rel = (p: string) => relative(ROOT, p).split(sep).join("/");
+const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8").replace(/\r\n/g, "\n");
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
 const stripSqlComments = (s: string) => s.replace(/--.*$/gm, "");
 
@@ -65,7 +71,7 @@ const investorFiles = [
   join(ROOT, "src/lib/data/investor-portal.ts"),
   join(ROOT, "src/app/actions/portal.ts"),
   join(ROOT, "src/app/actions/portal-access.ts"),
-].map((f) => f.replace(ROOT + "/", ""));
+].map(rel);
 
 describe("1. only an explicit allowlist of investor files may touch coordinates", () => {
   it("covers real files, and the allowlist is a subset of them", () => {

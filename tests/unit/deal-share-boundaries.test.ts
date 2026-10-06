@@ -10,20 +10,26 @@ import { describe, it, expect } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { composeMemo } from "@/lib/memo/compose";
 import { prospectSnapshot, prospectTeaser } from "@/lib/deal-share/document";
 import { ProspectDocument } from "@/components/deal-share/prospect-document";
 import { snapshotSource } from "./memo-source.fixture";
 
 const ROOT = process.cwd();
-const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
+// Repo-relative on either platform. The old idiom here stripped the prefix with
+// a string replace of ROOT plus a forward slash, which matches nothing on
+// Windows, where the separator is a backslash. Every path therefore stayed
+// absolute, join(ROOT, <absolute>) then produced nonsense, and these boundary
+// assertions stopped reading the files they name.
+const rel = (p: string) => relative(ROOT, p).split(sep).join("/");
+const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8").replace(/\r\n/g, "\n");
 const code = (rel: string) => read(rel).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
 const sql = (rel: string) => read(rel).replace(/--.*$/gm, "");
 function walk(dir: string, out: string[] = []): string[] {
   for (const n of readdirSync(dir)) {
     const p = join(dir, n);
-    if (statSync(p).isDirectory()) walk(p, out); else if (/\.(ts|tsx)$/.test(n)) out.push(p.replace(ROOT + "/", ""));
+    if (statSync(p).isDirectory()) walk(p, out); else if (/\.(ts|tsx)$/.test(n)) out.push(rel(p));
   }
   return out;
 }
