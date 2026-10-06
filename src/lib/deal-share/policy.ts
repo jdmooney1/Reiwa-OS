@@ -88,14 +88,3 @@ export function dealShareOrigin(raw: string | undefined = process.env.DEAL_SHARE
 
 export const dealSharePath = (rawToken: string): string => `/deal/${rawToken}`;
 export const dealShareLink = (origin: string, rawToken: string): string => `${origin}${dealSharePath(rawToken)}`;
-
-/**
- * The words on the prospect's screen. A prospect has no other relationship with Reiwa to
- * put what they are reading in context, so this is on-screen, not only in print. ONE
- * constant, so counsel's wording replaces it in one place. The wording is the Asset Snapshot's
- * own footer, extended by the brief's "not tax or legal advice"; it is a placeholder for counsel.
- */
-export const PROSPECT_DISCLAIMER =
-  "This material is provided for preliminary discussion purposes only. Figures are based on information available at the time of " +
-  "preparation and remain subject to verification, due diligence, tax advice and legal review. It is not tax or legal advice, " +
-  "and Reiwa Capital does not provide tax or legal advice.";

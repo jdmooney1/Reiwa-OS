@@ -6,7 +6,7 @@ import {
 } from "@/lib/deal-share/token";
 import {
   validateShareInput, shareState, dealShareOrigin, dealShareLink, dealSharePath,
-  DEAL_SHARE_TTL_DAYS_DEFAULT, DEAL_SHARE_TTL_DAYS_MAX, PROSPECT_DISCLAIMER,
+  DEAL_SHARE_TTL_DAYS_DEFAULT, DEAL_SHARE_TTL_DAYS_MAX,
 } from "@/lib/deal-share/policy";
 
 const ID = "11111111-1111-4111-8111-111111111111";
@@ -107,13 +107,5 @@ describe("the link", () => {
     ["http://portal.reiwa-capital.com", /https/], ["https://x.com/some/path", /origin/], ["https://x.com/?a=1", /origin/],
   ])("refuses %s", (raw, message) => {
     expect(() => dealShareOrigin(raw as string)).toThrow(message);
-  });
-});
-
-describe("the disclaimer", () => {
-  it("says it is for preliminary discussion, is not tax or legal advice, and that Reiwa gives none", () => {
-    expect(PROSPECT_DISCLAIMER).toMatch(/preliminary discussion purposes only/);
-    expect(PROSPECT_DISCLAIMER).toMatch(/not tax or legal advice/);
-    expect(PROSPECT_DISCLAIMER).toMatch(/Reiwa Capital does not provide tax or legal advice/);
   });
 });

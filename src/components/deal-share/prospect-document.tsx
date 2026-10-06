@@ -2,27 +2,17 @@ import { ReiwaLockup } from "@/components/brand/reiwa-lockup";
 import { AssetSnapshot } from "@/components/memo/asset-snapshot";
 import { SectionBody } from "@/components/memo/memo-blocks";
 import { TARGETS_DISCLAIMER } from "@/lib/memo/render";
-import { PROSPECT_DISCLAIMER } from "@/lib/deal-share/policy";
 import type { ProspectDocument as Doc } from "@/lib/deal-share/document";
 import { formatDate } from "@/lib/format";
 
 // ============================================================================
-// What a prospect sees: the two frozen documents, a disclaimer, and nothing else.
+// What a prospect sees: the two frozen documents, and nothing else.
 // ----------------------------------------------------------------------------
 // No navigation, no account, no link to any other page, no control that changes
 // anything. It draws the cut-down document from src/lib/deal-share/document.ts, never a
 // stored memo, with the same renderers staff print from (AssetSnapshot, SectionBody) on
 // their print surface, so what a prospect reads is what staff approved.
-//
-// The disclaimer is ON SCREEN, above the documents and again below them: this is the one
-// reader with no other relationship with Reiwa to put what they are looking at in context.
 // ============================================================================
-
-function Disclaimer({ className }: { className?: string }) {
-  return (
-    <p className={className} data-block="disclaimer">{PROSPECT_DISCLAIMER}</p>
-  );
-}
 
 export function ProspectDocument({ view, token }: { view: Doc & { prospectName: string }; token: string }) {
   const { snapshot, teaser } = view;
@@ -32,8 +22,6 @@ export function ProspectDocument({ view, token }: { view: Doc & { prospectName: 
         <ReiwaLockup size="header" />
         <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">Prepared for {view.prospectName}. Confidential.</p>
       </header>
-
-      <Disclaimer className="mt-6 rounded border border-line bg-surface-card px-4 py-3 text-xs leading-relaxed text-ink-muted" />
 
       {snapshot && (
         <section className="mt-8" data-document="snapshot" aria-label="Asset Snapshot">
@@ -75,8 +63,7 @@ export function ProspectDocument({ view, token }: { view: Doc & { prospectName: 
       )}
 
       <footer className="mt-8 border-t border-line pt-4">
-        <Disclaimer className="text-2xs leading-relaxed text-ink-faint" />
-        <p className="mt-1.5 text-2xs text-ink-faint">Prepared by Reiwa Capital. Confidential.</p>
+        <p className="text-2xs text-ink-faint">Prepared by Reiwa Capital. Confidential.</p>
       </footer>
     </main>
   );

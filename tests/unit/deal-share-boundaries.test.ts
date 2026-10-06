@@ -14,7 +14,6 @@ import { join } from "node:path";
 import { composeMemo } from "@/lib/memo/compose";
 import { prospectSnapshot, prospectTeaser } from "@/lib/deal-share/document";
 import { ProspectDocument } from "@/components/deal-share/prospect-document";
-import { PROSPECT_DISCLAIMER } from "@/lib/deal-share/policy";
 import { snapshotSource } from "./memo-source.fixture";
 
 const ROOT = process.cwd();
@@ -211,15 +210,12 @@ describe("what a prospect is shown", () => {
     },
   }));
 
-  it("the page shows both documents, the prospect's name and the disclaimer ON SCREEN, and no internal section", () => {
+  it("the page shows both documents, the prospect's name, and no internal section", () => {
     const html = view();
     expect(html).toContain('data-document="snapshot"');
     expect(html).toContain('data-document="teaser"');
     expect(html).toContain("A short written summary.");
     expect(html).toContain("Prepared for Hanako Sato");
-    expect(html).toContain(PROSPECT_DISCLAIMER);
-    expect(html).toContain("not tax or legal advice");
-    expect(html.match(/data-block="disclaimer"/g)!.length).toBeGreaterThanOrEqual(2);
     expect(html).not.toMatch(/INTERNAL-/);
     for (const label of ["Recommendation", "Risk and Mitigation", "Tax and Structuring", "Further DD Required", "Financial Analysis"]) {
       expect(html).not.toContain(label);
