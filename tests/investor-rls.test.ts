@@ -723,3 +723,43 @@ describe("platform_settings is staff-only, not investor-readable (0052)", () => 
     expect(rows).toEqual([]);
   });
 });
+
+describe("capital-pipeline test-import metadata is not investor-readable", () => {
+  // scripts/import-capital-pipeline-test-orgs.ts writes exactly this shape:
+  // investor_organizations.notes holds ONLY the tag, and every pipeline
+  // field (tier, phase, composite, intro route, ...) lives in
+  // platform_settings instead, keyed by that same tag. This proves the
+  // split actually holds even in the one case that matters: an investor
+  // whose own organisation happens to be one of these test rows — RLS is
+  // row-level, not column-level (investor_organizations_self, 0005, matches
+  // by investor_org_id alone), so the only thing stopping a leak here is
+  // that `notes` itself never contains the metadata.
+  it("an investor reading their own (test-imported) org sees only the tag, and cannot read its platform_settings metadata", async () => {
+    const tag = "[test-import:capital-pipeline:rls-probe-co]";
+    const org = await adminQuery<{ investor_org_id: string }>(
+      "insert into investor_organizations (name, notes) values ('RLS Probe Co', $1) returning investor_org_id",
+      [tag]);
+    const investorOrgId = org[0].investor_org_id;
+    await adminQuery(
+      "insert into platform_settings (key, value) values ($1, $2::jsonb)",
+      [tag, JSON.stringify({ tier: "A", composite: 99, nextAction: "Should never reach the portal" })]);
+
+    const authUser = await adminQuery<{ id: string }>(
+      "insert into auth.users (email) values ('rls-probe@example.com') returning id");
+    await adminQuery(
+      "insert into investor_contacts (investor_org_id, email, name, auth_user_id) values ($1,'rls-probe@example.com','RLS Probe Contact',$2)",
+      [investorOrgId, authUser[0].id]);
+
+    // The investor CAN read their own org row (that part of 0005 is by
+    // design) — but all they get is the inert tag.
+    const { rows: own } = await withInvestorSession(authUser[0].id, (tx) =>
+      tx.query<{ notes: string }>("select notes from investor_organizations where investor_org_id = $1", [investorOrgId]));
+    expect(own).toEqual([{ notes: tag }]);
+    expect(own[0].notes).not.toMatch(/tier|composite|next.?action/i);
+
+    // The metadata itself, in platform_settings, is unreachable regardless.
+    const { rows: settings } = await withInvestorSession(authUser[0].id, (tx) =>
+      tx.query("select * from platform_settings where key = $1", [tag]));
+    expect(settings).toEqual([]);
+  });
+});

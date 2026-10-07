@@ -22,7 +22,8 @@
     "test:e2e": "playwright test",
     "db:load-deal-seed": "tsx scripts/load-deal-seed.ts",
     "db:seed-doc-types": "tsx scripts/seed-doc-types.ts",
-    "db:import-capital-pipeline": "tsx scripts/import-capital-pipeline-test-orgs.ts"
+    "db:import-capital-pipeline": "tsx scripts/import-capital-pipeline-test-orgs.ts",
+    "db:remove-capital-pipeline-import": "tsx scripts/remove-capital-pipeline-import.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
