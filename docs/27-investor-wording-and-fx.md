@@ -19,7 +19,7 @@ Code only. No migration, no stored record changed.
 | ECB daily sync (`fx-sync.ts`, cron) | writes `fx_rates` | real source, already wired | unchanged |
 | Asset Snapshot: JPY equivalent, value-allocation yen, rate line | investors (print, prospect link) | used whatever `fx_rates` held, **including seeded demo rows** | demo rates are treated as absent at compose time, and dropped at render for memos already finalised |
 | Memo "FX Sensitivity" section | internal IC memo only | flagged "demonstration value" | unchanged (staff-only, already honest) |
-| Portfolio dashboard | staff only | flagged demo | unchanged |
+| Portfolio dashboard (GBP totals) | staff only | uses `fx_rates` as held; flags a **stale** rate but does not flag a **demo** one | unchanged: not investor-facing. Worth a follow-up, since until the first ECB sync its GBP totals rest on demo rates unflagged |
 | Investor portal, comparison, publication preview | investors / admins | **no FX conversion at all** (figures are in the deal's own currency) | unchanged, and a test asserts none is introduced |
 
 So the real source was already there; only the Snapshot used it without checking what it was. Until the
