@@ -37,3 +37,7 @@ playwright-report/
 
 # manual production-smoke findings (screenshots, JSON) — never committed
 /.smoke/
+
+# Raw source data handed to an import script (PII, confidential mandates,
+# contact lists) — never committed. Only the script that reads it is.
+/imports/
