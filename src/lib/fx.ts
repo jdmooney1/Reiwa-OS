@@ -1,9 +1,11 @@
 // ============================================================================
 // FX rates: what a rate is, when it has gone stale, and what may be saved.
 // ----------------------------------------------------------------------------
-// Pure. There is no live feed behind fx_rates: a rate is whatever an
-// administrator last typed, the source they named and the date it was good for.
-// So the honest thing the product can do is say how old it is. A rate older than
+// Pure. A rate is either the ECB's daily reference rate (written by the sync in
+// data/fx-sync.ts) or whatever an administrator typed, with the source they named
+// and the date it was good for; until the first sync the table holds the seeded
+// "Demo static rates", which are neither. The honest thing the product can do is
+// say how old a rate is, and never present a placeholder as a market rate. A rate older than
 // FX_STALE_AFTER_DAYS is FLAGGED wherever it is shown or composed ("this rate is
 // 41 days old"); it is never a hard block, because a month-old rate is still
 // better than no valuation and the person reading can judge that, provided they
@@ -108,6 +110,16 @@ export interface FxRateInput { currency: FxCurrency; rate: number; source: strin
 
 /** A source that is a placeholder, not a source. */
 const PLACEHOLDER_SOURCE = /\b(demo|static|placeholder|tbc|tbd|n\/?a|unknown)\b/i;
+
+/**
+ * True when a rate's source says it is a stand-in (the seeded "Demo static rates") or says
+ * nothing. Such a rate may be used inside the building with a warning; it must never reach an
+ * investor, because a number that looks live but is not is worse than no number.
+ */
+export function isPlaceholderFxSource(source: string | null | undefined): boolean {
+  const s = (source ?? "").trim();
+  return s === "" || PLACEHOLDER_SOURCE.test(s);
+}
 
 const SOURCE_PROMPT = "Name where this rate came from, for example 'ECB euro reference rate' or 'Bloomberg close'.";
 

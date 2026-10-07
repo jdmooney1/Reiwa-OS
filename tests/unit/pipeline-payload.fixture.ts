@@ -12,7 +12,7 @@ export function row(): Opportunity {
     referralNote: null, brokerName: "Knight Frank", vendorName: null, priority: "medium",
     triageStatus: "live", triagePriority: "P1", triageNote: "Strong income", ownerUserId: null,
     ownerName: null, nextMilestone: null, nextMilestoneDate: null, lastMaterialUpdateAt: null,
-    sizeSqft: null, sizeSqm: null, summary: null, address: "24-26 Spring Street", city: "London",
+    sizeSqft: null, sizeSqm: null, summary: null, investorOverview: null, address: "24-26 Spring Street", city: "London",
     country: "United Kingdom",
     latitude: 51.5158, longitude: -0.1755, geocodeStatus: "ok",
     formattedAddress: "24-26 Spring St, London W2 1JA, UK",

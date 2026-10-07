@@ -39,6 +39,7 @@ function mapOpp(r: Record<string, any>): Opportunity {
     nextMilestone: str(r.next_milestone), nextMilestoneDate: str(r.next_milestone_date),
     lastMaterialUpdateAt: r.last_material_update_at ?? null,
     sizeSqft: num(r.size_sqft), sizeSqm: num(r.size_sqm), summary: str(r.summary),
+    investorOverview: str(r.investor_overview),
     address: str(r.address), city: str(r.city), country: str(r.country),
     latitude: num(r.latitude), longitude: num(r.longitude),
     geocodeStatus: (r.geocode_status ?? "pending") as GeocodeStatus,
@@ -243,6 +244,8 @@ const EDITABLE: Record<string, string> = {
   assetType: "asset_type", strategy: "strategy", currency: "currency",
   probability: "probability", source: "source", brokerName: "broker_name",
   vendorName: "vendor_name", summary: "summary",
+  // Written for investors; the only free text the publication boundary reads.
+  investorOverview: "investor_overview",
   // Origination (Phase 1A). Deliberately a handful of columns rather than a
   // counterparty directory: a source is a few facts about how the opportunity
   // arrived, and a CRM built to hold them would be a product of its own.

@@ -41,7 +41,8 @@
 // ============================================================================
 import type { MemoSectionKey, OutputFormat } from "@/lib/memo/sections";
 import { MEMO_SECTIONS, FORMAT_BY_KEY } from "@/lib/memo/sections";
-import { fxStaleness, oldestStaleness, convertViaGbp, FX_BASE_CURRENCY, FX_STALE_AFTER_DAYS } from "@/lib/fx";
+import { INVESTOR_FIGURES_DISCLAIMER } from "@/lib/investor-copy";
+import { fxStaleness, oldestStaleness, convertViaGbp, isPlaceholderFxSource, FX_BASE_CURRENCY, FX_STALE_AFTER_DAYS } from "@/lib/fx";
 import { areaFrom, type Area } from "@/lib/units";
 import { allocationShares, annualDepreciation, checkAllocation, isDepreciationMethod, type DepreciationMethod } from "@/lib/underwriting/allocation";
 import { DD_STATUS_LABEL, ASSET_TYPE_LABEL, STRATEGY_LABEL, isDdOpen, isDdIssue } from "@/lib/domain";
@@ -840,22 +841,28 @@ export function composeSnapshot(src: MemoSource): ComposedSnapshot {
   const capex = c ? c.capex : p.capex;
 
   // Yen figures: through GBP, from the stored rates. A rate that is absent leaves
-  // the figure absent; the base currency's rate is 1 by definition.
-  const jpy = src.fxJpy;
-  const dealRate = o.currency === FX_BASE_CURRENCY ? 1 : src.fx && src.fx.currency === o.currency ? src.fx.rateToGbp : null;
+  // the figure absent; the base currency's rate is 1 by definition. A rate whose
+  // source is a placeholder (the seeded "Demo static rates") is treated as absent
+  // too: the Snapshot is an investor document, and a yen figure computed from a
+  // stand-in rate would look live and be neither.
+  const liveFx = src.fx && !isPlaceholderFxSource(src.fx.source) ? src.fx : null;
+  const jpy = src.fxJpy && !isPlaceholderFxSource(src.fxJpy.source) ? src.fxJpy : null;
+  // The base currency's rate is 1 by definition, so a placeholder GBP row says nothing about a GBP deal.
+  const placeholderRate = (o.currency !== FX_BASE_CURRENCY && src.fx !== null && liveFx === null) || (src.fxJpy !== null && jpy === null);
+  const dealRate = o.currency === FX_BASE_CURRENCY ? 1 : liveFx && liveFx.currency === o.currency ? liveFx.rateToGbp : null;
   const dealIsYen = o.currency === "JPY";
   const priceJpy = dealIsYen ? null : convertViaGbp(price, dealRate, jpy?.rateToGbp);
   const canQuoteYen = !dealIsYen && dealRate !== null && jpy !== null && jpy.rateToGbp > 0;
 
   let fx: SnapshotFx | null = null;
   if (canQuoteYen && jpy) {
-    const dealMatters = o.currency !== FX_BASE_CURRENCY && src.fx;
-    const stale = oldestStaleness([jpy.asOf, ...(dealMatters ? [src.fx!.asOf] : [])], src.today);
+    const dealMatters = o.currency !== FX_BASE_CURRENCY && liveFx;
+    const stale = oldestStaleness([jpy.asOf, ...(dealMatters ? [liveFx!.asOf] : [])], src.today);
     fx = {
       jpyPerGbp: 1 / jpy.rateToGbp, jpySource: jpy.source, jpyAsOf: jpy.asOf,
-      dealRateToGbp: dealMatters ? src.fx!.rateToGbp : null,
-      dealSource: dealMatters ? src.fx!.source : null,
-      dealAsOf: dealMatters ? src.fx!.asOf : null,
+      dealRateToGbp: dealMatters ? liveFx!.rateToGbp : null,
+      dealSource: dealMatters ? liveFx!.source : null,
+      dealAsOf: dealMatters ? liveFx!.asOf : null,
       staleNote: stale?.stale ? stale.note : null,
     };
   }
@@ -909,7 +916,9 @@ export function composeSnapshot(src: MemoSource): ComposedSnapshot {
     gaps.unshift({ key: "photo", label: "Photograph", why: "No photograph has been cleared for investors. Mark one as diligence on the asset to use it here." });
   }
   if (!src.asset.addressLine) gaps.unshift({ key: "address", label: "Street address", why: "No street address is recorded." });
-  if (!jpy && !dealIsYen) gaps.push({ key: "jpy", label: "Yen equivalent", why: "No JPY exchange rate is recorded." });
+  if (placeholderRate && !dealIsYen && !canQuoteYen) {
+    gaps.push({ key: "jpy", label: "Yen equivalent", why: "The exchange rates held are demonstration values, so no yen figure is shown to investors. Replace them (Admin, Settings) or run the ECB sync." });
+  } else if (!jpy && !dealIsYen) gaps.push({ key: "jpy", label: "Yen equivalent", why: "No JPY exchange rate is recorded." });
   else if (!dealIsYen && dealRate === null) gaps.push({ key: "jpy", label: "Yen equivalent", why: `No ${o.currency} exchange rate is recorded.` });
 
   return {
@@ -924,6 +933,29 @@ export function composeSnapshot(src: MemoSource): ComposedSnapshot {
     price, priceJpy, niyPct, passingRent, erv,
     occupancyPct: c ? c.occupancyPct : null,
     capex, area, fx, allocation, basisLabel: label, gaps,
+  };
+}
+
+/**
+ * A Snapshot as an investor may see it: no yen figure that rests on a placeholder rate.
+ *
+ * A finalised memo is frozen, so a Snapshot composed while the seeded "Demo static rates"
+ * were in force carries yen figures and a rate line that look live and are not. They stay in
+ * the stored record (it is a record of what was composed) and are dropped at the one point
+ * every reader passes through. Pure; returns the same object when there is nothing to drop.
+ */
+export function withoutPlaceholderFx(s: ComposedSnapshot): ComposedSnapshot {
+  const fx = s.fx;
+  if (!fx) return s;
+  const placeholder = isPlaceholderFxSource(fx.jpySource) || (fx.dealSource !== null && isPlaceholderFxSource(fx.dealSource));
+  if (!placeholder) return s;
+  const a = s.allocation;
+  return {
+    ...s, priceJpy: null, fx: null,
+    allocation: a && {
+      ...a, landJpy: null, buildingJpy: null,
+      depreciation: a.depreciation && { ...a.depreciation, annualJpy: null },
+    },
   };
 }
 
@@ -988,11 +1020,30 @@ export function resolveSection(
       : "The recorded content for this section is internal and is not shown in this format. Write an investor-facing version in the override box.";
     // When the content was withheld rather than absent, its flags describe content
     // this format does not show ("Based on unapproved underwriting"), so they go too.
-    const flags = section.status === "empty" ? section.flags : [];
+    const flags = section.status === "empty" && !external ? section.flags : [];
     return { state: "empty", overrideText: null, blocks: [], flags, emptyReason: reason, withheld };
   }
-  return { state: "composed", overrideText: null, blocks, flags: section.flags, emptyReason: null, withheld };
+  // Flags describe how the section was built ("based on unapproved underwriting"). That is
+  // for the people inside the building; a document an investor reads carries the one standard
+  // figures line instead (see showsFigures), whatever state the underwriting is in.
+  return { state: "composed", overrideText: null, blocks, flags: external ? [] : section.flags, emptyReason: null, withheld };
 }
+
+/**
+ * Does this section print a figure? Then, in a document an investor reads, it carries the
+ * standard "Indicative, subject to final underwriting" line. A person's own text is not
+ * inspected: the document's footer carries the line for that.
+ */
+export function showsFigures(resolved: ResolvedSection): boolean {
+  return resolved.state === "composed" && resolved.blocks.some((b) =>
+    b.kind === "metrics" && b.items.some((m) => m.value !== null && m.value !== ""));
+}
+
+/** The standard line for a section, or null when the section shows no figure. */
+export function figuresLine(resolved: ResolvedSection): string | null {
+  return showsFigures(resolved) ? INVESTOR_FIGURES_DISCLAIMER : null;
+}
+
 
 /** The sections a format shows, in memo order. */
 export function sectionsFor(format: OutputFormat): MemoSectionKey[] {

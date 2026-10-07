@@ -16,7 +16,7 @@
 // Deliberately no revalidatePath: generating changes nothing on the page. The draft goes
 // back to the caller and lives in the panel's own state.
 // ============================================================================
-import { requireAdminSession } from "@/lib/auth/admin";
+import { requireStaffSession } from "@/lib/auth/admin";
 import { AppError } from "@/lib/errors";
 import { runAction } from "@/lib/actions/run-action";
 import type { ActionResult } from "@/lib/actions/result";
@@ -36,7 +36,7 @@ export interface TranslateActionResult extends ActionResult {
  * one set of per-section drafts handed back. Nothing is saved to the memo.
  */
 export async function translateMemoAction(opportunityId: string, memoId: string): Promise<TranslateActionResult> {
-  const { db } = await requireAdminSession();
+  const { db } = await requireStaffSession();
 
   let draft: GeneratedDraft | undefined;
   const result = await runAction("workspace.memo.translate", { opportunityId, memoId }, async () => {

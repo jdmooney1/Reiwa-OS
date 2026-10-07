@@ -363,7 +363,13 @@ function AssignmentRow({
               </SmallBtn>
               <SmallBtn tone="negative" disabled={pending}
                 title="The investor loses sight of this opportunity immediately; the record is kept"
-                onClick={() => start(() => revokeEntitlementAction(e.entitlementId, org.investorOrgId))}>
+                onClick={() => {
+                  if (!window.confirm(
+                    `Revoke ${org.name}'s access to "${title}"?\n\n` +
+                    `They lose it immediately, including document downloads. ` +
+                    `It can be restored from this screen.`)) return;
+                  start(() => revokeEntitlementAction(e.entitlementId, org.investorOrgId));
+                }}>
                 <EyeOff className="h-3 w-3" /> Revoke
               </SmallBtn>
             </>
@@ -567,7 +573,12 @@ function ContactAccess({
           {invite?.state === "active" && (
             <SmallBtn tone="negative" disabled={pending}
               title="The link stops working immediately"
-              onClick={() => run(() => revokeInviteAction(invite.inviteId, org.investorOrgId))}>
+              onClick={() => {
+                if (!window.confirm(
+                  `Revoke the invitation sent to ${contact.email}?\n\n` +
+                  `The link stops working immediately. They would need a new invitation to sign in for the first time.`)) return;
+                run(() => revokeInviteAction(invite.inviteId, org.investorOrgId));
+              }}>
               Revoke
             </SmallBtn>
           )}

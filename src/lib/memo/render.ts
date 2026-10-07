@@ -10,10 +10,7 @@ import type { Currency } from "@/types/database";
 /** What a metric the record does not carry reads as. Never a guess, never zero. */
 export const NOT_RECORDED = "Not recorded";
 
-/** The same statement the investor portal puts under its figures. */
-export const TARGETS_DISCLAIMER =
-  "Targets are estimates prepared by Reiwa Capital on the assumptions set out in the investment " +
-  "materials. They are not forecasts or guarantees, and capital is at risk.";
+export { TARGETS_DISCLAIMER, INVESTOR_FIGURES_DISCLAIMER } from "@/lib/investor-copy";
 
 /** Formats whose audience is outside the building. */
 export const isExternalFormat = (f: OutputFormat): boolean => f !== "ic";

@@ -24,7 +24,9 @@
     "db:load-deal-seed": "tsx scripts/load-deal-seed.ts",
     "db:seed-doc-types": "tsx scripts/seed-doc-types.ts",
     "db:import-capital-pipeline": "tsx scripts/import-capital-pipeline-test-orgs.ts",
-    "db:remove-capital-pipeline-import": "tsx scripts/remove-capital-pipeline-import.ts"
+    "db:remove-capital-pipeline-import": "tsx scripts/remove-capital-pipeline-import.ts",
+    "db:audit-documents": "tsx scripts/audit-publication-documents.ts",
+    "db:unshare-documents": "tsx scripts/unshare-publication-documents.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

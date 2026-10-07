@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAuth, toDbSession } from "@/lib/auth/session";
+import { isInternalStaff } from "@/lib/auth/admin";
 import { latestMemo, composeLive } from "@/lib/data/memos";
 import { MemoWorkspace } from "@/components/memo/memo-workspace";
 import { FORMAT_BY_KEY, type OutputFormat } from "@/lib/memo/sections";
@@ -34,8 +35,8 @@ export default async function MemoPage({
       format={parseFormat(searchParams.format)}
       canWrite={auth.role !== "investor_viewer"}
       canShare={auth.role === "reiwa_admin"}
-      canReview={auth.role === "reiwa_admin"}
-      canTranslate={auth.role === "reiwa_admin"}
+      canReview={isInternalStaff(auth)}
+      canTranslate={isInternalStaff(auth)}
     />
   );
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChevronLeft, AlertTriangle, Loader2, Send, Undo2, CheckCircle2, FilePlus2,
   Archive, Plus, X, Trash2, Pencil, Lock, RefreshCw,
@@ -13,7 +14,7 @@ import type {
   PublicationSourcePanel, VersionDrift, PublicationEntitlementRow, WorkflowState,
 } from "@/lib/data/admin-portal";
 import {
-  submitForReviewAction, returnToDraftAction, publishVersionAction, withdrawPublicationAction,
+  submitForReviewAction, returnToDraftAction, withdrawPublicationAction,
   startDraftFromVersionAction, startDraftFromSourceAction, updateDraftVersionAction,
   addDocumentAction, updateDocumentAction, removeDocumentAction,
   grantAccessAction, setEntitlementVisibilityAction, revokeEntitlementAction,
@@ -26,10 +27,12 @@ import {
 } from "@/lib/portal-labels";
 import { UPLOAD_ACCEPT } from "@/lib/documents/constraints";
 import { ASSET_TYPE_LABEL, STRATEGY_LABEL } from "@/lib/domain";
-import { formatDate, formatMoneyCompact, formatPct, formatMultiple, formatArea } from "@/lib/format";
+import { formatDate } from "@/lib/format";
+import { figureText } from "@/lib/portal/metrics";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { FigureDisclaimer } from "@/components/shared/figure-disclaimer";
 import { cn } from "@/lib/utils";
 import type { AssetType, Strategy, Currency } from "@/types/database";
 
@@ -49,7 +52,22 @@ export function PublicationDetail({
   investorOrgs: InvestorOrganization[];
 }) {
   const [pending, start] = useTransition();
+  const router = useRouter();
   const id = publication.publicationId;
+  // Publishing happens on its own screen, which shows the change and asks for a
+  // typed sentence. Nothing in this component publishes directly.
+  const reviewHref = (versionId: string) => `/admin/publications/${id}/publish/${versionId}`;
+  // A new draft carries its own copy of each document file. When a file was already
+  // missing, the draft starts without that document and this says so, until dismissed.
+  const [notice, setNotice] = useState<string | undefined>();
+  const refreshFromSource = () => start(async () => {
+    const res = await startDraftFromSourceAction(id);
+    setNotice(res.error ?? res.notice);
+  });
+  const startDraft = (versionId: string) => start(async () => {
+    const res = await startDraftFromVersionAction(versionId, id);
+    setNotice(res.error ?? res.notice);
+  });
 
   const driftMap = useMemo(() => new Map(drift.map((d) => [d.versionId, d])), [drift]);
   const display = working ?? active ?? versions[0] ?? null;
@@ -97,9 +115,9 @@ export function PublicationDetail({
             {working?.status === "in_review" && (
               <>
                 <HeaderBtn primary disabled={pending}
-                  onClick={() => start(() => publishVersionAction(working.versionId, id))}>
+                  onClick={() => router.push(reviewHref(working.versionId))}>
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  {active ? `Publish v${working.versionNumber} (replaces v${active.versionNumber})` : "Publish"}
+                  {active ? `Review and publish v${working.versionNumber} (replaces v${active.versionNumber})` : "Review and publish"}
                 </HeaderBtn>
                 <HeaderBtn disabled={pending}
                   onClick={() => start(() => returnToDraftAction(working.versionId, id))}>
@@ -110,24 +128,43 @@ export function PublicationDetail({
             {!working && active && (
               <>
                 <HeaderBtn primary disabled={pending}
-                  onClick={() => start(() => startDraftFromVersionAction(active.versionId, id))}>
+                  onClick={() => startDraft(active.versionId)}>
                   <FilePlus2 className="h-3.5 w-3.5" /> New Draft (edit)
                 </HeaderBtn>
                 <HeaderBtn disabled={pending} danger
-                  onClick={() => start(() => withdrawPublicationAction(id))}>
+                  onClick={() => {
+                    if (!window.confirm(
+                      `Withdraw "${active?.title ?? "this publication"}" from investors?\n\n` +
+                      `Version ${active?.versionNumber ?? ""} disappears from every investor's portal immediately, ` +
+                      `including document downloads. Their saved items and requests are kept. ` +
+                      `You can start a new draft from it afterwards.`)) return;
+                    start(() => withdrawPublicationAction(id));
+                  }}>
                   <Archive className="h-3.5 w-3.5" /> Withdraw
                 </HeaderBtn>
               </>
             )}
             {!working && !active && versions[0] && publication.status === "withdrawn" && (
               <HeaderBtn primary disabled={pending}
-                onClick={() => start(() => startDraftFromVersionAction(versions[0].versionId, id))}>
+                onClick={() => startDraft(versions[0].versionId)}>
                 <FilePlus2 className="h-3.5 w-3.5" /> New Draft from v{versions[0].versionNumber}
               </HeaderBtn>
             )}
           </div>
         </div>
       </div>
+
+      {notice && (
+        <div role="status" data-testid="draft-notice"
+          className="flex items-start justify-between gap-3 border-b border-caution/30 bg-caution/10 px-8 py-3">
+          <div className="flex items-start gap-2.5 text-xs text-ink">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-caution" />
+            <span>{notice}</span>
+          </div>
+          <button type="button" onClick={() => setNotice(undefined)}
+            className="shrink-0 text-2xs text-ink-faint hover:text-ink">Dismiss</button>
+        </div>
+      )}
 
       {/* ---- Source drift warning ---- */}
       {displayDrift?.changed && (
@@ -184,7 +221,8 @@ export function PublicationDetail({
         {/* ================= Source ================= */}
         <TabsContent value="source" className="px-8 py-6">
           <SourceTab publicationId={id} source={source} display={display}
-            displayDrift={displayDrift} working={working} pending={pending} start={start} />
+            displayDrift={displayDrift} working={working} pending={pending} start={start}
+            refresh={refreshFromSource} />
         </TabsContent>
 
         {/* ================= Documents ================= */}
@@ -233,7 +271,7 @@ export function PublicationDetail({
         {/* ================= Versions ================= */}
         <TabsContent value="versions" className="px-8 py-6">
           <VersionsTab publication={publication} versions={versions} driftMap={driftMap}
-            working={working} pending={pending} start={start} />
+            working={working} pending={pending} start={start} startDraft={startDraft} />
         </TabsContent>
       </Tabs>
     </div>
@@ -257,6 +295,10 @@ function DraftEditor({ version, publicationId }: { version: PublicationVersion; 
             <span className="eyebrow">Overview</span>
             <textarea name="overview" rows={5} defaultValue={version.overview ?? ""}
               className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
+            <span className="mt-1 block text-2xs text-ink-faint">
+              Written for investors. This is not copied from the internal summary; it starts from the
+              investor overview saved on the opportunity, and is blank if none was written.
+            </span>
           </label>
           <label className="block">
             <span className="eyebrow">Highlights — one per line</span>
@@ -314,6 +356,8 @@ function DraftEditor({ version, publicationId }: { version: PublicationVersion; 
 // Read-only investor content (what a portal user would see)
 // ============================================================================
 function VersionContent({ version: v }: { version: PublicationVersion }) {
+  // The same text the investor reads: see figureText.
+  const figures = figureText(v);
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <Card>
@@ -343,15 +387,16 @@ function VersionContent({ version: v }: { version: PublicationVersion }) {
         <CardHeader eyebrow="Investor view" title="Headline Figures" />
         <CardBody className="p-0">
           <dl className="grid grid-cols-2 divide-x divide-y divide-line md:grid-cols-4">
-            <Figure k="Headline price" v={formatMoneyCompact(v.headlinePrice, v.currency as Currency)} />
-            <Figure k="Target NIY" v={formatPct(v.targetNiy, 1)} />
-            <Figure k="Target IRR" v={formatPct(v.targetIrr, 1)} />
-            <Figure k="Equity multiple" v={formatMultiple(v.targetEquityMultiple)} />
-            <Figure k="Hold period" v={v.holdPeriodYears != null ? `${v.holdPeriodYears} yrs` : "—"} />
-            <Figure k="Size" v={v.sizeSqft != null ? formatArea(v.sizeSqft, "sqft") : formatArea(v.sizeSqm, "sqm")} />
+            <Figure k="Headline price" v={figures.headlinePrice} />
+            <Figure k="Target NIY" v={figures.targetNiy} />
+            <Figure k="Target IRR" v={figures.targetIrr} />
+            <Figure k="Equity multiple" v={figures.targetEquityMultiple} />
+            <Figure k="Hold period" v={figures.holdPeriodYears} />
+            <Figure k="Size" v={figures.size} />
             <Figure k="Published" v={formatDate(v.publishedAt)} />
             <Figure k="Currency" v={v.currency} />
           </dl>
+          <FigureDisclaimer className="border-t border-line px-4 py-3" />
         </CardBody>
       </Card>
     </div>
@@ -362,9 +407,10 @@ function VersionContent({ version: v }: { version: PublicationVersion }) {
 // Source tab — the admin-only side of the boundary
 // ============================================================================
 function SourceTab({
-  publicationId, source, display, displayDrift, working, pending, start,
+  publicationId, source, display, displayDrift, working, pending, start, refresh,
 }: {
   publicationId: string;
+  refresh: () => void;
   source: PublicationSourcePanel | null;
   display: PublicationVersion | null;
   displayDrift: VersionDrift | undefined;
@@ -410,7 +456,10 @@ function SourceTab({
             internal fields (counterparties, probability, internal economics) never carry over.
             After that it is an independent record: <span className="font-medium text-ink">editing
             the internal opportunity never changes what investors see.</span> Bringing fresh internal
-            data across is always an explicit step that creates a new draft for review.
+            data across is always an explicit step that creates a new draft for review. That draft
+            starts as a copy of the latest version, so the headline, highlights, hold period and
+            documents are kept; only the factual fields (title, location, asset type, strategy,
+            currency, figures, size) are taken from the internal record again.
           </p>
           {working ? (
             <p className="text-2xs text-ink-faint">
@@ -419,7 +468,7 @@ function SourceTab({
             </p>
           ) : (
             <button disabled={pending}
-              onClick={() => start(() => startDraftFromSourceAction(publicationId))}
+              onClick={() => refresh()}
               className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-medium text-ink-muted hover:border-line hover:text-ink disabled:opacity-60">
               {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Start New Draft From Current Internal Data
@@ -536,12 +585,19 @@ function DocumentsCard({
                     </div>
                     {editable && (
                       <div className="flex shrink-0 items-center gap-1">
-                        <button onClick={() => setEditingId(d.documentId)}
+                        <button onClick={() => setEditingId(d.documentId)} aria-label={`Edit ${d.title}`}
                           className="rounded border border-line p-1.5 text-ink-muted hover:border-line hover:text-ink">
                           <Pencil className="h-3 w-3" />
                         </button>
                         <button disabled={pending}
-                          onClick={() => start(() => removeDocumentAction(d.documentId, publicationId))}
+                          aria-label={`Remove ${d.title}`}
+                          onClick={() => {
+                            if (!window.confirm(
+                              `Remove "${d.title}" from this version?\n\n` +
+                              `Its file is deleted. Other versions keep their own copies, so ` +
+                              `nothing already published is affected.`)) return;
+                            start(() => removeDocumentAction(d.documentId, publicationId));
+                          }}
                           className="rounded border border-line p-1.5 text-ink-muted hover:border-negative/40 hover:text-negative disabled:opacity-50">
                           <Trash2 className="h-3 w-3" />
                         </button>
@@ -706,7 +762,13 @@ function AccessTab({
                           {e.documentAccessLevel === "standard" ? "Grant diligence" : "Standard only"}
                         </MiniBtn>
                         <MiniBtn tone="negative" disabled={pending}
-                          onClick={() => start(() => revokeEntitlementAction(e.entitlementId, e.investorOrgId))}>
+                          onClick={() => {
+                            if (!window.confirm(
+                              `Revoke ${e.investorOrgName}'s access to this publication?\n\n` +
+                              `They lose it immediately, including document downloads. ` +
+                              `It can be restored from this screen.`)) return;
+                            start(() => revokeEntitlementAction(e.entitlementId, e.investorOrgId));
+                          }}>
                           Revoke
                         </MiniBtn>
                       </>
@@ -731,7 +793,7 @@ function AccessTab({
 // Version history
 // ============================================================================
 function VersionsTab({
-  publication, versions, driftMap, working, pending, start,
+  publication, versions, driftMap, working, pending, start, startDraft,
 }: {
   publication: Publication;
   versions: PublicationVersion[];
@@ -739,7 +801,9 @@ function VersionsTab({
   working: PublicationVersion | null;
   pending: boolean;
   start: (fn: () => Promise<void>) => void;
+  startDraft: (versionId: string) => void;
 }) {
+  const router = useRouter();
   return (
     <div className="mx-auto max-w-4xl">
       <Card>
@@ -788,8 +852,8 @@ function VersionsTab({
                       {v.status === "in_review" && (
                         <span className="inline-flex gap-1">
                           <MiniBtn disabled={pending}
-                            onClick={() => start(() => publishVersionAction(v.versionId, publication.publicationId))}>
-                            Publish
+                            onClick={() => router.push(`/admin/publications/${publication.publicationId}/publish/${v.versionId}`)}>
+                            Review and publish
                           </MiniBtn>
                           <MiniBtn disabled={pending}
                             onClick={() => start(() => returnToDraftAction(v.versionId, publication.publicationId))}>
@@ -799,7 +863,7 @@ function VersionsTab({
                       )}
                       {(v.status === "published" || v.status === "superseded") && !working && (
                         <MiniBtn disabled={pending}
-                          onClick={() => start(() => startDraftFromVersionAction(v.versionId, publication.publicationId))}>
+                          onClick={() => startDraft(v.versionId)}>
                           New draft from v{v.versionNumber}
                         </MiniBtn>
                       )}

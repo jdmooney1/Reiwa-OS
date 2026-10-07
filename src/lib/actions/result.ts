@@ -49,6 +49,8 @@ export interface ActionResult {
   ok?: boolean;
   /** Safe to display, always. Never a database message, never a stack. */
   error?: string;
+  /** Something the person should know that is not a failure. Safe to display. */
+  notice?: string;
 }
 
 /** The initial state for a form that has not been submitted yet. */

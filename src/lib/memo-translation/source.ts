@@ -25,7 +25,7 @@
 // decision, not the hand-written Japanese summary.
 // ============================================================================
 import {
-  resolveSection, type Block, type ComposedMemo, type MemoOverrides,
+  resolveSection, figuresLine, type Block, type ComposedMemo, type MemoOverrides,
 } from "@/lib/memo/compose";
 import { SECTION_LABEL, type MemoSectionKey } from "@/lib/memo/sections";
 import { formatMetric } from "@/lib/memo/render";
@@ -62,7 +62,12 @@ export function buildTranslationSource(memo: ComposedMemo, overrides: MemoOverri
     const resolved = resolveSection(memo.sections[key], overrides[key], "teaser");
     let body: string[];
     if (resolved.state === "edited") body = [(resolved.overrideText ?? "").trim()];
-    else if (resolved.state === "composed") body = [...resolved.blocks.flatMap((b) => lines(b, memo.currency)), ...resolved.flags];
+    // The English reader gets the standard figures line under a section that shows figures, so the
+    // Japanese reader does too. Flags are empty in a teaser: how the underwriting stood is not said to an investor.
+    else if (resolved.state === "composed") {
+      body = [...resolved.blocks.flatMap((b) => lines(b, memo.currency)), ...resolved.flags,
+        ...[figuresLine(resolved)].filter((l): l is string => l !== null)];
+    }
     else continue;
     const text = body.filter(Boolean).join("\n");
     if (text) sections.push({ key, label: SECTION_LABEL[key], text });

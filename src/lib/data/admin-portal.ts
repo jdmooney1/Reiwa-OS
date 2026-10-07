@@ -12,6 +12,10 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { num, str, bool } from "@/lib/data/coerce";
+import { recordVersionProvenance } from "@/lib/data/investor-portal";
+import {
+  documentObjectStore, DocumentObjectMissingError, type DocumentObjectStore,
+} from "@/lib/documents/storage";
 import type {
   InvestorOrgStatus, PublicationStatus, VersionStatus, Placement,
   EntitlementDocumentLevel, PublicationVersion,
@@ -401,18 +405,56 @@ export async function getPublicationVersion(
 // reset. Refreshing from the internal opportunity is a separate, explicit
 // action (createPublicationFromOpportunity), never a side effect.
 // ============================================================================
+export interface DraftFromVersionOptions {
+  copyDocuments?: boolean;
+  /** Where document files are copied. Defaults to the real private bucket. */
+  objects?: DocumentObjectStore;
+}
+
+export interface DraftFromVersion {
+  versionId: string;
+  versionNumber: number;
+  /**
+   * Titles of documents whose stored file was already missing, so the draft started
+   * without them. Said out loud rather than dropped: the person has to re-upload them.
+   */
+  missingDocuments: string[];
+}
+
+/**
+ * A new draft from an existing version, with its OWN copy of every document file.
+ *
+ * Document rows used to be copied with the same `storage_path` as the source, so a draft
+ * and the live version shared one file, and removing it from the draft deleted it from
+ * under the live version. A published version is a frozen snapshot; a snapshot that shares
+ * a mutable file with a draft is not frozen. So each document's file is copied to a new
+ * path owned by the draft, and the unique index on `storage_path` (0034) makes sharing
+ * impossible rather than merely discouraged.
+ *
+ * The copies happen inside the database transaction. If any step fails the rows roll back
+ * and the copies made so far are removed; if the commit itself fails the same cleanup runs.
+ */
 export async function createDraftFromVersion(
   session: Session, sourceVersionId: string,
-  options: { copyDocuments?: boolean } = {}, actorUserId?: string | null,
-): Promise<{ versionId: string; versionNumber: number }> {
-  return withSession(session, (tx) =>
-    createDraftFromVersionOn(tx, sourceVersionId, options, actorUserId ?? null));
+  options: DraftFromVersionOptions = {}, actorUserId?: string | null,
+): Promise<DraftFromVersion> {
+  const objects = options.objects ?? documentObjectStore;
+  const copied: string[] = [];
+  try {
+    return await withSession(session, (tx) =>
+      createDraftFromVersionOn(tx, sourceVersionId, { ...options, objects }, actorUserId ?? null, copied));
+  } catch (e) {
+    // Rows are gone with the rollback; so must the files copied for them be.
+    await objects.remove(copied).catch(() => undefined);
+    throw e;
+  }
 }
 
 export async function createDraftFromVersionOn(
   tx: Queryable, sourceVersionId: string,
-  options: { copyDocuments?: boolean } = {}, actorUserId: string | null = null,
-): Promise<{ versionId: string; versionNumber: number }> {
+  options: DraftFromVersionOptions & { objects: DocumentObjectStore },
+  actorUserId: string | null = null, copied: string[] = [],
+): Promise<DraftFromVersion> {
   const source = await tx.query<{ publication_id: string }>(
     "select publication_id from publication_versions where version_id = $1", [sourceVersionId]);
   if (!source.rows[0]) {
@@ -455,18 +497,124 @@ export async function createDraftFromVersionOn(
        from publication_version_sources where version_id = $2`,
     [created.version_id, sourceVersionId]);
 
+  const missingDocuments: string[] = [];
   if (options.copyDocuments !== false) {
-    await tx.query(
-      `insert into publication_documents
-         (version_id, title, category, storage_path, file_name, mime_type, size_bytes,
-          access_level, sort_order, created_by)
-       select $1, title, category, storage_path, file_name, mime_type, size_bytes,
-              access_level, sort_order, $3
-         from publication_documents where version_id = $2`,
-      [created.version_id, sourceVersionId, actorUserId]);
+    const docs = await tx.query<{
+      title: string; category: string; storage_path: string; file_name: string | null;
+      mime_type: string | null; size_bytes: unknown; access_level: string; sort_order: number;
+      lineage_id: string;
+    }>(
+      `select title, category, storage_path, file_name, mime_type, size_bytes, access_level, sort_order, lineage_id
+         from publication_documents where version_id = $1 order by sort_order, title`,
+      [sourceVersionId]);
+    for (const d of docs.rows) {
+      let ownPath: string;
+      try {
+        ownPath = await options.objects.copy(d.storage_path, created.version_id, d.mime_type);
+      } catch (e) {
+        if (e instanceof DocumentObjectMissingError) { missingDocuments.push(d.title); continue; }
+        throw e;
+      }
+      copied.push(ownPath);
+      await tx.query(
+        `insert into publication_documents
+           (version_id, title, category, storage_path, file_name, mime_type, size_bytes,
+            access_level, sort_order, lineage_id, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [created.version_id, d.title, d.category, ownPath, d.file_name, d.mime_type,
+         d.size_bytes, d.access_level, d.sort_order, d.lineage_id, actorUserId]);
+    }
   }
 
-  return { versionId: created.version_id, versionNumber: Number(created.version_number) };
+  return {
+    versionId: created.version_id, versionNumber: Number(created.version_number), missingDocuments,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Refresh from the internal opportunity
+// ----------------------------------------------------------------------------
+/**
+ * The fields a refresh may overwrite on the new draft: factual pipeline data, taken from the
+ * boundary function (source key -> version column). Title is here deliberately: it is the
+ * asset's name, the same kind of fact as its location and currency.
+ *
+ * NOT here, and therefore never touched by a refresh: headline, highlights and hold period
+ * (written for investors, only ever by a person) and the documents. The Overview is handled
+ * on its own below.
+ */
+export const REFRESH_FIELDS: Record<string, string> = {
+  title: "title", market: "market", submarket: "submarket", city: "city", country: "country",
+  asset_type: "asset_type", strategy: "strategy", currency: "currency",
+  headline_price: "headline_price", target_niy: "target_niy", target_irr: "target_irr",
+  target_equity_multiple: "target_equity_multiple", size_sqft: "size_sqft", size_sqm: "size_sqm",
+};
+
+export interface RefreshedDraft extends DraftFromVersion {
+  /** Version-column names the refresh actually overwrote, for the notice and the tests. */
+  overwritten: string[];
+}
+
+/**
+ * Start a new draft that brings fresh internal data across WITHOUT discarding what a person has
+ * written for investors.
+ *
+ * It begins as a copy of the latest version (documents copied the same way a draft from a
+ * version copies them: each file duplicated, so nothing is shared), then overwrites only the
+ * fields in REFRESH_FIELDS with what the boundary function offers now. The boundary omits
+ * empty values, and an omitted value never blanks a field. The Overview is overwritten only when
+ * the opportunity has an investor overview; the internal summary is not involved at all.
+ *
+ * Nothing is live until the draft is reviewed and published, and the review screen shows every
+ * field that moved.
+ */
+export async function createDraftRefreshedFromSource(
+  session: Session, publicationId: string,
+  options: { objects?: DocumentObjectStore } = {}, actorUserId?: string | null,
+): Promise<RefreshedDraft> {
+  const objects = options.objects ?? documentObjectStore;
+  const copied: string[] = [];
+  try {
+    return await withSession(session, async (tx) => {
+      const latest = await tx.query<{ version_id: string }>(
+        `select version_id from publication_versions
+          where publication_id = $1 order by version_number desc limit 1`, [publicationId]);
+      if (!latest.rows[0]) throw new Error(`Publication ${publicationId} has no version to refresh from`);
+      const link = await tx.query<{ opportunity_id: string }>(
+        "select opportunity_id from publication_sources where publication_id = $1", [publicationId]);
+      if (!link.rows[0]) throw new Error("This publication has no linked internal opportunity.");
+      const opportunityId = link.rows[0].opportunity_id;
+
+      const draft = await createDraftFromVersionOn(
+        tx, latest.rows[0].version_id, { copyDocuments: true, objects }, actorUserId ?? null, copied);
+
+      const current = await tx.query<{ source: Record<string, unknown> | null; fingerprint: string | null }>(
+        `select app.opportunity_publication_source($1) as source,
+                app.opportunity_publication_fingerprint($1) as fingerprint`, [opportunityId]);
+      const source = current.rows[0]?.source;
+      if (!source) throw new Error(`Opportunity ${opportunityId} is not readable, so it cannot be refreshed from`);
+
+      const sets: string[] = []; const values: unknown[] = [draft.versionId];
+      const overwritten: string[] = [];
+      const take = (key: string, column: string) => {
+        if (!(key in source)) return; // empty at the source: leave the draft's value alone
+        values.push(source[key]); sets.push(`${column} = $${values.length}`); overwritten.push(column);
+      };
+      for (const [key, column] of Object.entries(REFRESH_FIELDS)) take(key, column);
+      take("overview", "overview"); // present only when an investor overview has been written
+      if (sets.length > 0) {
+        await tx.query(
+          `update publication_versions set ${sets.join(", ")} where version_id = $1 and status = 'draft'`, values);
+      }
+
+      // The draft now reflects the source as it is today, so its provenance says so.
+      await recordVersionProvenance(tx, draft.versionId, opportunityId, current.rows[0].fingerprint);
+      return { ...draft, overwritten };
+    });
+  } catch (e) {
+    await objects.remove(copied).catch(() => undefined);
+    throw e;
+  }
 }
 
 /**

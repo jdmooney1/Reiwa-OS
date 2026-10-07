@@ -22,7 +22,7 @@
 // findings go back to the caller and live in the panel's own state, so running
 // one cannot flicker or reset the memo the person is reading.
 // ============================================================================
-import { requireAdminSession } from "@/lib/auth/admin";
+import { requireStaffSession } from "@/lib/auth/admin";
 import { AppError } from "@/lib/errors";
 import { runAction } from "@/lib/actions/run-action";
 import type { ActionResult } from "@/lib/actions/result";
@@ -51,7 +51,7 @@ export interface ReviewActionResult extends ActionResult {
 export async function reviewMemoAction(
   opportunityId: string, memoId: string, format: string,
 ): Promise<ReviewActionResult> {
-  const { db } = await requireAdminSession();
+  const { db } = await requireStaffSession();
 
   let review: StoredReview | undefined;
   const result = await runAction("workspace.memo.review", { opportunityId, memoId, format }, async () => {

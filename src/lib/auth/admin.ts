@@ -15,6 +15,16 @@ export function isPortalAdmin(session: Pick<AuthSession, "role">): boolean {
   return session.role === "reiwa_admin";
 }
 
+/**
+ * A Reiwa employee: administrator OR staff. For the pre-investor tools staff may use (the memo
+ * drafting aids). NOT a substitute for isPortalAdmin: anything investor-facing - publishing,
+ * entitlements, prospect links, exchange rates, user management - stays admin-only, and the
+ * database refuses staff on those regardless of what an application check says.
+ */
+export function isInternalStaff(session: Pick<AuthSession, "role">): boolean {
+  return session.role === "reiwa_admin" || session.role === "reiwa_staff";
+}
+
 /** Throwing guard for server actions. */
 export function assertPortalAdmin(session: Pick<AuthSession, "role">): void {
   if (!isPortalAdmin(session)) {
@@ -45,5 +55,18 @@ export async function requireAdminSession(): Promise<{ auth: AuthSession; db: Se
   const session = await getSession();
   if (!session) throw new Error("Not signed in.");
   assertPortalAdmin(session);
+  return { auth: session, db: toDbSession(session) };
+}
+
+/**
+ * For the pre-investor drafting actions staff may run: authenticated + reiwa_admin or
+ * reiwa_staff, or throw. The data layer scopes staff to the organisations they belong to.
+ */
+export async function requireStaffSession(): Promise<{ auth: AuthSession; db: Session }> {
+  const session = await getSession();
+  if (!session) throw new Error("Not signed in.");
+  if (!isInternalStaff(session)) {
+    throw new Error("Not authorised - this tool is for Reiwa staff.");
+  }
   return { auth: session, db: toDbSession(session) };
 }

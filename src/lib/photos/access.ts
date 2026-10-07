@@ -2,10 +2,11 @@
 // Who may be served a photograph - a pure rule, re-evaluated on every request.
 // ----------------------------------------------------------------------------
 // Phase 1 is STAFF ONLY. Internal staff (reiwa_admin, org_user, ic_member — added
-// by migration 0033, docs/24) may read a photo at every visibility, because to
-// them `visibility` is a label about the future, not a restriction. Everyone
-// else - including the read-only `investor_viewer` role and any portal contact -
-// may read NO photograph at ANY visibility.
+// by migration 0033, docs/24 — and reiwa_staff, added by migration 0035) may read
+// a photo at every visibility, because to them `visibility` is a label about the
+// future, not a restriction. Everyone else - including the read-only
+// `investor_viewer` role and any portal contact - may read NO photograph at ANY
+// visibility.
 //
 // This is deliberately stricter than "up to their entitlement tier": no investor
 // path exists yet, so there is no tier to compare. Phase 2 adds one by extending
@@ -18,5 +19,5 @@ import type { GlobalRole } from "@/lib/db/client";
 import type { PhotoVisibility } from "@/lib/photos/constraints";
 
 export function mayReadPhoto(role: GlobalRole | null | undefined, _visibility: PhotoVisibility): boolean {
-  return role === "reiwa_admin" || role === "org_user" || role === "ic_member";
+  return role === "reiwa_admin" || role === "org_user" || role === "ic_member" || role === "reiwa_staff";
 }

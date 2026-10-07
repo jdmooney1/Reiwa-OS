@@ -17,22 +17,28 @@ import {
   createInvestorContact, updateInvestorContact,
   createPublicationFromOpportunity, updateDraftVersion,
   submitVersionForReview, returnVersionToDraft, publishVersion, supersedeActiveVersion,
-  addPublicationDocument, removePublicationDocument,
+  addPublicationDocument,
   grantEntitlement, updateEntitlement, revokeEntitlement, setEntitlementPlacement,
   getPublicationProvenance,
   type InvestorOrgStatus, type Placement, type EntitlementDocumentLevel,
   type DocumentCategory, type DocumentAccessLevel,
 } from "@/lib/data/investor-portal";
 import {
-  createDraftFromVersion, assertNoOpenVersion, updatePublicationDocument,
+  createDraftFromVersion, createDraftRefreshedFromSource, assertNoOpenVersion, updatePublicationDocument,
   getPublicationForOpportunity, reorderSecondaryEntitlements,
 } from "@/lib/data/admin-portal";
 import {
   checkUpload, newObjectPath, putDocumentObject, deleteDocumentObject, safeFileName,
 } from "@/lib/documents/storage";
 import { AppError, reportError } from "@/lib/errors";
+import { runAction } from "@/lib/actions/run-action";
+import type { ActionResult } from "@/lib/actions/result";
+import { assertPublishConfirmed } from "@/lib/data/publish-review";
+import { removePublicationDocumentAndObject } from "@/lib/documents/publication-documents";
+import { updateOpportunity } from "@/lib/data/opportunities";
 import { parseNumber, PERCENT, NON_NEGATIVE } from "@/lib/validation/numeric";
 
+const MAX_INVESTOR_OVERVIEW = 4000;
 const trimmed = (v: FormDataEntryValue | null): string => String(v ?? "").trim();
 const orNull = (v: FormDataEntryValue | null): string | null => trimmed(v) || null;
 
@@ -281,13 +287,49 @@ export async function returnToDraftAction(
   refreshPublication(publicationId);
 }
 
+/**
+ * Publish a version that has been through the review screen.
+ *
+ * The confirmation is checked HERE, on the server, against a fresh read: a digest
+ * of what the screen showed and the sentence the person typed. A request that
+ * skips the screen has neither and is refused, so the pause cannot be clicked
+ * past. It is friction for one person, not a second approver; see
+ * docs/24-investor-overview-and-publish-review.md.
+ *
+ * Returns an ActionResult rather than throwing: a thrown message is replaced by a
+ * generic one in production, and this is a screen that has to say what is wrong.
+ */
 export async function publishVersionAction(
-  versionId: string, publicationId: string,
-): Promise<void> {
+  versionId: string, publicationId: string, confirmation: { digest: string; typed: string } | null,
+): Promise<ActionResult> {
   const { db, auth } = await requireAdminSession();
-  await publishVersion(db, versionId, auth.userId);
+  const result = await runAction("admin.publication.publish", { versionId, publicationId }, async () => {
+    await assertPublishConfirmed(db, versionId, confirmation);
+    await publishVersion(db, versionId, auth.userId);
+  });
+  if (result.error) return result;
   refreshPublication(publicationId);
   revalidatePath("/admin/investors");
+  return result;
+}
+
+/**
+ * Save the investor-facing overview on an opportunity. Admin only, because it is
+ * the one piece of free text that is copied into an investor draft; the internal
+ * summary beside it is never copied, and nothing here reads it.
+ */
+export async function saveInvestorOverviewAction(
+  opportunityId: string, overview: string,
+): Promise<ActionResult> {
+  const { db } = await requireAdminSession();
+  return runAction("admin.opportunity.investor-overview", { opportunityId }, async () => {
+    const text = overview.replace(/\r\n/g, "\n").trim();
+    if (text.length > MAX_INVESTOR_OVERVIEW) {
+      throw new AppError(`Keep the investor overview under ${MAX_INVESTOR_OVERVIEW} characters.`);
+    }
+    await updateOpportunity(db, opportunityId, { investorOverview: text === "" ? null : text });
+    revalidatePath(`/opportunities/${opportunityId}/publication`);
+  });
 }
 
 export async function withdrawPublicationAction(publicationId: string): Promise<void> {
@@ -297,27 +339,52 @@ export async function withdrawPublicationAction(publicationId: string): Promise<
   revalidatePath("/admin/investors");
 }
 
-/** Edit a published publication: copy the version into a fresh draft. */
+/**
+ * Edit a published publication: copy the version into a fresh draft, with its own copy of
+ * every document file. Returns a notice when a document could not be carried across because
+ * its stored file was already missing, so the person knows to re-upload it.
+ */
 export async function startDraftFromVersionAction(
   sourceVersionId: string, publicationId: string,
-): Promise<void> {
+): Promise<ActionResult> {
   const { db, auth } = await requireAdminSession();
-  await createDraftFromVersion(db, sourceVersionId, { copyDocuments: true }, auth.userId);
+  let notice: string | undefined;
+  const result = await runAction("admin.publication.new-draft", { sourceVersionId, publicationId }, async () => {
+    const draft = await createDraftFromVersion(db, sourceVersionId, { copyDocuments: true }, auth.userId);
+    if (draft.missingDocuments.length > 0) {
+      notice =
+        `Version ${draft.versionNumber} was started without: ${draft.missingDocuments.map((t) => `"${t}"`).join(", ")}. ` +
+        `The stored file for ${draft.missingDocuments.length === 1 ? "it was" : "each was"} already missing, so there was nothing to copy. ` +
+        `Upload ${draft.missingDocuments.length === 1 ? "it" : "them"} again on the Documents tab before publishing.`;
+    }
+  });
   refreshPublication(publicationId);
+  return notice ? { ...result, notice } : result;
 }
 
 /**
- * Explicitly refresh from the internal opportunity: a NEW draft re-prefilled
- * through the P1 whitelist. Deliberate and admin-visible — the live version is
- * untouched until that draft is reviewed and published.
+ * Explicitly refresh from the internal opportunity: a NEW draft that starts as a copy of the
+ * latest version, with its own copy of every document, and then takes the factual fields (title,
+ * location, asset type, strategy, currency, figures, size) from the internal record as it is now.
+ * What a person wrote for investors (headline, highlights, hold period, documents) is kept, an
+ * empty source value never blanks anything, and the Overview changes only if an investor overview
+ * has been written. The live version is untouched until the draft is reviewed and published.
  */
-export async function startDraftFromSourceAction(publicationId: string): Promise<void> {
+export async function startDraftFromSourceAction(publicationId: string): Promise<ActionResult> {
   const { db, auth } = await requireAdminSession();
-  await assertNoOpenVersion(db, publicationId);
-  const provenance = await getPublicationProvenance(db, publicationId);
-  if (!provenance) throw new AppError("This publication has no linked internal opportunity.");
-  await createPublicationFromOpportunity(db, provenance.opportunityId, auth.userId);
+  let notice: string | undefined;
+  const result = await runAction("admin.publication.refresh-draft", { publicationId }, async () => {
+    await assertNoOpenVersion(db, publicationId);
+    const draft = await createDraftRefreshedFromSource(db, publicationId, {}, auth.userId);
+    if (draft.missingDocuments.length > 0) {
+      notice =
+        `Version ${draft.versionNumber} was started without: ${draft.missingDocuments.map((t) => `"${t}"`).join(", ")}. ` +
+        `The stored file for ${draft.missingDocuments.length === 1 ? "it was" : "each was"} already missing, so there was nothing to copy. ` +
+        `Upload ${draft.missingDocuments.length === 1 ? "it" : "them"} again on the Documents tab before publishing.`;
+    }
+  });
   refreshPublication(publicationId);
+  return notice ? { ...result, notice } : result;
 }
 
 // ============================================================================
@@ -396,9 +463,9 @@ export async function removeDocumentAction(
   documentId: string, publicationId: string,
 ): Promise<void> {
   const { db } = await requireAdminSession();
-  // The path comes back from the deleted row, so the object removed is exactly
-  // the one that row owned — the browser never names it.
-  const storagePath = await removePublicationDocument(db, documentId);
-  if (storagePath) await deleteDocumentObject(storagePath);
+  // The row is deleted first, and the file only if no other row still needs it; the path
+  // comes back from the deleted row, so the browser never names it. See
+  // lib/documents/publication-documents.
+  await removePublicationDocumentAndObject(db, documentId);
   refreshPublication(publicationId);
 }

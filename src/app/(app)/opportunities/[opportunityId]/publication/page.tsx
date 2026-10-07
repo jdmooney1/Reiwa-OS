@@ -4,6 +4,7 @@ import { getPublicationForOpportunity, listEntitlementsForPublication } from "@/
 import {
   getPublication, listPublicationVersions, getVersionProvenance, publicationSourceDrift,
 } from "@/lib/data/investor-portal";
+import { getOpportunity } from "@/lib/data/opportunities";
 import { PublicationSection, type PublicationView } from "@/components/workspace/publication-section";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,10 @@ export default async function PublicationPage({
     );
   }
 
-  const publicationId = await getPublicationForOpportunity(session, params.opportunityId);
+  const [opportunity, publicationId] = await Promise.all([
+    getOpportunity(session, params.opportunityId),
+    getPublicationForOpportunity(session, params.opportunityId),
+  ]);
   let view: PublicationView | null = null;
 
   if (publicationId) {
@@ -67,6 +71,8 @@ export default async function PublicationPage({
       opportunityId={params.opportunityId}
       publication={view}
       portalAdmin
+      investorOverview={opportunity?.investorOverview ?? null}
+      internalSummary={opportunity?.summary ?? null}
     />
   );
 }

@@ -107,6 +107,8 @@ export interface PublicationDocument {
   sizeBytes: number | null;
   accessLevel: DocumentAccessLevel;
   sortOrder: number;
+  /** Same across the copies of one document in different versions; new for a fresh upload. */
+  lineageId: string;
   createdAt: string;
 }
 
@@ -195,7 +197,7 @@ function mapDocument(r: Record<string, any>): PublicationDocument {
     documentId: r.document_id, versionId: r.version_id, title: r.title, category: r.category,
     storagePath: r.storage_path, fileName: str(r.file_name), mimeType: str(r.mime_type),
     sizeBytes: num(r.size_bytes), accessLevel: r.access_level,
-    sortOrder: Number(r.sort_order), createdAt: r.created_at,
+    sortOrder: Number(r.sort_order), lineageId: r.lineage_id, createdAt: r.created_at,
   };
 }
 
@@ -459,23 +461,28 @@ async function insertDraftFromSource(
      returning version_id, version_number`,
     values);
 
-  // Provenance is recorded privately, never on the version row itself.
-  //
-  // Alongside the fingerprint, capture WHICH underwriting version and WHICH
-  // committee decision were live at the moment the draft was taken (Phase 1A).
-  //
-  // The underwriting version is the AUTHORITATIVE one — approved if there is
-  // one, otherwise the current working version — which is the same rule that
-  // projects the opportunity's headline figures, and therefore the same numbers
-  // this draft was just prefilled from. Capturing only approved versions would
-  // leave a publication drafted ahead of committee with no provenance at all,
-  // which is exactly the case where somebody later asks where the figures came
-  // from.
-  // Without them, "what did the investor actually see approved?" is answerable
-  // only by comparing dates, and the answer changes as the internal record
-  // moves on. Both are sub-selects rather than parameters so that a publication
-  // never depends on the caller having looked them up, and both are nullable:
-  // an opportunity may be published before it has been to committee.
+  await recordVersionProvenance(tx, rows[0].version_id, opportunityId, source.rows[0].fingerprint);
+
+  return { versionId: rows[0].version_id, versionNumber: Number(rows[0].version_number) };
+}
+
+/**
+ * Record what a draft was taken from, privately (never on the version row itself): the
+ * boundary's fingerprint, and WHICH underwriting version and WHICH committee decision were
+ * live at that moment (Phase 1A). Writing it again for the same version replaces it, which is
+ * what a refresh from source does.
+ *
+ * The underwriting version is the AUTHORITATIVE one - approved if there is one, otherwise the
+ * current working version - the same rule that projects the opportunity's headline figures, so
+ * the same numbers the draft was just prefilled from. Capturing only approved versions would
+ * leave a publication drafted ahead of committee with no provenance at all, which is exactly
+ * the case where somebody later asks where the figures came from. Both are sub-selects rather
+ * than parameters so a publication never depends on the caller having looked them up, and both
+ * are nullable: an opportunity may be published before it has been to committee.
+ */
+export async function recordVersionProvenance(
+  tx: Queryable, versionId: string, opportunityId: string, fingerprint: string | null,
+): Promise<void> {
   await tx.query(
     `insert into publication_version_sources
        (version_id, source_fingerprint, source_investment_case_id, source_ic_decision_id)
@@ -487,10 +494,13 @@ async function insertDraftFromSource(
           join investment_cases c on c.case_id = d.investment_case_id
          where d.opportunity_id = $3 and c.status = 'approved'
            and d.outcome in ('approved', 'approved_with_conditions')
-         order by d.decision_date desc, d.created_at desc limit 1))`,
-    [rows[0].version_id, source.rows[0].fingerprint, opportunityId]);
-
-  return { versionId: rows[0].version_id, versionNumber: Number(rows[0].version_number) };
+         order by d.decision_date desc, d.created_at desc limit 1))
+     on conflict (version_id) do update
+       set source_fingerprint = excluded.source_fingerprint,
+           source_investment_case_id = excluded.source_investment_case_id,
+           source_ic_decision_id = excluded.source_ic_decision_id,
+           source_captured_at = now()`,
+    [versionId, fingerprint, opportunityId]);
 }
 
 /**
@@ -814,7 +824,16 @@ export async function removePublicationDocument(
     const { rows } = await tx.query<{ storage_path: string }>(
       "delete from publication_documents where document_id = $1 returning storage_path",
       [documentId]);
-    return rows[0]?.storage_path ?? null;
+    const path = rows[0]?.storage_path;
+    if (!path) return null;
+    // Belt and braces. Every document owns its file (unique index, 0034), so nothing should
+    // still point at this path. If something does - data from before that index, or a bug -
+    // the file is NOT returned for deletion: leaving an unowned file in the store costs a
+    // few kilobytes, deleting a file a live version serves costs an investor their download.
+    const still = await tx.query<{ n: number }>(
+      `select (select count(*) from publication_documents where storage_path = $1)
+            + (select count(*) from opportunity_documents where storage_path = $1) as n`, [path]);
+    return Number(still.rows[0]?.n ?? 0) === 0 ? path : null;
   });
 }
 
