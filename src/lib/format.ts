@@ -53,19 +53,40 @@ export function formatMoney(
   })}`;
 }
 
+const FIXED = new Map<number, Intl.NumberFormat>();
+/**
+ * A number to a fixed count of decimals, rounding halves UP as a person reads them.
+ *
+ * `Number.prototype.toFixed` works on the binary value, so a figure typed as 13.35 is really
+ * 13.3499999... and comes out "13.3", while 13.45 comes out "13.4" and 1.005 comes out "1.00":
+ * halves round down or up at random. Intl formats the decimal the number was written as, so
+ * 13.35 is "13.4" and 4.35 is "4.4", every time. A yield an investor reads should not depend on
+ * how a binary double happens to fall.
+ */
+export function toFixedHalfUp(value: number, decimals: number): string {
+  let f = FIXED.get(decimals);
+  if (!f) {
+    f = new Intl.NumberFormat("en-GB", {
+      minimumFractionDigits: decimals, maximumFractionDigits: decimals, useGrouping: false,
+    });
+    FIXED.set(decimals, f);
+  }
+  return f.format(value);
+}
+
 /** Percentage already expressed as a number, e.g. 4.25 -> "4.25%". */
 export function formatPct(
   value: number | null | undefined,
   decimals = 2,
 ): string {
   if (value == null) return "—";
-  return `${value.toFixed(decimals)}%`;
+  return `${toFixedHalfUp(value, decimals)}%`;
 }
 
 /** Multiple, e.g. 1.8 -> "1.80x". */
 export function formatMultiple(value: number | null | undefined): string {
   if (value == null) return "—";
-  return `${value.toFixed(2)}x`;
+  return `${toFixedHalfUp(value, 2)}x`;
 }
 
 export function formatArea(

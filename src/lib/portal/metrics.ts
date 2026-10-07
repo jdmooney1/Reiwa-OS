@@ -10,6 +10,7 @@
 import {
   formatMoneyCompact, formatMoney, formatPct, formatMultiple, formatArea,
 } from "@/lib/format";
+import type { Currency } from "@/types/database";
 import { ASSET_TYPE_LABEL, STRATEGY_LABEL } from "@/lib/domain";
 import type { AssetType, Strategy } from "@/types/database";
 import type { PortalOpportunity } from "@/lib/data/portal-feed";
@@ -47,6 +48,41 @@ const metric = (key: string, label: string, raw: unknown, value: string): Metric
   key, label, value: raw == null ? NOT_DISCLOSED : value, present: raw != null,
 });
 
+/** The fields of a publication version that become investor-facing figures. */
+export interface PublicationFigures {
+  headlinePrice: number | null;
+  currency: string;
+  targetIrr: number | null;
+  targetNiy: number | null;
+  targetEquityMultiple: number | null;
+  holdPeriodYears: number | null;
+  sizeSqft: number | null;
+  sizeSqm: number | null;
+}
+
+export type FigureKey = "headlinePrice" | "targetIrr" | "targetNiy" | "targetEquityMultiple" | "holdPeriodYears" | "size";
+
+/**
+ * The text of each figure exactly as an investor reads it.
+ *
+ * ONE definition. The investor portal builds its metrics from this, and the admin's "Investor
+ * view" preview of a draft uses it too, so the preview can never show a different number of
+ * decimals from the screen it claims to preview (it once showed an NIY of 6.25% as 6.3%).
+ * `compact` shortens the acquisition value for cards and the comparison table.
+ */
+export function figureText(o: PublicationFigures, opts: { compact?: boolean } = {}): Record<FigureKey, string> {
+  const money = opts.compact ? formatMoneyCompact : formatMoney;
+  return {
+    headlinePrice: money(o.headlinePrice, o.currency as Currency),
+    targetIrr: formatPct(o.targetIrr, 1),
+    targetNiy: formatPct(o.targetNiy, 2),
+    targetEquityMultiple: formatMultiple(o.targetEquityMultiple),
+    holdPeriodYears: o.holdPeriodYears == null ? NOT_DISCLOSED : `${o.holdPeriodYears} years`,
+    size: o.sizeSqft != null ? formatArea(o.sizeSqft, "sqft")
+      : o.sizeSqm != null ? formatArea(o.sizeSqm, "sqm") : NOT_DISCLOSED,
+  };
+}
+
 /**
  * The full metric set, in the order an investment memorandum would present it.
  * `compact` shortens the acquisition value for cards and the comparison table.
@@ -54,19 +90,14 @@ const metric = (key: string, label: string, raw: unknown, value: string): Metric
 export function opportunityMetrics(
   o: PortalOpportunity, opts: { compact?: boolean } = {},
 ): Metric[] {
-  const money = opts.compact ? formatMoneyCompact : formatMoney;
+  const t = figureText(o, opts);
   return [
-    metric("headlinePrice", "Target acquisition value", o.headlinePrice,
-      money(o.headlinePrice, o.currency)),
-    metric("targetIrr", "Target IRR", o.targetIrr, formatPct(o.targetIrr, 1)),
-    metric("targetNiy", "Target net initial yield", o.targetNiy, formatPct(o.targetNiy, 2)),
-    metric("targetEquityMultiple", "Target equity multiple", o.targetEquityMultiple,
-      formatMultiple(o.targetEquityMultiple)),
-    metric("holdPeriodYears", "Indicative hold period", o.holdPeriodYears,
-      o.holdPeriodYears == null ? NOT_DISCLOSED : `${o.holdPeriodYears} years`),
-    metric("size", "Approximate size", o.sizeSqft ?? o.sizeSqm,
-      o.sizeSqft != null ? formatArea(o.sizeSqft, "sqft")
-        : o.sizeSqm != null ? formatArea(o.sizeSqm, "sqm") : NOT_DISCLOSED),
+    metric("headlinePrice", "Target acquisition value", o.headlinePrice, t.headlinePrice),
+    metric("targetIrr", "Target IRR", o.targetIrr, t.targetIrr),
+    metric("targetNiy", "Target net initial yield", o.targetNiy, t.targetNiy),
+    metric("targetEquityMultiple", "Target equity multiple", o.targetEquityMultiple, t.targetEquityMultiple),
+    metric("holdPeriodYears", "Indicative hold period", o.holdPeriodYears, t.holdPeriodYears),
+    metric("size", "Approximate size", o.sizeSqft ?? o.sizeSqm, t.size),
   ];
 }
 
