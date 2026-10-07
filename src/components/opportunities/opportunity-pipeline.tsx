@@ -99,7 +99,10 @@ export function OpportunityPipeline({
     const qs = toQueryString(state, mode);
     const path = window.location.pathname;
     const next = qs ? `${path}?${qs}` : path;
-    if (next !== path + window.location.search) window.history.replaceState(window.history.state, "", next);
+    // `null`, not window.history.state: Next treats a call carrying its own internal state as its own and does not
+    // adopt the new address, so a later revalidation (every triage decision revalidates this page) would put the
+    // old one back and drop the filters and the mode.
+    if (next !== path + window.location.search) window.history.replaceState(null, "", next);
   }, [state, mode]);
 
   // Decisions made in triage mode show at once, before the server round trip is refreshed.
