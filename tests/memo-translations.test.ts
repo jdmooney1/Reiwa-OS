@@ -278,13 +278,17 @@ describe("administrator only, append-only apart from accepted_sections", () => {
     expect(anon).toEqual([]);
   });
 
-  it("row level security is on and every policy requires app.is_admin()", async () => {
+  it("row level security is on and every policy requires app.is_staff()", async () => {
     const [{ enabled }] = await adminQuery<{ enabled: boolean }>("select relrowsecurity as enabled from pg_class where relname = 'memo_translation_drafts'");
     expect(enabled).toBe(true);
     const policies = await adminQuery<{ cmd: string; qual: string | null; withcheck: string | null }>(
       "select cmd, qual::text, with_check::text as withcheck from pg_policies where tablename = 'memo_translation_drafts'");
     expect(policies.map((p) => p.cmd).sort()).toEqual(["INSERT", "SELECT", "UPDATE"]);
-    for (const p of policies) expect(`${p.qual ?? ""}${p.withcheck ?? ""}`).toContain("is_admin");
+    for (const p of policies) {
+      const text = `${p.qual ?? ""}${p.withcheck ?? ""}`;
+      expect(text).toContain("is_staff");
+      expect(text).toContain("memos");
+    }
   });
 
   it("a non-administrator cannot save Japanese into a memo through the accept path either", async () => {

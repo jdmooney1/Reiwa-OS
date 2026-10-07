@@ -205,7 +205,7 @@ describe("administrator only, and append-only", () => {
     expect(rows).toEqual([]);
   });
 
-  it("row level security is on, and every policy requires app.is_admin()", async () => {
+  it("row level security is on, and every policy requires app.is_staff()", async () => {
     const [{ enabled }] = await adminQuery<{ enabled: boolean }>(
       "select relrowsecurity as enabled from pg_class where relname = 'memo_ai_reviews'");
     expect(enabled).toBe(true);
@@ -215,7 +215,10 @@ describe("administrator only, and append-only", () => {
         where tablename = 'memo_ai_reviews'`);
     expect(policies.length).toBeGreaterThan(0);
     for (const p of policies) {
-      expect(`${p.qual ?? ""}${p.withcheck ?? ""}`).toContain("is_admin");
+      // Internal staff (admin or staff, 0035), and only for a memo the caller can already see.
+      const text = `${p.qual ?? ""}${p.withcheck ?? ""}`;
+      expect(text).toContain("is_staff");
+      expect(text).toContain("memos");
       expect(["SELECT", "INSERT"]).toContain(p.cmd);
     }
   });
