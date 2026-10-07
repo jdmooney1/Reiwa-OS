@@ -27,6 +27,7 @@ import { adminQuery, withSession, type Session } from "@/lib/db/client";
 import { adminSession, orgIdByName, orgUserSession, profileIdByEmail } from "./helpers";
 import { seedDocTypes, DOC_TYPE_CATALOGUE } from "@/lib/db/seed-doc-types";
 import { readinessSummary, transitionDocumentStage, checkActionGate, recordActionGateOverride } from "@/lib/data/deal-gates";
+import { updateOpportunityFlags, updateDealInvestorFlags } from "@/lib/data/deal-flags";
 import { convertToAsset } from "@/lib/data/conversion";
 
 let org: string;
@@ -341,6 +342,83 @@ describe("doc_type_applies receives real flags, not '{}' (0051)", () => {
       "select count(*)::int as n from deal_document where deal_investor_id = $1 and doc_type_key = 'jp_pre_contract_disclosure'",
       [dealInvestorId]);
     expect(rows[0].n).toBe(1); // this investor's own flag wins over the deal's
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("flag governance: audited edits, admin+reason gate on regulated_disclosure (0052)", () => {
+  afterEach(async () => {
+    await adminQuery("delete from platform_settings where key = 'regulated_disclosure'");
+  });
+
+  it("every flags edit is audited, including an ordinary unrestricted one", async () => {
+    const oppId = await newOpportunity("53a Audit Basic");
+    await updateOpportunityFlags(session, oppId, { geared: true });
+    const rows = await adminQuery<{ before: unknown; after: Record<string, unknown>; reason: string | null }>(
+      "select before, after, reason from opportunity_flags_audit where opportunity_id = $1", [oppId]);
+    expect(rows.length).toBe(1);
+    expect(rows[0].after.geared).toBe(true);
+    expect(rows[0].reason).toBeNull();
+  });
+
+  it("turning regulated_disclosure ON needs no special role or reason", async () => {
+    const oppId = await newOpportunity("53b Turn On Easy");
+    await updateOpportunityFlags(session, oppId, { regulated_disclosure: true });
+    const row = await adminQuery<{ flags: { regulated_disclosure: boolean } }>(
+      "select flags from opportunities where opportunity_id = $1", [oppId]);
+    expect(row[0].flags.regulated_disclosure).toBe(true);
+  });
+
+  it("turning it OFF is unrestricted while the platform setting is not on", async () => {
+    const oppId = await newOpportunity("53c Turn Off No Platform");
+    await updateOpportunityFlags(session, oppId, { regulated_disclosure: true });
+    await expect(updateOpportunityFlags(session, oppId, { regulated_disclosure: false })).resolves.toBeUndefined();
+  });
+
+  it("turning it OFF while the platform setting is on requires a reiwa_admin AND a reason", async () => {
+    await adminQuery("insert into platform_settings (key, value) values ('regulated_disclosure', 'true'::jsonb)");
+    const oppId = await newOpportunity("53d Turn Off Platform On");
+    await updateOpportunityFlags(session, oppId, { regulated_disclosure: true });
+
+    await expect(updateOpportunityFlags(session, oppId, { regulated_disclosure: false }))
+      .rejects.toThrow(/reiwa_admin/);
+    await expect(updateOpportunityFlags(icMemberSession, oppId, { regulated_disclosure: false }))
+      .rejects.toThrow(/reiwa_admin/);
+    await expect(updateOpportunityFlags(adminSession, oppId, { regulated_disclosure: false }))
+      .rejects.toThrow(/requires a reason/);
+
+    await updateOpportunityFlags(adminSession, oppId, { regulated_disclosure: false }, "specified investor exemption");
+    const row = await adminQuery<{ flags: { regulated_disclosure: boolean } }>(
+      "select flags from opportunities where opportunity_id = $1", [oppId]);
+    expect(row[0].flags.regulated_disclosure).toBe(false);
+
+    const audit = await adminQuery<{ reason: string | null }>(
+      "select reason from opportunity_flags_audit where opportunity_id = $1 order by changed_at desc limit 1", [oppId]);
+    expect(audit[0].reason).toBe("specified investor exemption");
+  });
+
+  it("the same admin+reason gate, and the same audit trail, applies to deal_investor.flags", async () => {
+    await adminQuery("insert into platform_settings (key, value) values ('regulated_disclosure', 'true'::jsonb)");
+    const oppId = await newOpportunity("53e DI Flag Governance");
+    const investorOrgId = await newInvestorOrg("Test Flag Governance Investor " + randomUUID());
+    const diRows = await withSession(session, (tx) =>
+      tx.query<{ deal_investor_id: string }>(
+        "insert into deal_investor (org_id, opportunity_id, investor_org_id, introduced_by) values ($1,$2,$3,$4) returning deal_investor_id",
+        [org, oppId, investorOrgId, analyst]));
+    const dealInvestorId = diRows.rows[0].deal_investor_id;
+    await updateDealInvestorFlags(session, dealInvestorId, { regulated_disclosure: true });
+
+    await expect(updateDealInvestorFlags(session, dealInvestorId, { regulated_disclosure: false }))
+      .rejects.toThrow(/reiwa_admin/);
+    await updateDealInvestorFlags(adminSession, dealInvestorId, { regulated_disclosure: false }, "professional investor exemption");
+
+    const row = await adminQuery<{ flags: { regulated_disclosure: boolean } }>(
+      "select flags from deal_investor where deal_investor_id = $1", [dealInvestorId]);
+    expect(row[0].flags.regulated_disclosure).toBe(false);
+    const audit = await adminQuery<{ before: unknown; after: unknown; reason: string | null }>(
+      "select before, after, reason from deal_investor_flags_audit where deal_investor_id = $1 order by changed_at desc limit 1",
+      [dealInvestorId]);
+    expect(audit[0].reason).toBe("professional investor exemption");
   });
 });
 

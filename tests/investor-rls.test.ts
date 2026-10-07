@@ -6,7 +6,7 @@
 // permission function is mocked and no query is routed around a policy: a leak
 // in migration 0005 fails these tests.
 // ============================================================================
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { adminQuery, withInvestorSession, withSession } from "@/lib/db/client";
 import { createOpportunity } from "@/lib/data/opportunities";
 import {
@@ -687,5 +687,25 @@ describe("Staff visibility into investor_organizations via deal_investor (0049)"
   it("a Reiwa admin is unaffected by 0049 — the pre-existing admin policy already covered everything", async () => {
     const { rows } = await withSession(adminSession, (tx) => tx.query<{ n: number }>("select count(*)::int as n from investor_organizations"));
     expect(rows[0].n).toBeGreaterThan(0);
+  });
+});
+
+describe("platform_settings is staff-only, not investor-readable (0052)", () => {
+  afterEach(async () => {
+    await adminQuery("delete from platform_settings where key = 'regulated_disclosure'");
+  });
+
+  it("an investor session reads nothing from platform_settings, even once a row exists", async () => {
+    await adminQuery("insert into platform_settings (key, value) values ('regulated_disclosure', 'true'::jsonb)");
+    const { rows } = await withInvestorSession(kitanoUid, (tx) => tx.query("select * from platform_settings"));
+    expect(rows).toEqual([]);
+  });
+
+  it("internal staff (org_user) can read it", async () => {
+    await adminQuery("insert into platform_settings (key, value) values ('regulated_disclosure', 'true'::jsonb)");
+    const meiji = await orgIdByName("Meiji Shipping");
+    const { rows } = await withSession(orgUserSession([meiji]), (tx) =>
+      tx.query<{ key: string }>("select key from platform_settings"));
+    expect(rows.map((r) => r.key)).toContain("regulated_disclosure");
   });
 });
