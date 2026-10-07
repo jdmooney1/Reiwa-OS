@@ -153,10 +153,11 @@ describe("the reviewer is not a gate: finalising does not know it exists", () =>
   });
 });
 
-describe("administrator-only, and nothing investor-facing or printed can reach it", () => {
-  it("the action is gated by requireAdminSession and refuses a memo that is not a draft", () => {
+describe("internal-staff-only, and nothing investor-facing or printed can reach it", () => {
+  it("the action is gated by requireStaffSession (admin or staff, 0035) and refuses a memo that is not a draft", () => {
     const a = code(ACTION);
-    expect(a).toContain("requireAdminSession()");
+    expect(a).toContain("requireStaffSession()");
+    expect(a).not.toContain("requireAdminSession");
     expect(a).toContain("reviewRefusalReason(memo.status)");
     expect(a).toContain("if (refusal) throw new AppError(refusal);");
     // And the rule itself refuses, rather than merely being called.
@@ -164,9 +165,9 @@ describe("administrator-only, and nothing investor-facing or printed can reach i
     expect(reviewRefusalReason("draft")).toBeNull();
   });
 
-  it("the page offers it to a Reiwa administrator only", () => {
+  it("the page offers it to Reiwa staff and administrators only", () => {
     expect(code("src/app/(app)/opportunities/[opportunityId]/memo/page.tsx"))
-      .toMatch(/canReview=\{auth\.role === "reiwa_admin"\}/);
+      .toMatch(/canReview=\{isInternalStaff\(auth\)\}/);
   });
 
   it("no investor, portal or prospect file mentions the reviewer in any form", () => {

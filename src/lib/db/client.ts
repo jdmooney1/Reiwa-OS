@@ -16,7 +16,7 @@ import { Pool, types, type PoolClient } from "pg";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-export type GlobalRole = "reiwa_admin" | "org_user" | "investor_viewer";
+export type GlobalRole = "reiwa_admin" | "reiwa_staff" | "org_user" | "investor_viewer";
 
 export interface Session {
   userId: string;

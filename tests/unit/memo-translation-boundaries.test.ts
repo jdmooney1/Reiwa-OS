@@ -145,13 +145,13 @@ describe("generating writes its own audit row and nothing else", () => {
   });
 });
 
-describe("administrator-only, and nothing outward-facing or finalising can reach it", () => {
-  it("both actions are gated by requireAdminSession before anything else", () => {
+describe("internal-staff-only, and nothing outward-facing or finalising can reach it", () => {
+  it("both actions are gated by requireStaffSession (admin or staff, 0035) before anything else", () => {
     for (const f of [GENERATE_ACTION, ACCEPT_ACTION]) {
       const a = code(f);
-      expect(a, f).toContain("requireAdminSession()");
-      for (const m of a.matchAll(/export async function \w+\([^)]*\)[^{]*\{\s*const \{ db \} = await requireAdminSession\(\);/g)) expect(m[0]).toBeTruthy();
-      expect((a.match(/export async function/g) ?? []).length, f).toBe((a.match(/await requireAdminSession\(\)/g) ?? []).length);
+      expect(a, f).toContain("requireStaffSession()");
+      for (const m of a.matchAll(/export async function \w+\([^)]*\)[^{]*\{\s*const \{ db \} = await requireStaffSession\(\);/g)) expect(m[0]).toBeTruthy();
+      expect((a.match(/export async function/g) ?? []).length, f).toBe((a.match(/await requireStaffSession\(\)/g) ?? []).length);
     }
   });
 
@@ -160,8 +160,8 @@ describe("administrator-only, and nothing outward-facing or finalising can reach
     expect(code("src/lib/memo-translation/generate.ts")).toContain("if (refusal) throw new AppError(refusal);");
   });
 
-  it("the page offers it to a Reiwa administrator only", () => {
-    expect(code("src/app/(app)/opportunities/[opportunityId]/memo/page.tsx")).toMatch(/canTranslate=\{auth\.role === "reiwa_admin"\}/);
+  it("the page offers it to Reiwa staff and administrators only", () => {
+    expect(code("src/app/(app)/opportunities/[opportunityId]/memo/page.tsx")).toMatch(/canTranslate=\{isInternalStaff\(auth\)\}/);
   });
 
   it("the panel is shown on a draft's Teaser view and nowhere else", () => {
