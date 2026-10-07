@@ -23,6 +23,7 @@ import type { TriageResult } from "@/lib/data/triage";
 import { PriceFilter, YieldFilter } from "@/components/opportunities/pipeline-money-filters";
 import { SavedViewsMenu } from "@/components/opportunities/pipeline-saved-views";
 import { TriageMode } from "@/components/opportunities/pipeline-triage";
+import { RemoveDealButton, RestoreDealButton } from "@/components/opportunities/remove-deal";
 import { TRIAGE_STATUSES, TRIAGE_PRIORITIES, type TriageStatus } from "@/lib/data/opportunity-types";
 import { cn } from "@/lib/utils";
 import type { AssetType, Strategy } from "@/types/database";
@@ -107,10 +108,16 @@ export function OpportunityPipeline({
 
   // Decisions made in triage mode show at once, before the server round trip is refreshed.
   const [decisions, setDecisions] = useState<Record<string, TriageResult>>({});
-  useEffect(() => { setDecisions({}); }, [fromServer]);
+  // Likewise a deal just taken off the pipeline (or restored) moves between the board and the Archived list at once.
+  const [statuses, setStatuses] = useState<Record<string, OppStatus>>({});
+  useEffect(() => { setDecisions({}); setStatuses({}); }, [fromServer]);
   const opportunities = useMemo(
-    () => fromServer.map((o) => (decisions[o.opportunityId] ? { ...o, ...decisions[o.opportunityId] } : o)),
-    [fromServer, decisions]);
+    () => fromServer.map((o) => {
+      const d = decisions[o.opportunityId];
+      const st = statuses[o.opportunityId];
+      return d || st ? { ...o, ...(d ?? {}), ...(st ? { status: st } : {}) } : o;
+    }),
+    [fromServer, decisions, statuses]);
 
   const active = useMemo(() => opportunities.filter((o) => o.status === "active" || o.status === "converted"), [opportunities]);
   const archived = useMemo(() => opportunities.filter((o) => o.status === "rejected" || o.status === "withdrawn" || o.status === "lost"), [opportunities]);
@@ -211,11 +218,13 @@ export function OpportunityPipeline({
           </div>
         ) : (
           <div className="px-8 py-6">
-            <OppTable rows={shownActive} filtered={hasActiveFilters(filters)} sort={sort} onSort={clickSort} />
+            <OppTable rows={shownActive} filtered={hasActiveFilters(filters)} sort={sort} onSort={clickSort}
+              canWrite={canWrite} onRemoved={(id, st) => setStatuses((s) => ({ ...s, [id]: st }))} onRestored={(id) => setStatuses((s) => ({ ...s, [id]: "active" }))} />
             {shownArchived.length > 0 && (
               <>
                 <div className="eyebrow mt-8 mb-2">Archived</div>
-                <OppTable rows={shownArchived} muted sort={sort} onSort={clickSort} />
+                <OppTable rows={shownArchived} muted sort={sort} onSort={clickSort}
+                  canWrite={canWrite} onRemoved={(id, st) => setStatuses((s) => ({ ...s, [id]: st }))} onRestored={(id) => setStatuses((s) => ({ ...s, [id]: "active" }))} />
               </>
             )}
           </div>
@@ -280,8 +289,9 @@ const SORT_TITLE: Record<SortKey, string> = {
   irr: "Sort by IRR: highest first, then lowest first, then the original order. Blanks come last.",
 };
 
-function OppTable({ rows, muted, filtered, sort, onSort }: {
+function OppTable({ rows, muted, filtered, sort, onSort, canWrite, onRemoved, onRestored }: {
   rows: PipelineRow[]; muted?: boolean; filtered?: boolean; sort: SortState | null; onSort: (key: SortKey) => void;
+  canWrite: boolean; onRemoved: (id: string, status: OppStatus) => void; onRestored: (id: string) => void;
 }) {
   return (
     <div className={cn("overflow-hidden rounded-lg border border-line", muted && "opacity-70")}>
@@ -306,6 +316,7 @@ function OppTable({ rows, muted, filtered, sort, onSort }: {
                 </th>
               );
             })}
+            {canWrite && <th scope="col" className="px-3 py-2.5"><span className="sr-only">Actions</span></th>}
           </tr>
         </thead>
         <tbody className="tabular divide-y divide-line">
@@ -323,9 +334,17 @@ function OppTable({ rows, muted, filtered, sort, onSort }: {
               <td className="px-3 py-2.5 text-2xs text-ink-faint">{basisNote(o)}</td>
               <td className="px-3 py-2.5"><Badge tone={STATUS_TONE[o.status]} dot>{STATUS_LABEL[o.status]}</Badge></td>
               <td className="px-3 py-2.5"><TriageBadge o={o} /></td>
+              {canWrite && (
+                <td className="px-3 py-2.5 text-right">
+                  {o.status === "active" && <RemoveDealButton compact opportunityId={o.opportunityId} name={o.name} onDone={(st) => onRemoved(o.opportunityId, st)} />}
+                  {(o.status === "rejected" || o.status === "withdrawn" || o.status === "lost") && (
+                    <RestoreDealButton compact opportunityId={o.opportunityId} onDone={() => onRestored(o.opportunityId)} />
+                  )}
+                </td>
+              )}
             </tr>
           ))}
-          {rows.length === 0 && <tr><td colSpan={12} className="px-3 py-8 text-center text-sm text-ink-faint">{filtered ? "No opportunities match these filters." : "No opportunities."}</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={13} className="px-3 py-8 text-center text-sm text-ink-faint">{filtered ? "No opportunities match these filters." : "No opportunities."}</td></tr>}
         </tbody>
       </table>
     </div>
