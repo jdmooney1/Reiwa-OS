@@ -4,13 +4,20 @@ import { requireAuth, toDbSession } from "@/lib/auth/session";
 import { listPipeline } from "@/lib/data/opportunity-file";
 import { PageHeader } from "@/components/layout/page-header";
 import { OpportunityPipeline } from "@/components/opportunities/opportunity-pipeline";
+import { listSavedViews } from "@/lib/data/pipeline-views";
+import { parseViewState, parseMode } from "@/lib/pipeline/view-state";
 
 export const dynamic = "force-dynamic";
 
-export default async function PipelinePage() {
+export default async function PipelinePage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const auth = await requireAuth();
-  const opportunities = await listPipeline(toDbSession(auth));
+  const session = toDbSession(auth);
+  const [opportunities, savedViews] = await Promise.all([listPipeline(session), listSavedViews(session)]);
   const canWrite = auth.role !== "investor_viewer";
+  // The address bar IS the view: a bookmarked, filtered pipeline opens as it was saved. Anything in it
+  // that is not valid is dropped rather than refused (see lib/pipeline/view-state).
+  const initialState = parseViewState(searchParams);
+  const initialMode = parseMode(searchParams);
 
   return (
     <div className="flex h-full flex-col">
@@ -27,7 +34,10 @@ export default async function PipelinePage() {
         }
       />
       <div className="min-h-0 flex-1">
-        <OpportunityPipeline opportunities={opportunities} />
+        <OpportunityPipeline
+          opportunities={opportunities} initialState={initialState} initialMode={initialMode}
+          savedViews={savedViews} canWrite={canWrite}
+        />
       </div>
     </div>
   );

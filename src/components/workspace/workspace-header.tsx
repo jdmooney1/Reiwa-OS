@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import type { AssetType, Strategy } from "@/types/database";
 import { STAGE_LABEL, STATUS_LABEL, STATUS_TONE, PRIORITY_LABEL } from "@/lib/workspace/labels";
 import { WorkspaceNav } from "@/components/workspace/workspace-nav";
+import { WorkspaceRemoval } from "@/components/workspace/workspace-removal";
 
 /**
  * The top of an investment file.
@@ -53,12 +54,15 @@ export function WorkspaceHeader({
             </div>
           </div>
 
-          {converted && o.assetId && (
-            <Link href={`/assets/${o.assetId}`}
-              className="flex shrink-0 items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-semibold text-ink-muted hover:text-ink">
-              View asset <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            {converted && o.assetId && (
+              <Link href={`/assets/${o.assetId}`}
+                className="flex shrink-0 items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-semibold text-ink-muted hover:text-ink">
+                View asset <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
+            {canWrite && !converted && <WorkspaceRemoval opportunityId={o.opportunityId} name={o.name} status={o.status} />}
+          </div>
         </div>
       </div>
 
