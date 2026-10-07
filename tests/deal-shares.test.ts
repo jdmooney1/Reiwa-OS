@@ -157,7 +157,7 @@ describe("opening a link", () => {
     // The teaser's sections that have something in them, in teaser order: an investor copy does not print an empty box.
     const teaserOrder = ["executive_summary", "key_metrics", "asset_overview", "location_market", "investment_thesis", "business_plan", "exit_strategy"];
     const keys = one!.teaser!.sections.map((s) => s.key);
-    expect(keys).toEqual(expect.arrayContaining(["executive_summary", "key_metrics"]));
+    expect(keys).toEqual(expect.arrayContaining(["key_metrics", "asset_overview", "location_market"]));
     expect(keys).toEqual(teaserOrder.filter((k) => (keys as string[]).includes(k)));
     expect(one!.teaser!.sections.every((s) => s.resolved.state !== "empty")).toBe(true);
     expect(await viewsOf(made.shareId)).toBe(1);
