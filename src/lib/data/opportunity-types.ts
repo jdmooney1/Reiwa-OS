@@ -72,7 +72,13 @@ export interface Opportunity {
   lastMaterialUpdateAt: string | null;
   sizeSqft: number | null;
   sizeSqm: number | null;
+  /** INTERNAL thesis / summary. Never crosses into an investor-facing record. */
   summary: string | null;
+  /**
+   * Written for investors (migration 0033). The only free text the publication
+   * boundary reads. Null = not written; a new draft's Overview then starts blank.
+   */
+  investorOverview: string | null;
   address: string | null;
   city: string | null;
   country: string | null;

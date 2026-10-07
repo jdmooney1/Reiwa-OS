@@ -31,8 +31,13 @@ import {
   checkUpload, newObjectPath, putDocumentObject, deleteDocumentObject, safeFileName,
 } from "@/lib/documents/storage";
 import { AppError, reportError } from "@/lib/errors";
+import { runAction } from "@/lib/actions/run-action";
+import type { ActionResult } from "@/lib/actions/result";
+import { assertPublishConfirmed } from "@/lib/data/publish-review";
+import { updateOpportunity } from "@/lib/data/opportunities";
 import { parseNumber, PERCENT, NON_NEGATIVE } from "@/lib/validation/numeric";
 
+const MAX_INVESTOR_OVERVIEW = 4000;
 const trimmed = (v: FormDataEntryValue | null): string => String(v ?? "").trim();
 const orNull = (v: FormDataEntryValue | null): string | null => trimmed(v) || null;
 
@@ -281,13 +286,49 @@ export async function returnToDraftAction(
   refreshPublication(publicationId);
 }
 
+/**
+ * Publish a version that has been through the review screen.
+ *
+ * The confirmation is checked HERE, on the server, against a fresh read: a digest
+ * of what the screen showed and the sentence the person typed. A request that
+ * skips the screen has neither and is refused, so the pause cannot be clicked
+ * past. It is friction for one person, not a second approver; see
+ * docs/24-investor-overview-and-publish-review.md.
+ *
+ * Returns an ActionResult rather than throwing: a thrown message is replaced by a
+ * generic one in production, and this is a screen that has to say what is wrong.
+ */
 export async function publishVersionAction(
-  versionId: string, publicationId: string,
-): Promise<void> {
+  versionId: string, publicationId: string, confirmation: { digest: string; typed: string } | null,
+): Promise<ActionResult> {
   const { db, auth } = await requireAdminSession();
-  await publishVersion(db, versionId, auth.userId);
+  const result = await runAction("admin.publication.publish", { versionId, publicationId }, async () => {
+    await assertPublishConfirmed(db, versionId, confirmation);
+    await publishVersion(db, versionId, auth.userId);
+  });
+  if (result.error) return result;
   refreshPublication(publicationId);
   revalidatePath("/admin/investors");
+  return result;
+}
+
+/**
+ * Save the investor-facing overview on an opportunity. Admin only, because it is
+ * the one piece of free text that is copied into an investor draft; the internal
+ * summary beside it is never copied, and nothing here reads it.
+ */
+export async function saveInvestorOverviewAction(
+  opportunityId: string, overview: string,
+): Promise<ActionResult> {
+  const { db } = await requireAdminSession();
+  return runAction("admin.opportunity.investor-overview", { opportunityId }, async () => {
+    const text = overview.replace(/\r\n/g, "\n").trim();
+    if (text.length > MAX_INVESTOR_OVERVIEW) {
+      throw new AppError(`Keep the investor overview under ${MAX_INVESTOR_OVERVIEW} characters.`);
+    }
+    await updateOpportunity(db, opportunityId, { investorOverview: text === "" ? null : text });
+    revalidatePath(`/opportunities/${opportunityId}/publication`);
+  });
 }
 
 export async function withdrawPublicationAction(publicationId: string): Promise<void> {

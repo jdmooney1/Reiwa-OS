@@ -150,7 +150,8 @@ enforced at the boundary rather than by convention at each call site:
 | asset type, strategy, currency | probability, internal stage and status |
 | target price → headline price | capex budget, passing rent, ERV |
 | NIY, target IRR, equity multiple | reference, owner/creator ids, org id |
-| size (sqft / sqm), summary → overview | |
+| size (sqft / sqm) | |
+| investor overview → overview (since 0033; see [24](24-investor-overview-and-publish-review.md)) | the internal summary: it is never copied |
 
 After the prefill the version is an **independent record**. Editing the internal
 opportunity cannot reach it — there is no view, no trigger and no join that

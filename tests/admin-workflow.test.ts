@@ -96,7 +96,8 @@ describe("Creating a publication from an internal opportunity", () => {
     expect(version.status).toBe("draft");
     expect(version.title).toBe("31 Savile Row");
     expect(version.headlinePrice).toBe(47500000);
-    expect(version.overview).toBe("Mayfair freehold with rooftop consent.");
+    // The internal summary is not the investor overview: blank until a person writes one.
+    expect(version.overview).toBeNull();
 
     // Nothing confidential reaches the investor-facing row.
     const raw = await withSession(adminSession, (tx) =>
@@ -105,6 +106,7 @@ describe("Creating a publication from an internal opportunity", () => {
     expect(serialised).not.toContain("Confidential Broker");
     expect(serialised).not.toContain("Confidential Vendor");
     expect(serialised).not.toContain("Off-market");
+    expect(serialised).not.toContain("Mayfair freehold with rooftop consent");
     expect(serialised).not.toContain(oppA); // no internal identifier either
 
     // Provenance exists, privately.
