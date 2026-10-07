@@ -32,14 +32,23 @@ export async function loadGateContext(tx: Queryable, opportunityId: string): Pro
   }));
 
   const invRows = await tx.query<Record<string, any>>(
-    "select deal_investor_id, status, investor_type from deal_investor where opportunity_id = $1", [opportunityId]);
+    "select deal_investor_id, status, investor_type, flags from deal_investor where opportunity_id = $1", [opportunityId]);
   const investors: DealInvestorRow[] = invRows.rows.map((r) => ({
-    dealInvestorId: r.deal_investor_id, status: r.status, investorType: r.investor_type,
+    dealInvestorId: r.deal_investor_id, status: r.status, investorType: r.investor_type, flags: r.flags ?? {},
   }));
+
+  // Three layers, least to most specific: the platform setting, then this
+  // opportunity's own flags column (which may override it explicitly), then
+  // — at the call sites in evaluate.ts — that specific investor's own
+  // flags. Same precedence app.doc_type_applies applies on the SQL side
+  // (migration 0051).
+  const settingRow = await tx.query<{ value: unknown }>(
+    "select value from platform_settings where key = 'regulated_disclosure'");
+  const regulated_disclosure = settingRow.rows[0]?.value === true;
 
   const oppRow = await tx.query<{ flags: DealFlags }>(
     "select flags from opportunities where opportunity_id = $1", [opportunityId]);
-  const flags = oppRow.rows[0]?.flags ?? {};
+  const flags: DealFlags = { regulated_disclosure, ...(oppRow.rows[0]?.flags ?? {}) };
 
   return { docTypes, dealDocuments, investors, flags };
 }

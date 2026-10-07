@@ -13,16 +13,15 @@
 -- check against the `stage_transition` clearance record, never a
 -- re-derivation of the gate logic that produced it.
 --
--- Scoped to `document_stage > 0` — opportunities that never engaged the
--- Session 3 readiness tracker (document_stage still at its default 0,
--- which is every opportunity converted before this feature existed, and
--- every opportunity converted today through the legacy stage/approval path
--- without ever touching deal readiness) are exempt. Only a deal that was
--- actually put through the tracker is held to the Stage-4 clearance it
--- introduces — this is the same "don't break existing features" reasoning
--- 0045's header already applied to I1 itself, carried one level deeper now
--- that I1 is shipping: the tracker producing the requirement must exist
--- before the requirement can apply.
+-- Scoped to `document_stage > 0` at the moment this migration runs.
+-- SUPERSEDED by 0050: that exemption was too wide (ANY opportunity, including
+-- a brand-new one, could skip the readiness tracker by simply never
+-- advancing document_stage, and convert with no clearance at all). 0050
+-- redefines this same function to key off `opportunities.legacy_exempt`
+-- instead — a fact about the specific opportunity rather than a side effect
+-- of a column it never happened to touch — once that column exists. Left
+-- as originally written here so this migration still applies cleanly on its
+-- own, in order; the final behaviour is 0050's.
 -- ============================================================================
 
 create or replace function app.guard_opportunity_stage_acquired() returns trigger

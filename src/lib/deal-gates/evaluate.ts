@@ -57,7 +57,7 @@ export function evaluateStageExit(
     const qualifying = investors.filter((inv) =>
       investorStatusAtLeast(inv.status, "soft_circled")
       && investorGateTypes.every((dt) =>
-        !conditionHolds(dt.gateCondition, flags, inv.investorType) || isCleared(dealDocuments, dt.key, inv.dealInvestorId)));
+        !conditionHolds(dt.gateCondition, { ...flags, ...(inv.flags ?? {}) }, inv.investorType) || isCleared(dealDocuments, dt.key, inv.dealInvestorId)));
     investorRequirement = {
       applicable: true,
       satisfied: qualifying.length > 0,
@@ -69,7 +69,7 @@ export function evaluateStageExit(
     const committed = investors.filter((inv) => inv.status === "committed");
     const allSatisfy = committed.every((inv) =>
       investorGateTypes.every((dt) =>
-        !conditionHolds(dt.gateCondition, flags, inv.investorType) || isCleared(dealDocuments, dt.key, inv.dealInvestorId)));
+        !conditionHolds(dt.gateCondition, { ...flags, ...(inv.flags ?? {}) }, inv.investorType) || isCleared(dealDocuments, dt.key, inv.dealInvestorId)));
     investorRequirement = {
       applicable: true,
       satisfied: allSatisfy,

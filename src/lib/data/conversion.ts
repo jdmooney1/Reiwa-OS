@@ -155,15 +155,16 @@ export async function convertToAsset(
     // (e.g. granted earlier from the deal readiness checklist) is reused,
     // never duplicated.
     //
-    // Mirrors 0048's own exemption: an opportunity still at document_stage 0
-    // never engaged the readiness tracker (every opportunity converted
-    // before Session 3, and every opportunity converted today through the
-    // legacy stage/approval path alone), so the trigger does not require a
-    // clearance for it and this function computes nothing — there is no
-    // gate to check, and no stage_transition row to write.
+    // Mirrors 0048/0050's own exemption: `legacy_exempt` (0050) is a fact
+    // about THIS opportunity, true only for deals that existed before the
+    // readiness tracker shipped. Every opportunity created since defaults to
+    // false and is held to Stage 3/4 clearance regardless of whether it ever
+    // touched document_stage — unlike the `document_stage > 0` check this
+    // replaced, a new deal cannot opt itself out just by never engaging the
+    // tracker.
     const alreadyCleared = await tx.query(
       "select 1 from stage_transition where opportunity_id = $1 and to_stage = 4 limit 1", [opportunityId]);
-    if (Number(opp.document_stage) > 0 && !alreadyCleared.rows[0]) {
+    if (!(opp.legacy_exempt as boolean) && !alreadyCleared.rows[0]) {
       const ctx = await loadGateContext(tx, opportunityId);
       const exit = evaluateStageExit(3, ctx.docTypes, ctx.dealDocuments, ctx.investors, ctx.flags);
       if (exit.satisfied) {

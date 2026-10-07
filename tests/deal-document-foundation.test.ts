@@ -21,10 +21,10 @@
 // against a disposable Supabase project before this work is considered
 // fully proven, but this is not an unverified first draft.
 // ============================================================================
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { adminQuery, withSession, type Session } from "@/lib/db/client";
-import { orgIdByName, orgUserSession, profileIdByEmail } from "./helpers";
+import { adminSession, orgIdByName, orgUserSession, profileIdByEmail } from "./helpers";
 import { seedDocTypes, DOC_TYPE_CATALOGUE } from "@/lib/db/seed-doc-types";
 import { readinessSummary, transitionDocumentStage, checkActionGate, recordActionGateOverride } from "@/lib/data/deal-gates";
 import { convertToAsset } from "@/lib/data/conversion";
@@ -271,6 +271,76 @@ describe("investor-scoped auto-create is status-driven and cumulative (0047, Ses
     const rows = await adminQuery<{ status: string }>(
       "select status from deal_document where deal_investor_id = $1 and doc_type_key = 'investor_nda'", [dealInvestorId]);
     expect(rows[0].status).toBe("not_applicable");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("doc_type_applies receives real flags, not '{}' (0051)", () => {
+  afterEach(async () => {
+    await adminQuery("delete from platform_settings where key = 'regulated_disclosure'");
+  });
+
+  async function newCorporateInvestorAtIoi(oppId: string): Promise<string> {
+    const investorOrgId = await newInvestorOrg("Test Flags Investor " + randomUUID());
+    const diRows = await withSession(session, (tx) =>
+      tx.query<{ deal_investor_id: string }>(
+        "insert into deal_investor (org_id, opportunity_id, investor_org_id, introduced_by, investor_type) values ($1,$2,$3,$4,'corporate') returning deal_investor_id",
+        [org, oppId, investorOrgId, analyst]));
+    const dealInvestorId = diRows.rows[0].deal_investor_id;
+    await withSession(session, (tx) =>
+      tx.query("update deal_investor set status = 'ioi_received' where deal_investor_id = $1", [dealInvestorId]));
+    return dealInvestorId;
+  }
+
+  it("jp_pre_contract_disclosure is NOT created with no platform setting and no flag override", async () => {
+    const oppId = await newOpportunity("27a Regulated Disclosure Off");
+    const dealInvestorId = await newCorporateInvestorAtIoi(oppId);
+    const rows = await adminQuery<{ n: number }>(
+      "select count(*)::int as n from deal_document where deal_investor_id = $1 and doc_type_key = 'jp_pre_contract_disclosure'",
+      [dealInvestorId]);
+    expect(rows[0].n).toBe(0);
+  });
+
+  it("switching the platform setting on creates jp_pre_contract_disclosure for a new investor reaching ioi_received", async () => {
+    await adminQuery(
+      "insert into platform_settings (key, value) values ('regulated_disclosure', 'true'::jsonb)");
+    const oppId = await newOpportunity("27b Regulated Disclosure On");
+    const dealInvestorId = await newCorporateInvestorAtIoi(oppId);
+    const rows = await adminQuery<{ n: number }>(
+      "select count(*)::int as n from deal_document where deal_investor_id = $1 and doc_type_key = 'jp_pre_contract_disclosure'",
+      [dealInvestorId]);
+    expect(rows[0].n).toBe(1);
+  });
+
+  it("the opportunity's own flags override the platform setting for its own deal_investor rows", async () => {
+    await adminQuery(
+      "insert into platform_settings (key, value) values ('regulated_disclosure', 'true'::jsonb)");
+    const oppId = await newOpportunity("27c Deal Flag Overrides Platform");
+    await adminQuery("update opportunities set flags = '{\"regulated_disclosure\": false}'::jsonb where opportunity_id = $1", [oppId]);
+    const dealInvestorId = await newCorporateInvestorAtIoi(oppId);
+    const rows = await adminQuery<{ n: number }>(
+      "select count(*)::int as n from deal_document where deal_investor_id = $1 and doc_type_key = 'jp_pre_contract_disclosure'",
+      [dealInvestorId]);
+    expect(rows[0].n).toBe(0); // the deal's own flag wins over the platform default
+  });
+
+  it("an investor's own flags override the deal's, for that investor alone", async () => {
+    const oppId = await newOpportunity("27d Investor Flag Overrides Deal");
+    await adminQuery("update opportunities set flags = '{\"regulated_disclosure\": false}'::jsonb where opportunity_id = $1", [oppId]);
+    const investorOrgId = await newInvestorOrg("Test Investor Override " + randomUUID());
+    const diRows = await withSession(session, (tx) =>
+      tx.query<{ deal_investor_id: string }>(
+        `insert into deal_investor (org_id, opportunity_id, investor_org_id, introduced_by, investor_type, flags)
+         values ($1,$2,$3,$4,'corporate','{"regulated_disclosure": true}'::jsonb) returning deal_investor_id`,
+        [org, oppId, investorOrgId, analyst]));
+    const dealInvestorId = diRows.rows[0].deal_investor_id;
+    await withSession(session, (tx) =>
+      tx.query("update deal_investor set status = 'ioi_received' where deal_investor_id = $1", [dealInvestorId]));
+
+    const rows = await adminQuery<{ n: number }>(
+      "select count(*)::int as n from deal_document where deal_investor_id = $1 and doc_type_key = 'jp_pre_contract_disclosure'",
+      [dealInvestorId]);
+    expect(rows[0].n).toBe(1); // this investor's own flag wins over the deal's
   });
 });
 
@@ -661,6 +731,10 @@ describe("stage_transition clearance invariants (0041, 0045)", () => {
 describe("I7: post-close amendment guard (0046)", () => {
   it("refuses a new version of a Stage <=3 document after conversion, without a matching override", async () => {
     const oppId = await newOpportunity("45 Post Close");
+    // This test is about I7, not I1 (0048/0050) — mark it legacy_exempt so
+    // the bare UPDATE below (which never grants a Stage-4 clearance) is not
+    // itself refused by I1.
+    await withSession(adminSession, (tx) => tx.query("update opportunities set legacy_exempt = true where opportunity_id = $1", [oppId]));
     await withSession(session, (tx) => tx.query("update opportunities set stage = 'acquired' where opportunity_id = $1", [oppId]));
     // screening_memo (Stage 0) is auto-created by 0047 at opportunity
     // creation — select it rather than inserting a duplicate.
@@ -675,6 +749,7 @@ describe("I7: post-close amendment guard (0046)", () => {
 
   it("succeeds when a matching override is inserted in the same transaction", async () => {
     const oppId = await newOpportunity("46 Post Close Override");
+    await withSession(adminSession, (tx) => tx.query("update opportunities set legacy_exempt = true where opportunity_id = $1", [oppId]));
     await withSession(session, (tx) => tx.query("update opportunities set stage = 'acquired' where opportunity_id = $1", [oppId]));
     const doc = await adminQuery<{ deal_document_id: string }>(
       "select deal_document_id from deal_document where opportunity_id = $1 and doc_type_key = 'screening_memo'",
@@ -692,35 +767,33 @@ describe("I7: post-close amendment guard (0046)", () => {
 });
 
 // ---------------------------------------------------------------------------
-describe("I1: opportunities.stage -> acquired requires Stage-4 clearance, once readiness is engaged (0048)", () => {
-  it("is exempt for an opportunity that never engaged the readiness tracker (document_stage still 0)", async () => {
-    const oppId = await newOpportunity("47 Never Tracked");
-    await expect(withSession(session, (tx) =>
-      tx.query("update opportunities set stage = 'acquired' where opportunity_id = $1", [oppId]),
-    )).resolves.toBeDefined();
-  });
-
-  it("is enforced once document_stage has moved past 0, and refuses without a Stage-4 clearance", async () => {
-    const oppId = await newOpportunity("48 Tracked No Clearance");
-    await withSession(icMemberSession, (tx) =>
-      tx.query("insert into stage_transition (org_id, opportunity_id, from_stage, to_stage, recorded_by) values ($1,$2,0,1,$3)",
-        [org, oppId, analyst]));
-    await withSession(session, (tx) =>
-      tx.query("update opportunities set document_stage = 1 where opportunity_id = $1", [oppId]));
+describe("I1: opportunities.stage -> acquired requires Stage-4 clearance, keyed on legacy_exempt (0048, 0050)", () => {
+  it("a brand-new opportunity defaults to legacy_exempt = false and CANNOT skip the gate just by never engaging the tracker", async () => {
+    // This is exactly the gap the document_stage > 0 exemption left open:
+    // document_stage is never touched here at all, yet the bare UPDATE
+    // below must still be refused.
+    const oppId = await newOpportunity("47 New Deal Cannot Skip");
+    const flag = await adminQuery<{ legacy_exempt: boolean }>(
+      "select legacy_exempt from opportunities where opportunity_id = $1", [oppId]);
+    expect(flag[0].legacy_exempt).toBe(false);
 
     await expect(withSession(session, (tx) =>
       tx.query("update opportunities set stage = 'acquired' where opportunity_id = $1", [oppId]),
     )).rejects.toThrow(/cannot become acquired/);
   });
 
-  it("succeeds once a Stage-4 clearance is on record, for a tracked opportunity", async () => {
-    const oppId = await newOpportunity("49 Tracked With Clearance");
-    await withSession(icMemberSession, (tx) =>
-      tx.query("insert into stage_transition (org_id, opportunity_id, from_stage, to_stage, recorded_by) values ($1,$2,0,1,$3)",
-        [org, oppId, analyst]));
-    await withSession(session, (tx) =>
-      tx.query("update opportunities set document_stage = 1 where opportunity_id = $1", [oppId]));
+  it("is exempt once legacy_exempt is true", async () => {
+    const oppId = await newOpportunity("48 Exempt Deal");
+    await withSession(adminSession, (tx) =>
+      tx.query("update opportunities set legacy_exempt = true where opportunity_id = $1", [oppId]));
 
+    await expect(withSession(session, (tx) =>
+      tx.query("update opportunities set stage = 'acquired' where opportunity_id = $1", [oppId]),
+    )).resolves.toBeDefined();
+  });
+
+  it("succeeds once a Stage-4 clearance is on record, for a non-exempt opportunity", async () => {
+    const oppId = await newOpportunity("49 Cleared Deal");
     const kase = await withSession(session, (tx) =>
       tx.query<{ case_id: string }>(
         "insert into investment_cases (org_id, opportunity_id, created_by) values ($1,$2,$3) returning case_id",
@@ -730,12 +803,57 @@ describe("I1: opportunities.stage -> acquired requires Stage-4 clearance, once r
         "insert into ic_decisions (org_id, opportunity_id, investment_case_id, outcome, recorded_by) values ($1,$2,$3,'approved',$4)",
         [org, oppId, kase.rows[0].case_id, analyst]));
     await withSession(icMemberSession, (tx) =>
-      tx.query("insert into stage_transition (org_id, opportunity_id, from_stage, to_stage, recorded_by) values ($1,$2,1,4,$3)",
+      tx.query("insert into stage_transition (org_id, opportunity_id, from_stage, to_stage, recorded_by) values ($1,$2,0,4,$3)",
         [org, oppId, analyst]));
 
     await expect(withSession(session, (tx) =>
       tx.query("update opportunities set stage = 'acquired' where opportunity_id = $1", [oppId]),
     )).resolves.toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("opportunities.legacy_exempt: admin-only to turn on, always audited (0050)", () => {
+  it("backfilled true for the migration-time catalogue seed opportunity, by the column default alone", async () => {
+    // Every opportunity created in this suite's fixtures is created AFTER
+    // migration 0050 ran, so none of them demonstrate the backfill directly;
+    // the backfill itself (every row that existed AT migration time) is a
+    // one-time ALTER TABLE default, not something a running test re-creates.
+    // What every fixture here DOES demonstrate is the other half: the
+    // default for anything created since is false (asserted in the I1 block
+    // above) — together the two halves are the whole backfill contract.
+    const oppId = await newOpportunity("60 Default Check");
+    const flag = await adminQuery<{ legacy_exempt: boolean }>(
+      "select legacy_exempt from opportunities where opportunity_id = $1", [oppId]);
+    expect(flag[0].legacy_exempt).toBe(false);
+  });
+
+  it("org_user and ic_member are both refused; only an admin may turn it on", async () => {
+    const oppId = await newOpportunity("61 Admin Only");
+    await expect(withSession(session, (tx) =>
+      tx.query("update opportunities set legacy_exempt = true where opportunity_id = $1", [oppId]),
+    )).rejects.toThrow(/may only be set to true by a reiwa_admin/);
+    await expect(withSession(icMemberSession, (tx) =>
+      tx.query("update opportunities set legacy_exempt = true where opportunity_id = $1", [oppId]),
+    )).rejects.toThrow(/may only be set to true by a reiwa_admin/);
+    await expect(withSession(adminSession, (tx) =>
+      tx.query("update opportunities set legacy_exempt = true where opportunity_id = $1", [oppId]),
+    )).resolves.toBeDefined();
+  });
+
+  it("turning it off again needs no special privilege, but every change either way is audited", async () => {
+    const oppId = await newOpportunity("62 Audited Both Ways");
+    await withSession(adminSession, (tx) =>
+      tx.query("update opportunities set legacy_exempt = true where opportunity_id = $1", [oppId]));
+    await withSession(session, (tx) =>
+      tx.query("update opportunities set legacy_exempt = false where opportunity_id = $1", [oppId]));
+
+    const history = await adminQuery<{ before: boolean; after: boolean }>(
+      "select before, after from opportunity_legacy_exempt_audit where opportunity_id = $1 order by changed_at", [oppId]);
+    expect(history).toEqual([
+      { before: false, after: true },
+      { before: true, after: false },
+    ]);
   });
 });
 
@@ -747,8 +865,10 @@ describe("convertToAsset <-> I1 integration (Session 3)", () => {
     }
   }
 
-  it("a legacy conversion (document_stage never advanced) still succeeds with no override, unchanged from before Session 3", async () => {
+  it("a legacy_exempt conversion still succeeds with no override, unchanged from before Session 3", async () => {
     const oppId = await newOpportunity("50 Legacy Conversion");
+    await withSession(adminSession, (tx) =>
+      tx.query("update opportunities set legacy_exempt = true where opportunity_id = $1", [oppId]));
     await approveToIc(oppId);
     const { assetId, alreadyExisted } = await convertToAsset(session, oppId, {
       acquisitionDate: "2026-08-27", equityInvested: 1000, debt: 1000,
@@ -757,26 +877,16 @@ describe("convertToAsset <-> I1 integration (Session 3)", () => {
     expect(assetId).toBeTruthy();
   });
 
-  it("a tracked opportunity (document_stage > 0) refuses conversion without an override once Stage 3 isn't clear", async () => {
-    const oppId = await newOpportunity("51 Tracked Conversion Blocked");
+  it("a brand-new (non-exempt) opportunity refuses conversion without an override, even though document_stage never advanced", async () => {
+    const oppId = await newOpportunity("51 New Deal Conversion Blocked");
     await approveToIc(oppId);
-    await withSession(icMemberSession, (tx) =>
-      tx.query("insert into stage_transition (org_id, opportunity_id, from_stage, to_stage, recorded_by) values ($1,$2,0,1,$3)",
-        [org, oppId, analyst]));
-    await withSession(session, (tx) =>
-      tx.query("update opportunities set document_stage = 1 where opportunity_id = $1", [oppId]));
 
     await expect(convertToAsset(session, oppId, { acquisitionDate: "2026-08-27" })).rejects.toThrow(/not yet ready to close/);
   });
 
-  it("the same tracked opportunity converts with an override reason, once an IC decision exists (I1+I2 together)", async () => {
-    const oppId = await newOpportunity("52 Tracked Conversion Override");
+  it("the same non-exempt opportunity converts with an override reason, once an IC decision exists (I1+I2 together)", async () => {
+    const oppId = await newOpportunity("52 New Deal Conversion Override");
     await approveToIc(oppId);
-    await withSession(icMemberSession, (tx) =>
-      tx.query("insert into stage_transition (org_id, opportunity_id, from_stage, to_stage, recorded_by) values ($1,$2,0,1,$3)",
-        [org, oppId, analyst]));
-    await withSession(session, (tx) =>
-      tx.query("update opportunities set document_stage = 1 where opportunity_id = $1", [oppId]));
     const kase = await withSession(session, (tx) =>
       tx.query<{ case_id: string }>(
         "insert into investment_cases (org_id, opportunity_id, created_by) values ($1,$2,$3) returning case_id",

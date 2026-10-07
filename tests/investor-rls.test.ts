@@ -8,9 +8,10 @@
 // ============================================================================
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminQuery, withInvestorSession, withSession } from "@/lib/db/client";
+import { createOpportunity } from "@/lib/data/opportunities";
 import {
   adminSession, investorAuthUserId, investorContactIdByEmail, investorOrgIdByName,
-  orgIdByName, orgUserSession, publicationByOpportunityName,
+  orgIdByName, orgUserSession, profileIdByEmail, publicationByOpportunityName,
 } from "./helpers";
 
 const KITANO = "principal@kitano-fo.example";     // featured: Queens Gate, diligence tier
@@ -633,5 +634,58 @@ describe("The investor_feed projection carries the same guarantees", () => {
     const sakura = await withInvestorSession(sakuraUid, (tx) =>
       tx.query<{ publication_id: string }>("select publication_id from investor_feed"));
     expect(sakura.rows.map((r) => r.publication_id)).toEqual([fenchurch.publicationId]);
+  });
+});
+
+describe("Staff visibility into investor_organizations via deal_investor (0049)", () => {
+  it("an investor still cannot see another investor org through this new policy either", async () => {
+    // 0049 adds a policy keyed on app.has_org(deal_investor.org_id) — an
+    // investor session carries no org_ids claim at all (withInvestorSession's
+    // doc comment: "every internal policy denies them by construction"), so
+    // this new policy must grant an investor nothing beyond what
+    // investor_organizations_self (0005) already did.
+    const { rows } = await withInvestorSession(kitanoUid, (tx) =>
+      tx.query<{ name: string }>("select name from investor_organizations"));
+    expect(rows.map((r) => r.name)).toEqual(["Kitano Family Office"]);
+  });
+
+  it("internal staff see an investor org once it is linked to their own org via deal_investor", async () => {
+    const meiji = await orgIdByName("Meiji Shipping");
+    const staff = orgUserSession([meiji]);
+    const kitanoOrgId = await investorOrgIdByName("Kitano Family Office");
+    const sakuraOrgId = await investorOrgIdByName("Sakura Capital Partners");
+
+    // Before any link: neither investor org is visible to Meiji's staff.
+    const before = await withSession(staff, (tx) => tx.query<{ name: string }>("select name from investor_organizations"));
+    expect(before.rows).toEqual([]);
+
+    const oppId = await createOpportunity(staff, {
+      orgId: meiji, name: "0049 RLS Link Test", market: "London", assetType: "office",
+      strategy: "value_add", currency: "GBP",
+    });
+    await withSession(staff, (tx) =>
+      tx.query("insert into deal_investor (org_id, opportunity_id, investor_org_id) values ($1,$2,$3)",
+        [meiji, oppId, kitanoOrgId]));
+
+    const after = await withSession(staff, (tx) => tx.query<{ name: string }>("select name from investor_organizations"));
+    expect(after.rows.map((r) => r.name)).toEqual(["Kitano Family Office"]);
+    // Sakura was never linked to Meiji via any deal_investor row — stays invisible.
+    expect(after.rows.map((r) => r.name)).not.toContain("Sakura Capital Partners");
+
+    // And by exact id, not just by the unfiltered list.
+    const targeted = await withSession(staff, (tx) =>
+      tx.query("select * from investor_organizations where investor_org_id = $1", [sakuraOrgId]));
+    expect(targeted.rows.length).toBe(0);
+  });
+
+  it("an internal org with no deal_investor link of its own sees no investor org at all", async () => {
+    const aoyama = orgUserSession([await orgIdByName("Aoyama Holdings")], await profileIdByEmail("user@aoyama.com"));
+    const { rows } = await withSession(aoyama, (tx) => tx.query<{ name: string }>("select name from investor_organizations"));
+    expect(rows).toEqual([]);
+  });
+
+  it("a Reiwa admin is unaffected by 0049 — the pre-existing admin policy already covered everything", async () => {
+    const { rows } = await withSession(adminSession, (tx) => tx.query<{ n: number }>("select count(*)::int as n from investor_organizations"));
+    expect(rows[0].n).toBeGreaterThan(0);
   });
 });

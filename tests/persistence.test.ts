@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { adminQuery, closePool, type Session } from "@/lib/db/client";
+import { adminQuery, closePool, withSession, type Session } from "@/lib/db/client";
+import { adminSession } from "./helpers";
 import { authenticate } from "@/lib/auth/service";
 import { canWrite } from "@/lib/auth/session";
 import { createOpportunity, getOpportunity, setStage } from "@/lib/data/opportunities";
@@ -51,6 +52,11 @@ describe("Persistence across a server restart", () => {
       assetType: "office", currency: "GBP", targetPrice: 30000000, targetIrr: 15,
     });
     for (const s of ["screening", "underwriting", "ic", "approved"] as const) await setStage(session, id, s);
+    // This test is about restart persistence, not deal-document readiness
+    // gating (I1, migration 0048/0050) — exempt it the same way every
+    // opportunity that predates that feature already is.
+    await withSession(adminSession, (tx) =>
+      tx.query("update opportunities set legacy_exempt = true where opportunity_id = $1", [id]));
     const { assetId } = await convertToAsset(session, id, {
       acquisitionDate: "2026-08-27", equityInvested: 15000000, debt: 15000000,
     });

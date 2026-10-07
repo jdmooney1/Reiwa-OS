@@ -29,8 +29,12 @@ describe("conditionHolds", () => {
     expect(conditionHolds("investor_type:corporate", {}, "individual")).toBe(false);
     expect(conditionHolds("investor_type:corporate", {}, null)).toBe(false);
   });
-  it("defaults regulated_disclosure to applicable (no platform setting exists yet)", () => {
-    expect(conditionHolds("regulated_disclosure", {}, null)).toBe(true);
+  it("regulated_disclosure defaults to NOT applicable with no platform setting and no flag override", () => {
+    expect(conditionHolds("regulated_disclosure", {}, null)).toBe(false);
+  });
+  it("regulated_disclosure applies once the (already-merged) flags say so", () => {
+    expect(conditionHolds("regulated_disclosure", { regulated_disclosure: true }, null)).toBe(true);
+    expect(conditionHolds("regulated_disclosure", { regulated_disclosure: false }, null)).toBe(false);
   });
 });
 

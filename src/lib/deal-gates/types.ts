@@ -48,21 +48,46 @@ export interface DealInvestorRow {
   dealInvestorId: string;
   status: DealInvestorStatus;
   investorType: string | null;
+  /** This investor's own flags (deal_investor.flags) — the most specific of
+   * the three layers conditionHolds() can be given; see loadGateContext.
+   * Optional so a literal built for a test need not supply it; loadGateContext
+   * always populates it for real. */
+  flags?: DealFlags;
 }
 
 export interface DealFlags {
   geared?: boolean;
   hedged?: boolean;
   jurisdiction?: "UK" | "NL";
+  /**
+   * Snake_case, deliberately NOT camelCased like the rest of this
+   * interface: `geared`/`hedged`/`jurisdiction` are passed through from the
+   * raw `flags` jsonb column with no translation layer at all, and this key
+   * does the same — a flag set directly in SQL (`regulated_disclosure`) and
+   * one read here must be the identical string, or they silently stop
+   * agreeing. Resolved, not raw: loadGateContext merges the platform
+   * setting (platform_settings, key 'regulated_disclosure') underneath the
+   * opportunity's own `flags` column before this is ever built, the same
+   * precedence app.doc_type_applies applies on the SQL side (0051). By the
+   * time a DealFlags reaches conditionHolds(), there is nothing further to
+   * resolve.
+   */
+  regulated_disclosure?: boolean;
 }
 
 /**
  * `gate_condition` has two readings depending on `gate_kind` (docs/24 §5,
- * app.doc_type_applies in migration 0047 — this is the TypeScript side of
- * the same rule, not a shared implementation: one is a DB applicability
+ * app.doc_type_applies in migration 0047/0051 — this is the TypeScript side
+ * of the same rule, not a shared implementation: one is a DB applicability
  * filter for auto-creation, this is the gate evaluator; they must agree in
  * MEANING, not in code, since they run in different languages against
  * different inputs).
+ *
+ * `flags` is expected to already be the fully merged view for whatever this
+ * condition is being checked against — platform setting, then deal flags,
+ * then (for an investor-scoped check) that investor's own flags layered on
+ * top, exactly as app.doc_type_applies is called with `o.flags || di.flags`
+ * on the SQL side. This function does no merging itself.
  */
 export function conditionHolds(
   condition: string | null, flags: DealFlags, investorType: string | null,
@@ -72,8 +97,6 @@ export function conditionHolds(
   if (condition === "hedged") return flags.hedged === true;
   if (condition.startsWith("jurisdiction:")) return flags.jurisdiction === condition.slice("jurisdiction:".length);
   if (condition.startsWith("investor_type:")) return investorType === condition.slice("investor_type:".length);
-  // 'regulated_disclosure': a platform-level setting with nowhere to read
-  // from yet (docs/24 catalogue note) — default to applicable, same as the
-  // DB side, rather than silently hiding a document type.
+  if (condition === "regulated_disclosure") return flags.regulated_disclosure === true;
   return true;
 }
