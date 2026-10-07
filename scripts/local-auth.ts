@@ -26,6 +26,7 @@
 //   POST   /storage/v1/object/sign/:bucket/*       mint a signed URL
 //   GET    /storage/v1/object/sign/:bucket/*       redeem one (expiry enforced)
 //   GET    /storage/v1/object/public/:bucket/*     refused for a private bucket
+//   POST   /storage/v1/object/copy                 copy an object inside a bucket
 //   DELETE /storage/v1/object/:bucket              remove objects by path
 //
 // OTP codes are not emailed locally — they are written to auth._local_otp so a
@@ -266,6 +267,22 @@ async function handleStorage(
       "select public from storage._local_buckets where id = $1", [decodeURIComponent(publicGet[1])]);
     if (!rows[0]?.public) return send(res, 400, { message: "Bucket not found" }), true;
     return send(res, 404, { message: "Object not found" }), true;
+  }
+
+  // ---- Copy (server-side, same bucket) --------------------------------------
+  if (path === "/storage/v1/object/copy" && method === "POST") {
+    const body = await readJson(req);
+    const bucket = String(body.bucketId ?? "");
+    const from = String(body.sourceKey ?? "");
+    const to = String(body.destinationKey ?? "");
+    const src = await pool.query(
+      "select mime_type, content from storage._local_objects where bucket_id = $1 and path = $2", [bucket, from]);
+    if (!src.rows[0]) return send(res, 404, { statusCode: "404", error: "not_found", message: "Object not found" }), true;
+    const made = await pool.query(
+      `insert into storage._local_objects(bucket_id, path, mime_type, content) values ($1,$2,$3,$4)
+       on conflict (bucket_id, path) do nothing`, [bucket, to, src.rows[0].mime_type, src.rows[0].content]);
+    if (!made.rowCount) return send(res, 409, { statusCode: "409", error: "Duplicate", message: "The resource already exists" }), true;
+    return send(res, 200, { Key: `${bucket}/${to}` }), true;
   }
 
   // ---- Remove -------------------------------------------------------------

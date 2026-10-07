@@ -12,7 +12,7 @@ const base: ReviewVersion = {
   targetIrr: 13.5, targetEquityMultiple: 1.9, sizeSqft: 21500, sizeSqm: null,
 };
 const doc = (p: string, over: Partial<ReviewDocument> = {}): ReviewDocument => ({
-  storagePath: p, title: p, category: "teaser", accessLevel: "standard", fileName: `${p}.pdf`, sizeBytes: 10, ...over,
+  lineageId: p, title: p, category: "teaser", accessLevel: "standard", fileName: `${p}.pdf`, sizeBytes: 10, ...over,
 });
 
 describe("diffVersions", () => {
@@ -54,7 +54,7 @@ describe("diffVersions", () => {
     expect(d.fields[0].after).not.toContain("Reversion in 2029");
   });
 
-  it("reports documents added, removed and changed, keyed by the stored file", () => {
+  it("reports documents added, removed and changed, keyed by the document's lineage, not its file path", () => {
     const live = [doc("keep"), doc("drop", { accessLevel: "diligence" }), doc("retier")];
     const next = [doc("keep"), doc("new"), doc("retier", { accessLevel: "diligence" })];
     const d = diffVersions(base, base, live, next);

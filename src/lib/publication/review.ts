@@ -35,7 +35,8 @@ export interface ReviewVersion {
 }
 
 export interface ReviewDocument {
-  storagePath: string;
+  /** The same document across versions (a copy keeps it); a fresh upload has a new one. */
+  lineageId: string;
   title: string;
   category: string;
   accessLevel: string;
@@ -146,10 +147,10 @@ export function diffVersions(
   }
 
   const documents: DocumentChange[] = [];
-  const liveByPath = new Map(liveDocs.map((d) => [d.storagePath, d]));
-  const nextByPath = new Map(candidateDocs.map((d) => [d.storagePath, d]));
+  const liveByLineage = new Map(liveDocs.map((d) => [d.lineageId, d]));
+  const nextByLineage = new Map(candidateDocs.map((d) => [d.lineageId, d]));
   for (const d of candidateDocs) {
-    const was = liveByPath.get(d.storagePath);
+    const was = liveByLineage.get(d.lineageId);
     if (!was) {
       documents.push({ type: "added", title: d.title, detail: `${d.accessLevel} tier` });
       continue;
@@ -161,7 +162,7 @@ export function diffVersions(
     if (moved.length) documents.push({ type: "changed", title: d.title, detail: moved.join("; ") });
   }
   for (const d of liveDocs) {
-    if (!nextByPath.has(d.storagePath)) {
+    if (!nextByLineage.has(d.lineageId)) {
       documents.push({ type: "removed", title: d.title, detail: `${d.accessLevel} tier` });
     }
   }

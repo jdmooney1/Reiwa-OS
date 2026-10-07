@@ -73,7 +73,7 @@ function toReview(v: PublicationVersion): ReviewVersion {
 
 function toReviewDoc(d: PublicationDocument): ReviewDocument {
   return {
-    storagePath: d.storagePath, title: d.title, category: d.category,
+    lineageId: d.lineageId, title: d.title, category: d.category,
     accessLevel: d.accessLevel, fileName: d.fileName, sizeBytes: d.sizeBytes,
   };
 }

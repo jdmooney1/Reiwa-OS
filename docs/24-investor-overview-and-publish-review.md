@@ -79,8 +79,8 @@ what was changing. "Revoke" and document delete had no confirmation at all.
   digest, confirmation removed): each left the version in review.
 - Withdraw, revoke access (both places), revoke invitation and remove document now ask first, naming
   the consequence. They use the same browser confirmation dialog as memo finalise, no stronger.
-  Removing a document warns when its file is also attached to the live version, because today that
-  deletes the live copy too (a known fault, fixed separately).
+  (Document removal used to warn that a file might be shared with the live version; that fault is
+  fixed, see [25](25-publication-document-ownership.md), and the warning is gone.)
 
 ### What this is not
 - **Not separation of duties.** The person shown the diff and typing the sentence can be the person

@@ -107,6 +107,8 @@ export interface PublicationDocument {
   sizeBytes: number | null;
   accessLevel: DocumentAccessLevel;
   sortOrder: number;
+  /** Same across the copies of one document in different versions; new for a fresh upload. */
+  lineageId: string;
   createdAt: string;
 }
 
@@ -195,7 +197,7 @@ function mapDocument(r: Record<string, any>): PublicationDocument {
     documentId: r.document_id, versionId: r.version_id, title: r.title, category: r.category,
     storagePath: r.storage_path, fileName: str(r.file_name), mimeType: str(r.mime_type),
     sizeBytes: num(r.size_bytes), accessLevel: r.access_level,
-    sortOrder: Number(r.sort_order), createdAt: r.created_at,
+    sortOrder: Number(r.sort_order), lineageId: r.lineage_id, createdAt: r.created_at,
   };
 }
 
@@ -814,7 +816,16 @@ export async function removePublicationDocument(
     const { rows } = await tx.query<{ storage_path: string }>(
       "delete from publication_documents where document_id = $1 returning storage_path",
       [documentId]);
-    return rows[0]?.storage_path ?? null;
+    const path = rows[0]?.storage_path;
+    if (!path) return null;
+    // Belt and braces. Every document owns its file (unique index, 0034), so nothing should
+    // still point at this path. If something does - data from before that index, or a bug -
+    // the file is NOT returned for deletion: leaving an unowned file in the store costs a
+    // few kilobytes, deleting a file a live version serves costs an investor their download.
+    const still = await tx.query<{ n: number }>(
+      `select (select count(*) from publication_documents where storage_path = $1)
+            + (select count(*) from opportunity_documents where storage_path = $1) as n`, [path]);
+    return Number(still.rows[0]?.n ?? 0) === 0 ? path : null;
   });
 }
 
