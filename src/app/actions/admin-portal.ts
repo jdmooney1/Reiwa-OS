@@ -24,7 +24,7 @@ import {
   type DocumentCategory, type DocumentAccessLevel,
 } from "@/lib/data/investor-portal";
 import {
-  createDraftFromVersion, assertNoOpenVersion, updatePublicationDocument,
+  createDraftFromVersion, createDraftRefreshedFromSource, assertNoOpenVersion, updatePublicationDocument,
   getPublicationForOpportunity, reorderSecondaryEntitlements,
 } from "@/lib/data/admin-portal";
 import {
@@ -363,17 +363,28 @@ export async function startDraftFromVersionAction(
 }
 
 /**
- * Explicitly refresh from the internal opportunity: a NEW draft re-prefilled
- * through the P1 whitelist. Deliberate and admin-visible — the live version is
- * untouched until that draft is reviewed and published.
+ * Explicitly refresh from the internal opportunity: a NEW draft that starts as a copy of the
+ * latest version, with its own copy of every document, and then takes the factual fields (title,
+ * location, asset type, strategy, currency, figures, size) from the internal record as it is now.
+ * What a person wrote for investors (headline, highlights, hold period, documents) is kept, an
+ * empty source value never blanks anything, and the Overview changes only if an investor overview
+ * has been written. The live version is untouched until the draft is reviewed and published.
  */
-export async function startDraftFromSourceAction(publicationId: string): Promise<void> {
+export async function startDraftFromSourceAction(publicationId: string): Promise<ActionResult> {
   const { db, auth } = await requireAdminSession();
-  await assertNoOpenVersion(db, publicationId);
-  const provenance = await getPublicationProvenance(db, publicationId);
-  if (!provenance) throw new AppError("This publication has no linked internal opportunity.");
-  await createPublicationFromOpportunity(db, provenance.opportunityId, auth.userId);
+  let notice: string | undefined;
+  const result = await runAction("admin.publication.refresh-draft", { publicationId }, async () => {
+    await assertNoOpenVersion(db, publicationId);
+    const draft = await createDraftRefreshedFromSource(db, publicationId, {}, auth.userId);
+    if (draft.missingDocuments.length > 0) {
+      notice =
+        `Version ${draft.versionNumber} was started without: ${draft.missingDocuments.map((t) => `"${t}"`).join(", ")}. ` +
+        `The stored file for ${draft.missingDocuments.length === 1 ? "it was" : "each was"} already missing, so there was nothing to copy. ` +
+        `Upload ${draft.missingDocuments.length === 1 ? "it" : "them"} again on the Documents tab before publishing.`;
+    }
+  });
   refreshPublication(publicationId);
+  return notice ? { ...result, notice } : result;
 }
 
 // ============================================================================
