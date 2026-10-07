@@ -61,5 +61,9 @@
   },
   "overrides": {
     "uuid": "^11.0.0"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "unrs-resolver": true
   }
 }
