@@ -3,6 +3,7 @@
 // Every call runs under withSession, so RLS enforces org isolation + write scope.
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
+import { AppError } from "@/lib/errors";
 import { num, str } from "@/lib/data/coerce";
 import { staffNamesOn, nameOf } from "@/lib/data/directory";
 import { resolveProperty } from "@/lib/data/properties";
@@ -293,13 +294,23 @@ export async function setStage(session: Session, id: string, stage: OppStage): P
     tx.query("update opportunities set stage = $1 where opportunity_id = $2", [stage, id]));
 }
 
-/** Archive with an alternate outcome (rejected / withdrawn / lost). */
+/**
+ * Archive with an alternate outcome (rejected / withdrawn / lost).
+ *
+ * "merged" is refused: it is not an outcome, it needs a surviving record to point at, and only the
+ * reviewed merge script sets it (supabase/one-off/, docs/28).
+ */
 export async function setOutcome(session: Session, id: string, status: OppStatus): Promise<void> {
+  if (status === "merged") throw new AppError("A record can only be marked as merged by the merge procedure, not set by hand.");
   await withSession(session, (tx) =>
     tx.query("update opportunities set status = $1, archived_at = now() where opportunity_id = $2", [status, id]));
 }
 
 export async function reactivate(session: Session, id: string): Promise<void> {
-  await withSession(session, (tx) =>
-    tx.query("update opportunities set status = 'active', archived_at = null where opportunity_id = $1", [id]));
+  await withSession(session, async (tx) => {
+    const { rows } = await tx.query<{ status: string }>("select status from opportunities where opportunity_id = $1", [id]);
+    // Reviving a duplicate would put two records for one building back on the board.
+    if (rows[0]?.status === "merged") throw new AppError("This record was merged into another and cannot be reactivated. Open the record it was merged into.");
+    await tx.query("update opportunities set status = 'active', archived_at = null where opportunity_id = $1", [id]);
+  });
 }

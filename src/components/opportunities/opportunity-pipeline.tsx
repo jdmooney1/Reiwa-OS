@@ -23,10 +23,10 @@ const STAGE_LABEL: Record<OppStage, string> = {
   new: "New", screening: "Screening", underwriting: "Underwriting", ic: "IC", approved: "Approved", acquired: "Acquired",
 };
 const STATUS_LABEL: Record<OppStatus, string> = {
-  active: "Active", rejected: "Rejected", withdrawn: "Withdrawn", lost: "Lost", converted: "Converted",
+  active: "Active", rejected: "Rejected", withdrawn: "Withdrawn", lost: "Lost", converted: "Converted", merged: "Merged",
 };
 const STATUS_TONE = {
-  active: "positive", rejected: "negative", withdrawn: "muted", lost: "negative", converted: "accent",
+  active: "positive", rejected: "negative", withdrawn: "muted", lost: "negative", converted: "accent", merged: "muted",
 } as const;
 
 const TRIAGE_LABEL: Record<TriageStatus, string> = {
@@ -77,7 +77,8 @@ export function OpportunityPipeline({ opportunities }: { opportunities: Pipeline
   const change = (key: FilterKey, value: string) => setFilters((f) => setFilter(f, key, value));
   const shownActive = useMemo(() => applyFilters(active, filters), [active, filters]);
   const shownArchived = useMemo(() => applyFilters(archived, filters), [archived, filters]);
-  const progress = useMemo(() => triageProgress(opportunities), [opportunities]);
+  // A merged record is a duplicate kept for the audit trail: it is neither on the board nor in the count of deals still to triage.
+  const progress = useMemo(() => triageProgress(opportunities.filter((o) => o.status !== "merged")), [opportunities]);
 
   return (
     <div className="flex h-full flex-col">

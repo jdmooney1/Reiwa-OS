@@ -1,7 +1,12 @@
 // Pure types & constants (no server imports) — safe to import from client
 // components. The data layer (opportunities.ts) re-exports these.
 export type OppStage = "new" | "screening" | "underwriting" | "ic" | "approved" | "acquired";
-export type OppStatus = "active" | "rejected" | "withdrawn" | "lost" | "converted";
+/**
+ * "merged" is not an outcome: it says this record was a second description of a building another
+ * record already covers, and was folded into it (opportunities.merged_into_opportunity_id). It is set by
+ * a reviewed one-off script, never by a person from the UI, so it is not among the outcomes setOutcome accepts.
+ */
+export type OppStatus = "active" | "rejected" | "withdrawn" | "lost" | "converted" | "merged";
 
 /** How the opportunity reached Reiwa. Structured; `source` is the free-text detail. */
 export type SourceType =

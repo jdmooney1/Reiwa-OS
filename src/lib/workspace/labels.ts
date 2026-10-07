@@ -14,12 +14,12 @@ export const STAGE_LABEL: Record<OppStage, string> = {
 
 export const STATUS_LABEL: Record<OppStatus, string> = {
   active: "Active", rejected: "Rejected", withdrawn: "Withdrawn",
-  lost: "Lost", converted: "Converted",
+  lost: "Lost", converted: "Converted", merged: "Merged",
 };
 
 export const STATUS_TONE: Record<OppStatus, Tone> = {
   active: "positive", rejected: "negative", withdrawn: "muted",
-  lost: "negative", converted: "accent",
+  lost: "negative", converted: "accent", merged: "muted",
 };
 
 export const PRIORITY_LABEL: Record<OppPriority, string> = {
