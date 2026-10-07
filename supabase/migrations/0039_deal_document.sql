@@ -25,9 +25,13 @@ create table if not exists deal_document (
   counterparty_id  uuid references deal_counterparties(counterparty_id) on delete cascade,
   doc_type_key     text not null references doc_type(key),
 
+  -- 'not_applicable' added per review answer to docs/24 §12: a declined
+  -- investor's still-open documents are marked not_applicable (app.
+  -- mark_declined_investor_docs_not_applicable, 0047) — never deleted, so
+  -- the record of what was never pursued survives the decline.
   status       text not null default 'not_started'
                  check (status in ('not_started', 'requested', 'instructed', 'draft',
-                                    'in_review', 'final', 'signed', 'superseded')),
+                                    'in_review', 'final', 'signed', 'superseded', 'not_applicable')),
   owner_user_id uuid references profiles(user_id),
   due_date      date,
 

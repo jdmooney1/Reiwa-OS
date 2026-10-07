@@ -18,6 +18,7 @@ import { LOCATION_FIELDS, withoutLocation, type Opportunity } from "@/lib/data/o
 const full = (over: Partial<Opportunity> = {}): Opportunity => ({
   opportunityId: "o1", orgId: "org", propertyId: "p1", name: "24-26 Spring Street", market: "London",
   submarket: "Paddington", assetType: "office", strategy: "core", stage: "new", status: "active",
+  documentStage: 0,
   currency: "GBP", targetPrice: null, niy: null, reversionaryYield: null, passingRent: null, erv: null,
   capexBudget: null, targetIrr: null, equityMultiple: null, probability: null, source: null,
   sourceType: "other", sourceContactName: null, sourceContactEmail: null, sourcedAt: null,

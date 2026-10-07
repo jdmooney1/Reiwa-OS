@@ -24,6 +24,8 @@ interface Counts {
   risksOpen: number;
   decisions: number;
   documents: number;
+  investors: number;
+  readinessOpen: number;
 }
 
 export function WorkspaceNav({
@@ -54,6 +56,12 @@ export function WorkspaceNav({
       tone: counts.risksOpen > 0 ? "issue" : undefined,
     },
     { href: `${base}/documents`, label: "Documents" },
+    {
+      href: `${base}/readiness`,
+      label: "Deal readiness",
+      badge: counts.readinessOpen > 0 ? counts.readinessOpen : undefined,
+    },
+    { href: `${base}/investors`, label: "Investors", badge: counts.investors > 0 ? counts.investors : undefined },
     { href: `${base}/decision`, label: "Decision" },
     { href: `${base}/memo`, label: "Memo" },
     { href: `${base}/publication`, label: "Publication" },

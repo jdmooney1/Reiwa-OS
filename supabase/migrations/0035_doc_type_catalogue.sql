@@ -54,6 +54,18 @@ create table if not exists doc_type (
   -- docs/24 §D). Null means unconditional.
   gate_condition   text,
 
+  -- Revised per review answer to docs/24 §12: an investor-scoped type is
+  -- auto-created when a deal_investor reaches THIS status (cumulatively —
+  -- app.investor_status_rank, 0047 — not only on an exact match, so a
+  -- funnel status skipped in practice still creates what it would have),
+  -- never by the deal's document_stage. Stage is still meaningful for these
+  -- rows — it is which stage's EXIT gate the document blocks, read by the
+  -- evaluator (src/lib/deal-gates/evaluate.ts) — just not when the row is
+  -- created. Null for deal/counterparty-scoped types, which stay
+  -- document_stage-driven.
+  investor_status_trigger text check (investor_status_trigger in
+    ('matched', 'teaser_sent', 'nda_signed', 'pack_released', 'ioi_received', 'soft_circled', 'committed', 'completed')),
+
   jurisdiction        text check (jurisdiction in ('UK', 'NL')),
   jurisdiction_labels jsonb,
 

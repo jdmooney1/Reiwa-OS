@@ -39,7 +39,15 @@ export interface DocTypeSeed {
   template_key?: string | null;
   governing_language?: "EN" | "JA";
   sort_order: number;
+  /** Investor-scoped types only — which deal_investor status (cumulatively,
+   * app.investor_status_rank) auto-creates this row. Null for deal/
+   * counterparty-scoped types, which stay document_stage-driven. */
+  investor_status_trigger?: DealInvestorStatus | null;
 }
+
+type DealInvestorStatus =
+  | "matched" | "teaser_sent" | "nda_signed" | "pack_released"
+  | "ioi_received" | "soft_circled" | "committed" | "completed";
 
 // Two "Conditional: X" shapes in the original catalogue mean different
 // things and are kept distinct here:
@@ -69,27 +77,27 @@ export const DOC_TYPE_CATALOGUE: DocTypeSeed[] = [
   { key: "investor_teaser", name_en: "Anonymised investor teaser", name_ja: "匿名化インベスター・ティーザー",
     stage: 1, origin: "produce", scope: "deal", audience: ["investor"], gate_kind: "transition", generation_mode: "memo_backed", sort_order: 15 },
   { key: "investor_nda", name_en: "Investor NDA with non-circumvention and fee protection", name_ja: "インベスターNDA（非回避及びフィー保護条項付き）",
-    stage: 1, origin: "produce", scope: "investor", audience: ["investor"], gate_kind: "action", gate_action: "release_pitch_pack_and_portal_access", generation_mode: "manual_upload", sort_order: 16 },
+    stage: 1, origin: "produce", scope: "investor", audience: ["investor"], gate_kind: "action", gate_action: "release_pitch_pack_and_portal_access", generation_mode: "manual_upload", investor_status_trigger: "teaser_sent", sort_order: 16 },
   { key: "pitch_pack", name_en: "Investment summary / pitch pack", name_ja: "投資サマリー／ピッチパック",
     stage: 1, origin: "produce", scope: "deal", audience: ["investor"], gate_kind: "transition", generation_mode: "memo_backed", sort_order: 17 },
 
   // ---- Stage 2 — Soft-circled -------------------------------------------
   { key: "investor_ioi", name_en: "Investor indication of interest", name_ja: "インベスター関心表明書（IOI）",
-    stage: 2, origin: "receive", scope: "investor", audience: ["internal"], gate_kind: "transition", generation_mode: "none", sort_order: 20 },
+    stage: 2, origin: "receive", scope: "investor", audience: ["internal"], gate_kind: "transition", generation_mode: "none", investor_status_trigger: "ioi_received", sort_order: 20 },
   { key: "advisory_mandate", name_en: "Advisory mandate / engagement letter", name_ja: "アドバイザリー・マンデート／エンゲージメント・レター",
-    stage: 2, origin: "produce", scope: "investor", audience: ["investor"], gate_kind: "transition", generation_mode: "manual_upload", sort_order: 21 },
+    stage: 2, origin: "produce", scope: "investor", audience: ["investor"], gate_kind: "transition", generation_mode: "manual_upload", investor_status_trigger: "ioi_received", sort_order: 21 },
   { key: "jp_pre_contract_disclosure", name_en: "Pre-contract disclosure document (契約締結前交付書面)", name_ja: "契約締結前交付書面",
-    stage: 2, origin: "produce", scope: "investor", audience: ["investor"], gate_kind: "transition", gate_condition: "regulated_disclosure", generation_mode: "template_fill", template_key: "jp_pre_contract_disclosure_v1", sort_order: 22 },
+    stage: 2, origin: "produce", scope: "investor", audience: ["investor"], gate_kind: "transition", gate_condition: "regulated_disclosure", generation_mode: "template_fill", template_key: "jp_pre_contract_disclosure_v1", investor_status_trigger: "ioi_received", sort_order: 22 },
   { key: "investor_kyc", name_en: "Investor KYC / AML file (incl. source of funds)", name_ja: "インベスターKYC／AMLファイル（資金源泉含む）",
-    stage: 2, origin: "receive", scope: "investor", audience: ["internal"], gate_kind: "transition", generation_mode: "none", sort_order: 23 },
+    stage: 2, origin: "receive", scope: "investor", audience: ["internal"], gate_kind: "transition", generation_mode: "none", investor_status_trigger: "ioi_received", sort_order: 23 },
   { key: "sanctions_screening_investor", name_en: "Sanctions and PEP screening (investor)", name_ja: "制裁及びPEPスクリーニング（投資家）",
-    stage: 2, origin: "produce", scope: "investor", audience: ["internal"], gate_kind: "transition", generation_mode: "none", sort_order: 24 },
+    stage: 2, origin: "produce", scope: "investor", audience: ["internal"], gate_kind: "transition", generation_mode: "none", investor_status_trigger: "ioi_received", sort_order: 24 },
   { key: "sanctions_screening_vendor", name_en: "Sanctions and PEP screening (vendor)", name_ja: "制裁及びPEPスクリーニング（売主）",
     stage: 2, origin: "produce", scope: "counterparty", audience: ["internal"], gate_kind: "transition", generation_mode: "none", sort_order: 25 },
   { key: "abort_cost_agreement", name_en: "Abort-cost / DD cost-sharing agreement", name_ja: "アボートコスト／DDコスト分担契約",
-    stage: 2, origin: "produce", scope: "investor", audience: ["investor"], gate_kind: "action", gate_action: "instruct_stage3_commission", generation_mode: "manual_upload", sort_order: 26 },
+    stage: 2, origin: "produce", scope: "investor", audience: ["investor"], gate_kind: "action", gate_action: "instruct_stage3_commission", generation_mode: "manual_upload", investor_status_trigger: "ioi_received", sort_order: 26 },
   { key: "ringi_pack", name_en: "Internal approval support pack (稟議 support, JA-first)", name_ja: "社内承認支援パック（稟議サポート、日本語優先）",
-    stage: 2, origin: "produce", scope: "investor", audience: ["investor"], gate_kind: "none", gate_condition: "investor_type:corporate", generation_mode: "template_fill", template_key: "ringi_pack_v1", governing_language: "JA", sort_order: 27 },
+    stage: 2, origin: "produce", scope: "investor", audience: ["investor"], gate_kind: "none", gate_condition: "investor_type:corporate", generation_mode: "template_fill", template_key: "ringi_pack_v1", governing_language: "JA", investor_status_trigger: "ioi_received", sort_order: 27 },
   { key: "offer_letter", name_en: "Indicative offer letter to vendor", name_ja: "売主への指標的オファーレター",
     stage: 2, origin: "produce", scope: "deal", audience: ["vendor"], gate_kind: "transition", generation_mode: "template_fill", template_key: "offer_letter_v1", sort_order: 28 },
   { key: "vendor_nda", name_en: "Vendor NDA + data room access", name_ja: "売主NDA及びデータルームアクセス",
@@ -97,7 +105,7 @@ export const DOC_TYPE_CATALOGUE: DocTypeSeed[] = [
 
   // ---- Stage 3 — Closing -------------------------------------------------
   { key: "heads_of_terms", name_en: "Heads of terms", name_ja: "基本合意書（HOT）",
-    stage: 3, origin: "produce", scope: "deal", audience: ["vendor", "investor"], gate_kind: "transition", generation_mode: "none", sort_order: 30 },
+    stage: 3, origin: "produce", scope: "deal", audience: ["vendor", "investor"], gate_kind: "transition", generation_mode: "manual_upload", sort_order: 30 },
   { key: "title_report", name_en: "Legal report on title (incl. searches and enquiries)", name_ja: "権利関係法務報告書（調査事項含む）",
     stage: 3, origin: "commission", scope: "deal", audience: ["investor"], gate_kind: "transition", generation_mode: "none", sort_order: 31 },
   { key: "building_survey", name_en: "Building survey / technical DD", name_ja: "建物調査／テクニカルDD",
@@ -139,7 +147,7 @@ export const DOC_TYPE_CATALOGUE: DocTypeSeed[] = [
   { key: "am_agreement", name_en: "Asset management agreement", name_ja: "アセットマネジメント契約",
     stage: 4, origin: "produce", scope: "deal", audience: ["investor"], gate_kind: "none", generation_mode: "manual_upload", sort_order: 51 },
   { key: "jp_fx_filing", name_en: "Japanese FX Act overseas investment report (外為法)", name_ja: "外為法に基づく対外直接投資報告書",
-    stage: 4, origin: "receive", scope: "investor", audience: ["internal"], gate_kind: "none", gate_condition: "investor_type:corporate", generation_mode: "none", sort_order: 52 },
+    stage: 4, origin: "receive", scope: "investor", audience: ["internal"], gate_kind: "none", gate_condition: "investor_type:corporate", generation_mode: "none", investor_status_trigger: "committed", sort_order: 52 },
   { key: "quarterly_report", name_en: "Quarterly investor report + distribution notices", name_ja: "四半期投資家報告書及び分配通知",
     stage: 4, origin: "produce", scope: "deal", audience: ["investor"], gate_kind: "none", recurring: true, generation_mode: "template_fill", template_key: "quarterly_report_v1", sort_order: 53 },
   { key: "annual_valuation", name_en: "Annual valuation", name_ja: "年次鑑定評価",
@@ -172,7 +180,7 @@ function sameRow(existing: Record<string, unknown>, seed: DocTypeSeed): boolean 
     jurisdiction: seed.jurisdiction ?? null, jurisdiction_labels: seed.jurisdiction_labels ?? null,
     recurring: seed.recurring ?? false, generation_mode: seed.generation_mode,
     template_key: seed.template_key ?? null, governing_language: seed.governing_language ?? "EN",
-    sort_order: seed.sort_order,
+    sort_order: seed.sort_order, investor_status_trigger: seed.investor_status_trigger ?? null,
   };
   const current = {
     name_en: existing.name_en, name_ja: existing.name_ja, stage: existing.stage, origin: existing.origin,
@@ -181,7 +189,7 @@ function sameRow(existing: Record<string, unknown>, seed: DocTypeSeed): boolean 
     jurisdiction: existing.jurisdiction, jurisdiction_labels: existing.jurisdiction_labels,
     recurring: existing.recurring, generation_mode: existing.generation_mode,
     template_key: existing.template_key, governing_language: existing.governing_language,
-    sort_order: existing.sort_order,
+    sort_order: existing.sort_order, investor_status_trigger: existing.investor_status_trigger,
   };
   return JSON.stringify(canonical(normalised)) === JSON.stringify(canonical(current));
 }
@@ -210,8 +218,9 @@ export async function seedDocTypes(): Promise<SeedDocTypesResult> {
     await adminQuery(
       `insert into doc_type (key, name_en, name_ja, name_ja_reviewed, stage, origin, scope, audience,
                              gate_kind, gate_action, gate_condition, jurisdiction, jurisdiction_labels,
-                             recurring, generation_mode, template_key, governing_language, sort_order)
-       values ($1,$2,$3,false,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+                             recurring, generation_mode, template_key, governing_language, sort_order,
+                             investor_status_trigger)
+       values ($1,$2,$3,false,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        on conflict (key) do update set
          name_en = excluded.name_en, name_ja = excluded.name_ja, stage = excluded.stage,
          origin = excluded.origin, scope = excluded.scope, audience = excluded.audience,
@@ -220,12 +229,13 @@ export async function seedDocTypes(): Promise<SeedDocTypesResult> {
          jurisdiction_labels = excluded.jurisdiction_labels, recurring = excluded.recurring,
          generation_mode = excluded.generation_mode, template_key = excluded.template_key,
          governing_language = excluded.governing_language, sort_order = excluded.sort_order,
+         investor_status_trigger = excluded.investor_status_trigger,
          updated_at = now()`,
       [seed.key, seed.name_en, seed.name_ja, seed.stage, seed.origin, seed.scope, seed.audience,
        seed.gate_kind, seed.gate_action ?? null, seed.gate_condition ?? null, seed.jurisdiction ?? null,
        seed.jurisdiction_labels ? JSON.stringify(seed.jurisdiction_labels) : null,
        seed.recurring ?? false, seed.generation_mode, seed.template_key ?? null,
-       seed.governing_language ?? "EN", seed.sort_order],
+       seed.governing_language ?? "EN", seed.sort_order, seed.investor_status_trigger ?? null],
     );
     if (existing) updated++; else created++;
   }
