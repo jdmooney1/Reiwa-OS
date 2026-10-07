@@ -92,7 +92,10 @@ describe("The publication boundary is a whitelist", () => {
     expect(source!.title).toBe("14 Cavendish Row");
     expect(source!.city).toBe("London");
     expect(Number(source!.headline_price)).toBe(51000000);
-    expect(source!.overview).toBe("Freehold island site with vacant upper floors.");
+    // The internal summary does NOT cross. With no investor overview written the
+    // key is absent altogether (migration 0033), never a fallback to `summary`.
+    expect(Object.keys(source!)).not.toContain("overview");
+    expect(JSON.stringify(source)).not.toContain("Freehold island site");
 
     // Everything else is absent by construction, not by omission at call sites.
     for (const excluded of ["broker_name", "vendor_name", "source", "probability",

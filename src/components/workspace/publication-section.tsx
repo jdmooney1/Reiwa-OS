@@ -8,6 +8,7 @@ import type { PublicationEntitlementRow } from "@/lib/data/admin-portal";
 import { preparePublicationAction } from "@/app/actions/admin-portal";
 import { formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { InvestorOverviewEditor } from "@/components/workspace/investor-overview-editor";
 import { Section, FactList, TableWrap, Th, Td, Empty, Provenance } from "@/components/workspace/primitives";
 import { IC_OUTCOME_LABEL } from "@/lib/workspace/labels";
 import type { IcOutcome } from "@/lib/data/ic-decisions";
@@ -46,11 +47,13 @@ export interface PublicationView {
  * a silently updated figure.
  */
 export function PublicationSection({
-  opportunityId, publication, portalAdmin,
+  opportunityId, publication, portalAdmin, investorOverview = null, internalSummary = null,
 }: {
   opportunityId: string;
   publication: PublicationView | null;
   portalAdmin: boolean;
+  investorOverview?: string | null;
+  internalSummary?: string | null;
 }) {
   const [pending, start] = useTransition();
 
@@ -65,8 +68,19 @@ export function PublicationSection({
     );
   }
 
+  const overviewEditor = (
+    <InvestorOverviewEditor
+      opportunityId={opportunityId}
+      saved={investorOverview}
+      internalSummary={internalSummary}
+      hasPublication={publication !== null}
+    />
+  );
+
   if (!publication) {
     return (
+      <div>
+      {overviewEditor}
       <Section eyebrow="Investors" title="Not prepared for investors">
         <Empty
           // Precise about which of the three states this is: no publication at
@@ -85,6 +99,7 @@ export function PublicationSection({
           Prepare investor draft
         </button>
       </Section>
+      </div>
     );
   }
 
@@ -93,6 +108,7 @@ export function PublicationSection({
 
   return (
     <div>
+      {overviewEditor}
       <Section
         eyebrow="Investors"
         title="Investor publication"

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChevronLeft, AlertTriangle, Loader2, Send, Undo2, CheckCircle2, FilePlus2,
   Archive, Plus, X, Trash2, Pencil, Lock, RefreshCw,
@@ -13,7 +14,7 @@ import type {
   PublicationSourcePanel, VersionDrift, PublicationEntitlementRow, WorkflowState,
 } from "@/lib/data/admin-portal";
 import {
-  submitForReviewAction, returnToDraftAction, publishVersionAction, withdrawPublicationAction,
+  submitForReviewAction, returnToDraftAction, withdrawPublicationAction,
   startDraftFromVersionAction, startDraftFromSourceAction, updateDraftVersionAction,
   addDocumentAction, updateDocumentAction, removeDocumentAction,
   grantAccessAction, setEntitlementVisibilityAction, revokeEntitlementAction,
@@ -49,7 +50,11 @@ export function PublicationDetail({
   investorOrgs: InvestorOrganization[];
 }) {
   const [pending, start] = useTransition();
+  const router = useRouter();
   const id = publication.publicationId;
+  // Publishing happens on its own screen, which shows the change and asks for a
+  // typed sentence. Nothing in this component publishes directly.
+  const reviewHref = (versionId: string) => `/admin/publications/${id}/publish/${versionId}`;
 
   const driftMap = useMemo(() => new Map(drift.map((d) => [d.versionId, d])), [drift]);
   const display = working ?? active ?? versions[0] ?? null;
@@ -97,9 +102,9 @@ export function PublicationDetail({
             {working?.status === "in_review" && (
               <>
                 <HeaderBtn primary disabled={pending}
-                  onClick={() => start(() => publishVersionAction(working.versionId, id))}>
+                  onClick={() => router.push(reviewHref(working.versionId))}>
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  {active ? `Publish v${working.versionNumber} (replaces v${active.versionNumber})` : "Publish"}
+                  {active ? `Review and publish v${working.versionNumber} (replaces v${active.versionNumber})` : "Review and publish"}
                 </HeaderBtn>
                 <HeaderBtn disabled={pending}
                   onClick={() => start(() => returnToDraftAction(working.versionId, id))}>
@@ -114,7 +119,14 @@ export function PublicationDetail({
                   <FilePlus2 className="h-3.5 w-3.5" /> New Draft (edit)
                 </HeaderBtn>
                 <HeaderBtn disabled={pending} danger
-                  onClick={() => start(() => withdrawPublicationAction(id))}>
+                  onClick={() => {
+                    if (!window.confirm(
+                      `Withdraw "${active?.title ?? "this publication"}" from investors?\n\n` +
+                      `Version ${active?.versionNumber ?? ""} disappears from every investor's portal immediately, ` +
+                      `including document downloads. Their saved items and requests are kept. ` +
+                      `You can start a new draft from it afterwards.`)) return;
+                    start(() => withdrawPublicationAction(id));
+                  }}>
                   <Archive className="h-3.5 w-3.5" /> Withdraw
                 </HeaderBtn>
               </>
@@ -194,6 +206,9 @@ export function PublicationDetail({
               <DocumentsCard
                 title={`Version ${working.versionNumber} (${VERSION_STATUS_LABEL[working.status]})`}
                 documents={workingDocuments}
+                liveVersion={active && active.versionId !== working.versionId
+                  ? { versionNumber: active.versionNumber, paths: activeDocuments.map((a) => a.storagePath) }
+                  : null}
                 editable={working.status === "draft"}
                 versionId={working.versionId}
                 publicationId={id}
@@ -257,6 +272,10 @@ function DraftEditor({ version, publicationId }: { version: PublicationVersion; 
             <span className="eyebrow">Overview</span>
             <textarea name="overview" rows={5} defaultValue={version.overview ?? ""}
               className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30" />
+            <span className="mt-1 block text-2xs text-ink-faint">
+              Written for investors. This is not copied from the internal summary; it starts from the
+              investor overview saved on the opportunity, and is blank if none was written.
+            </span>
           </label>
           <label className="block">
             <span className="eyebrow">Highlights — one per line</span>
@@ -435,8 +454,10 @@ function SourceTab({
 // Documents
 // ============================================================================
 function DocumentsCard({
-  title, documents, editable, versionId, publicationId, note,
+  title, documents, editable, versionId, publicationId, note, liveVersion,
 }: {
+  /** The live version's files, so a removal can warn when it shares one with it. */
+  liveVersion?: { versionNumber: number; paths: string[] } | null;
   title: string;
   documents: PublicationDocument[];
   editable: boolean;
@@ -536,12 +557,23 @@ function DocumentsCard({
                     </div>
                     {editable && (
                       <div className="flex shrink-0 items-center gap-1">
-                        <button onClick={() => setEditingId(d.documentId)}
+                        <button onClick={() => setEditingId(d.documentId)} aria-label={`Edit ${d.title}`}
                           className="rounded border border-line p-1.5 text-ink-muted hover:border-line hover:text-ink">
                           <Pencil className="h-3 w-3" />
                         </button>
                         <button disabled={pending}
-                          onClick={() => start(() => removeDocumentAction(d.documentId, publicationId))}
+                          aria-label={`Remove ${d.title}`}
+                          onClick={() => {
+                            const shared = liveVersion && liveVersion.paths.includes(d.storagePath);
+                            if (!window.confirm(
+                              `Remove "${d.title}" from this version?\n\n` +
+                              `The file is deleted from storage.` +
+                              (shared
+                                ? `\n\nThis file is also attached to the live version (v${liveVersion.versionNumber}). ` +
+                                  `Deleting it here currently deletes it there too, and investors' downloads of it will fail.`
+                                : ``))) return;
+                            start(() => removeDocumentAction(d.documentId, publicationId));
+                          }}
                           className="rounded border border-line p-1.5 text-ink-muted hover:border-negative/40 hover:text-negative disabled:opacity-50">
                           <Trash2 className="h-3 w-3" />
                         </button>
@@ -706,7 +738,13 @@ function AccessTab({
                           {e.documentAccessLevel === "standard" ? "Grant diligence" : "Standard only"}
                         </MiniBtn>
                         <MiniBtn tone="negative" disabled={pending}
-                          onClick={() => start(() => revokeEntitlementAction(e.entitlementId, e.investorOrgId))}>
+                          onClick={() => {
+                            if (!window.confirm(
+                              `Revoke ${e.investorOrgName}'s access to this publication?\n\n` +
+                              `They lose it immediately, including document downloads. ` +
+                              `It can be restored from this screen.`)) return;
+                            start(() => revokeEntitlementAction(e.entitlementId, e.investorOrgId));
+                          }}>
                           Revoke
                         </MiniBtn>
                       </>
@@ -740,6 +778,7 @@ function VersionsTab({
   pending: boolean;
   start: (fn: () => Promise<void>) => void;
 }) {
+  const router = useRouter();
   return (
     <div className="mx-auto max-w-4xl">
       <Card>
@@ -788,8 +827,8 @@ function VersionsTab({
                       {v.status === "in_review" && (
                         <span className="inline-flex gap-1">
                           <MiniBtn disabled={pending}
-                            onClick={() => start(() => publishVersionAction(v.versionId, publication.publicationId))}>
-                            Publish
+                            onClick={() => router.push(`/admin/publications/${publication.publicationId}/publish/${v.versionId}`)}>
+                            Review and publish
                           </MiniBtn>
                           <MiniBtn disabled={pending}
                             onClick={() => start(() => returnToDraftAction(v.versionId, publication.publicationId))}>
