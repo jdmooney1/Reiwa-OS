@@ -16,7 +16,10 @@ import { Pool, types, type PoolClient } from "pg";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-export type GlobalRole = "reiwa_admin" | "org_user" | "investor_viewer";
+// ic_member added by migration 0033 (docs/24) — internal staff, same write
+// capability as org_user, plus authority to approve a gate override or
+// record an IC decision (Session 3 wires the override-permission checks).
+export type GlobalRole = "reiwa_admin" | "org_user" | "investor_viewer" | "ic_member";
 
 export interface Session {
   userId: string;

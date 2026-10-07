@@ -4,19 +4,22 @@ The DD Tracker is an **investment risk-control system**, not a task list. It enc
 Reiwa Capital's standing diligence frameworks for London and Amsterdam and tracks every
 workstream from request to clearance, surfacing issues to the investment committee.
 
-> **Status after Phase 0.**
+> **Status after Phase 1A, corrected.** This status block previously said "there is
+> no DD screen and no DD table" and listed the table/screen as something Phase 1 must
+> still build. That became stale the moment migration `0008_opportunity_foundation.sql`
+> shipped — it was never updated to say so until the docs/24 audit caught it.
 >
 > | | |
 > | --- | --- |
-> | **Exists today** | Nothing. There is no DD screen and no DD table. |
-> | **Reusable domain logic** | The frameworks themselves — `src/lib/dd/templates.ts` (both market templates, jurisdiction-branched) and `src/lib/dd/progress.ts` (completion and critical-item computation). Both are pure, tested by nothing yet, and depend on no removed code. |
-> | **Phase 1 must build** | A `due_diligence_items` table scoped to `opportunity_id`, the server actions to apply a template and update a status, and the tracker screen. |
+> | **Exists today, built** | `opportunity_dd_items` (migration `0008`), scoped to `opportunity_id`, `org_id`-scoped RLS. The tracker screen at `/opportunities/[opportunityId]/diligence`. `source_document_id` links a finding back to the `opportunity_documents` row it came from. |
+> | **Reusable domain logic** | `src/lib/dd/templates.ts` (both market templates, jurisdiction-branched) and `src/lib/dd/progress.ts` (completion and critical-item computation) — now wired into the live screen, not merely preserved. |
+> | **Extended by docs/24** | `deal_document.linked_dd_item_id` (migration `0043`) lets a Commission catalogue document drive a linked DD item's status forward, as a floor — see `24-deal-document-system.md` §10. |
 >
 > The DD tracker previously rendered at `/deals/[dealId]/due-diligence` against
 > `src/lib/mock-data.ts`. Statuses changed in React state and were never written
 > anywhere. That screen was removed in Phase 0; the frameworks below survived it,
 > which is the point — **the firm's diligence IP was the valuable part, not the
-> screen.**
+> screen.** Phase 1A then built the real table and screen against them.
 
 ## Framework sections (21)
 
@@ -82,14 +85,16 @@ because it is firm logic rather than screen logic)
 - `criticalOpenItems(items)` — open workstreams that are flagged issues or
   high/critical priority, ranked by severity.
 
-## Behaviour Phase 1 should build
+## Behaviour (built)
 
 - **Apply template** — an opportunity with no DD shows the framework chooser
   (pre-selected from `opportunity.market`); applying persists all 21 sections.
 - **Progress by section** — proportional, status-coloured bars and cleared/in-scope
   counts, rolled up to an overall completion percentage.
 - **Critical Open Items** — a panel over `criticalOpenItems`.
-- **Inline status editing**, written through a server action under RLS.
+- **Inline status editing**, written through a server action under RLS — except for
+  an item with a linked `deal_document` (docs/24 §10), where the database refuses a
+  backward edit below the document's status floor and the screen should point at the
+  document instead.
 
-Nothing here needs new logic — it needs a table, actions and a screen. The
-computation is done.
+All built against the real table and screen at `/opportunities/[opportunityId]/diligence`.

@@ -3,8 +3,12 @@
 @tailwind utilities;
 
 :root {
-  /* One family. See src/app/layout.tsx — DM Sans, loaded by next/font. */
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  /* One family. See src/app/layout.tsx — DM Sans, loaded by next/font.
+     Noto Sans JP is a named fallback (docs/24 §D): DM Sans has no Japanese
+     glyphs, so any Japanese text (memo translation, Japanese Language
+     Summary) now falls through to a font this app actually loaded, rather
+     than whatever CJK font the viewer's OS happens to have installed. */
+  --font-sans: "DM Sans", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {

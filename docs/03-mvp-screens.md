@@ -119,22 +119,25 @@ never mutates the underlying opportunity.
 
 ---
 
-## F. Designed, never built
+## F. Designed, never built — corrected
 
-These were specified as tabs of the removed `/deals/[dealId]` file. **None is a
-feature today.** They are kept because the design is sound and, where noted, the
-model behind it survives and is ready for a screen to be built against it.
+**This section is stale and was left uncorrected for some time.** It originally
+described tabs of the removed `/deals/[dealId]` file as designed-but-not-built,
+with only their underlying models preserved. Phase 1A (migration `0008` onward) then
+built real screens against five of the six "model preserved" rows below, and the
+section was never updated to say so — caught by the docs/24 audit. Genuinely
+not-built items are marked accordingly; the rest now link to a live route.
 
-| Screen | Model preserved | Where |
+| Screen | Status | Where |
 | --- | --- | --- |
-| Due Diligence Tracker | ✅ London / Amsterdam checklists, jurisdiction-branched; progress and blocking-item computation | `src/lib/dd/templates.ts`, `src/lib/dd/progress.ts` |
-| Investment Score | ✅ 11 weighted criteria summing to 100, recommendation bands; radar and dial components | `src/lib/scoring/model.ts`, `src/components/shared/` |
-| Investment Memo | ✅ Composed deterministically from real rows, versioned and immutable once final; 17-section spine, 4 formats (IC / teaser / snapshot / Japanese), print view | `src/lib/memo/`, migration 0023, [`07`](07-memo-generator.md) |
-| Document Vault | ✅ Category taxonomy mapped to DD sections | `src/lib/documents/catalog.ts` |
-| Risk Register | ✅ `opportunity_risks` (migration 0008) holds the pre-acquisition register, with `source_dd_item_id` linking a risk back to the diligence finding it was promoted from; `asset_risks` is the post-acquisition register | `src/lib/data/opportunity-risks.ts` |
-| Asset Snapshot, Financial Metrics | ❌ No schema | |
+| Due Diligence Tracker | ✅ **Built.** London / Amsterdam checklists, jurisdiction-branched, progress and blocking-item computation, live | `/opportunities/[opportunityId]/diligence`, `src/lib/dd/templates.ts`, `src/lib/dd/progress.ts`, [`05`](05-dd-framework.md) |
+| Investment Score | ✅ **Built.** 11 weighted criteria summing to 100, recommendation bands, radar and dial components | `/opportunities/[opportunityId]/score`, `src/lib/scoring/model.ts`, migration 0024, [`06`](06-investment-score.md) |
+| Investment Memo | ✅ **Built.** Composed deterministically from real rows, versioned and immutable once final; 17-section spine, 4 formats (IC / teaser / snapshot / Japanese), print view | `/opportunities/[opportunityId]/memo`, `src/lib/memo/`, migration 0023, [`07`](07-memo-generator.md) |
+| Document Vault | ✅ **Built.** Category taxonomy mapped to DD sections, real Storage upload | `/opportunities/[opportunityId]/documents`, `src/lib/documents/catalog.ts`, migration 0008, [`08`](08-document-vault.md) |
+| Risk Register | ✅ **Built.** `opportunity_risks` (migration 0008) holds the pre-acquisition register, with `source_dd_item_id` linking a risk back to the diligence finding it was promoted from; `asset_risks` is the post-acquisition register | `/opportunities/[opportunityId]/risks`, `src/lib/data/opportunity-risks.ts` |
+| Asset Snapshot, Financial Metrics | ❌ No schema (the one-page Asset Snapshot is a memo *format*, not a separate screen — see `07`) | |
 | Deal Contacts, Contacts Directory | ❌ No schema. `/contacts` was an empty placeholder and was removed | |
-| Settings | ❌ Empty placeholder, removed | |
+| Settings | ✅ **Partially built.** `/admin/settings` exists for FX rate administration (migration 0025); a general settings screen remains unbuilt | |
 
 Two things were **not** preserved, deliberately:
 
