@@ -55,6 +55,7 @@ create or replace function app.is_staff() returns boolean
   set search_path = ''
   as $$ select app.current_global_role() in ('reiwa_admin', 'reiwa_staff') $$;
 
+revoke execute on function app.is_staff() from public, anon;
 grant execute on function app.is_staff() to authenticated;
 
 -- 3. The memo drafting aids: administrators everywhere (unchanged), staff on memos they can see.
