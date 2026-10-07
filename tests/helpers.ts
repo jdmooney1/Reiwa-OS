@@ -142,3 +142,26 @@ export async function publicationByOpportunityName(
     activeVersionId: rows[0].active_version_id,
   };
 }
+
+// ---- Reiwa staff (migration 0035) -----------------------------------------
+/**
+ * A real `reiwa_staff` user: a Supabase Auth account, a profile with that role, and a
+ * membership of each organisation named. Created on the privileged connection, which is the
+ * only way a role is ever assigned (there is deliberately no screen for it yet). The returned
+ * Session is exactly what the application builds from that profile.
+ */
+export async function createStaffSession(email: string, name: string, orgIds: string[]): Promise<Session> {
+  // Imported here so files that never need an auth user do not load the Supabase client.
+  const { createSupabaseAdminClient, ensureAuthUser } = await import("@/lib/supabase/admin");
+  const { DEMO_PASSWORD } = await import("@/lib/db/seed");
+  const userId = await ensureAuthUser(createSupabaseAdminClient(), { email, password: DEMO_PASSWORD, name });
+  await adminQuery(
+    `insert into profiles(user_id, email, name, global_role) values ($1,$2,$3,'reiwa_staff')
+     on conflict (user_id) do update set global_role = 'reiwa_staff'`, [userId, email, name]);
+  for (const orgId of orgIds) {
+    await adminQuery(
+      "insert into organization_members(org_id, user_id, role) values ($1,$2,'manager') on conflict do nothing",
+      [orgId, userId]);
+  }
+  return { userId, orgIds, role: "reiwa_staff", canWrite: true };
+}

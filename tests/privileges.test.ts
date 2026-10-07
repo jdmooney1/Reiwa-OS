@@ -21,6 +21,7 @@ const EXPECTED: Record<string, { authenticated: boolean; why: string }> = {
   current_global_role:  { authenticated: true,  why: "called from app.is_admin() (INVOKER body)" },
   current_org_ids:      { authenticated: true,  why: "called from app.has_org() (INVOKER body)" },
   is_admin:             { authenticated: true,  why: "policy predicate on 12 tables" },
+  is_staff:             { authenticated: true,  why: "policy predicate on the two memo drafting-aid tables (0035)" },
   can_write:            { authenticated: true,  why: "write policies on 12 internal tables" },
   has_org:              { authenticated: true,  why: "tenancy predicate on 13 internal tables" },
 

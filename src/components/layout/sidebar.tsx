@@ -9,6 +9,7 @@ import { signOutAction } from "@/app/actions/auth";
 
 const ROLE_LABEL: Record<string, string> = {
   reiwa_admin: "Reiwa Admin",
+  reiwa_staff: "Reiwa Staff",
   org_user: "Organisation User",
   investor_viewer: "Investor Viewer",
 };

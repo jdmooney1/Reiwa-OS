@@ -11,7 +11,7 @@
 // This module imports no model: it cannot generate, so a save can never trigger a call.
 // ============================================================================
 import { revalidatePath } from "next/cache";
-import { requireAdminSession } from "@/lib/auth/admin";
+import { requireStaffSession } from "@/lib/auth/admin";
 import { AppError } from "@/lib/errors";
 import { runAction } from "@/lib/actions/run-action";
 import type { ActionResult } from "@/lib/actions/result";
@@ -26,7 +26,7 @@ function ids(opportunityId: string, memoId: string) {
 export async function acceptTranslationAction(
   opportunityId: string, memoId: string, draftId: string, key: string, text: string, acknowledgeFigures = false,
 ): Promise<ActionResult> {
-  const { db } = await requireAdminSession();
+  const { db } = await requireStaffSession();
   return runAction("workspace.memo.translation.accept", { opportunityId, memoId, draftId, key }, async () => {
     ids(opportunityId, memoId);
     if (!isUuid(draftId)) throw new AppError("That draft could not be found.");
@@ -38,7 +38,7 @@ export async function acceptTranslationAction(
 export async function removeTranslationAction(
   opportunityId: string, memoId: string, key: string,
 ): Promise<ActionResult> {
-  const { db } = await requireAdminSession();
+  const { db } = await requireStaffSession();
   return runAction("workspace.memo.translation.remove", { opportunityId, memoId, key }, async () => {
     ids(opportunityId, memoId);
     await removeTranslatedSection(db, memoId, key);
