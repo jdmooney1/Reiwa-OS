@@ -18,7 +18,10 @@
 -- touched. It lets a prospect who was first shown the deal via a prospect
 -- link, and only later formally tracked, carry their real introduction date
 -- forward rather than restarting the clock at the day someone got round to
--- adding them.
+-- adding them — but a backdate is never a quiet side effect of an UPDATE:
+-- it must be evidenced by the attached share's own first view, move only
+-- earlier, and carry a logged, authorised gate_override. See the function
+-- below for the full rule (revised after review).
 -- ============================================================================
 
 -- ============================================================================
@@ -70,13 +73,41 @@ drop trigger if exists trg_deal_investor_touch on deal_investor;
 create trigger trg_deal_investor_touch before update on deal_investor
   for each row execute function app.touch_updated_at();
 
--- ---- first_introduced_at: computed, monotonically non-increasing ----------
+-- ---- first_introduced_at: computed at creation, backdatable only with evidence + a logged override ----------
+-- Revised per review: the original version let an UPDATE that merely
+-- attached an earlier-viewed originating_share_id move the value with no
+-- accountability trail at all. Now EVERY post-creation move requires:
+--   1. it is strictly earlier than the stored value — never later, no
+--      exception, override or not;
+--   2. the new value exactly equals what the (newly or already) attached
+--      originating share's first view evidences — never an arbitrary
+--      caller-supplied timestamp, override or not. An override authorises
+--      WHO may apply evidence that already exists; it cannot manufacture
+--      evidence that doesn't;
+--   3. a matching gate_override row (action = 'backdate_first_introduced'),
+--      inserted in the SAME transaction (app.guard_post_close_document_version,
+--      0046, established the `go.at = now()` same-transaction correlation
+--      this reuses), by admin/ic_member (RLS on gate_override, 0041).
+-- Attaching/changing originating_share_id WITHOUT also attempting to move
+-- first_introduced_at itself (i.e. leaving it at its stored value) is
+-- unrestricted — it is provenance metadata, not the protected fact.
+--
+-- SECURITY DEFINER, found only by actually running this (not by reading it):
+-- `deal_share_views` is readable by `app.is_admin()` ALONE (0029) — an
+-- ordinary org_user/ic_member session reading it as SECURITY INVOKER gets
+-- zero rows back, so `min(viewed_at)` silently returns NULL and the evidence
+-- check fails for every non-admin caller, every time, with no indication why.
+-- Same category of gap as app.record_doc_type_audit() / app.log_deal_investor_
+-- status_change() (0036/0038) — reading something the caller's own privilege
+-- can't reach, not just writing it.
 create or replace function app.set_deal_investor_first_introduced() returns trigger
   language plpgsql
+  security definer
   set search_path = ''
   as $fn$
   declare
     earliest_view timestamptz;
+    has_override  boolean;
   begin
     if tg_op = 'INSERT' then
       if new.originating_share_id is not null then
@@ -85,28 +116,41 @@ create or replace function app.set_deal_investor_first_introduced() returns trig
       end if;
       -- The earlier of "this row was created" and "the originating share was
       -- first opened before we even created it". Never trusts a caller-
-      -- supplied value for this column at all.
+      -- supplied value for this column at all. Creation is not a "change"
+      -- to an existing fact, so no override applies here.
       new.first_introduced_at := least(now(), coalesce(earliest_view, now()));
       return new;
     end if;
 
-    if tg_op = 'UPDATE' then
-      if new.originating_share_id is distinct from old.originating_share_id
-         and new.originating_share_id is not null then
-        select min(viewed_at) into earliest_view
-          from public.deal_share_views where share_id = new.originating_share_id;
-        if earliest_view is not null and earliest_view < old.first_introduced_at then
-          new.first_introduced_at := earliest_view;
-          return new;
-        end if;
-      end if;
-      -- No legitimate recomputation applies: the value may not move.
-      if new.first_introduced_at is distinct from old.first_introduced_at then
+    -- tg_op = 'UPDATE'
+    if new.first_introduced_at is distinct from old.first_introduced_at then
+      if new.first_introduced_at > old.first_introduced_at then
         raise exception
-          'deal_investor.first_introduced_at (row %) is immutable except when an earlier-viewed originating_share_id is attached',
+          'deal_investor.first_introduced_at (row %) can never move later',
           old.deal_investor_id;
       end if;
-      return new;
+
+      if new.originating_share_id is not null then
+        select min(viewed_at) into earliest_view
+          from public.deal_share_views where share_id = new.originating_share_id;
+      end if;
+      if earliest_view is null or earliest_view <> new.first_introduced_at then
+        raise exception
+          'deal_investor.first_introduced_at (row %) may only move to the date its originating share''s first view evidences',
+          old.deal_investor_id;
+      end if;
+
+      select exists (
+        select 1 from public.gate_override go
+         where go.deal_investor_id = old.deal_investor_id
+           and go.action = 'backdate_first_introduced'
+           and go.at = now()
+      ) into has_override;
+      if not has_override then
+        raise exception
+          'deal_investor.first_introduced_at (row %) cannot be backdated without a matching backdate_first_introduced gate_override in the same transaction',
+          old.deal_investor_id;
+      end if;
     end if;
 
     return new;

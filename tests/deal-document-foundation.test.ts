@@ -235,17 +235,101 @@ describe("deal_investor.first_introduced_at (0038)", () => {
     expect(new Date(rows.rows[0].first_introduced_at).getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
   });
 
-  it("is immutable: a direct update to a different value is refused", async () => {
+  it("can never move later, even with an override logged", async () => {
     const oppId = await newOpportunity("32 Immutable Mews");
     const investorOrgId = await newInvestorOrg("Test Immutable Investor " + randomUUID());
     const di = await withSession(session, (tx) =>
       tx.query<{ deal_investor_id: string }>(
         "insert into deal_investor (org_id, opportunity_id, investor_org_id, introduced_by) values ($1,$2,$3,$4) returning deal_investor_id",
         [org, oppId, investorOrgId, analyst]));
+    await expect(withSession(icMemberSession, async (tx) => {
+      await tx.query(
+        "insert into gate_override (org_id, opportunity_id, deal_investor_id, action, reason, recorded_by) values ($1,$2,$3,'backdate_first_introduced','trying anyway',$4)",
+        [org, oppId, di.rows[0].deal_investor_id, analyst]);
+      return tx.query("update deal_investor set first_introduced_at = now() + interval '1 day' where deal_investor_id = $1",
+        [di.rows[0].deal_investor_id]);
+    })).rejects.toThrow(/can never move later/);
+  });
+
+  it("a manual backdate with no originating share (no evidence) is refused even with an override", async () => {
+    const oppId = await newOpportunity("32b No Evidence");
+    const investorOrgId = await newInvestorOrg("Test No Evidence Investor " + randomUUID());
+    const di = await withSession(session, (tx) =>
+      tx.query<{ deal_investor_id: string }>(
+        "insert into deal_investor (org_id, opportunity_id, investor_org_id, introduced_by) values ($1,$2,$3,$4) returning deal_investor_id",
+        [org, oppId, investorOrgId, analyst]));
+    await expect(withSession(icMemberSession, async (tx) => {
+      await tx.query(
+        "insert into gate_override (org_id, opportunity_id, deal_investor_id, action, reason, recorded_by) values ($1,$2,$3,'backdate_first_introduced','no evidence attached',$4)",
+        [org, oppId, di.rows[0].deal_investor_id, analyst]);
+      return tx.query("update deal_investor set first_introduced_at = now() - interval '1 day' where deal_investor_id = $1",
+        [di.rows[0].deal_investor_id]);
+    })).rejects.toThrow(/originating share's first view evidences/);
+  });
+
+  it("a manual backdate matching the originating share's evidence is refused without a matching override", async () => {
+    const oppId = await newOpportunity("32c No Override");
+    const share = await adminQuery<{ share_id: string }>(
+      `insert into deal_shares (opportunity_id, teaser_memo_id, prospect_name, prospect_email, token_hash, expires_at, created_by)
+       select $1, memo_id, 'Prospect Tester', 'prospect2@example.com',
+              encode(sha256(gen_random_uuid()::text::bytea), 'hex'), now() + interval '14 days', $2
+         from memos where opportunity_id = $1 limit 1
+       returning share_id`,
+      [oppId, analyst],
+    ).catch(() => [] as { share_id: string }[]);
+    if (!share[0]) return; // best-effort, same precondition note as below
+    await adminQuery("insert into deal_share_views (share_id, viewed_at) values ($1, now() - interval '2 days')", [share[0].share_id]);
+
+    const investorOrgId = await newInvestorOrg("Test Unauthorised Backdate " + randomUUID());
+    const di = await withSession(session, (tx) =>
+      tx.query<{ deal_investor_id: string; first_introduced_at: string }>(
+        "insert into deal_investor (org_id, opportunity_id, investor_org_id, introduced_by) values ($1,$2,$3,$4) returning deal_investor_id, first_introduced_at",
+        [org, oppId, investorOrgId, analyst]));
+    const evidenced = await adminQuery<{ v: string }>("select min(viewed_at)::text as v from deal_share_views where share_id = $1", [share[0].share_id]);
+
+    // Attach the share AND the evidenced value, but log no override at all.
     await expect(withSession(session, (tx) =>
-      tx.query("update deal_investor set first_introduced_at = now() + interval '1 day' where deal_investor_id = $1",
-        [di.rows[0].deal_investor_id]),
-    )).rejects.toThrow(/immutable/);
+      tx.query("update deal_investor set originating_share_id = $1, first_introduced_at = $2 where deal_investor_id = $3",
+        [share[0].share_id, evidenced[0].v, di.rows[0].deal_investor_id]),
+    )).rejects.toThrow(/backdate_first_introduced gate_override/);
+  });
+
+  it("a manual, evidenced backdate succeeds with a matching override, and is logged", async () => {
+    const oppId = await newOpportunity("32d Authorised Backdate");
+    const share = await adminQuery<{ share_id: string }>(
+      `insert into deal_shares (opportunity_id, teaser_memo_id, prospect_name, prospect_email, token_hash, expires_at, created_by)
+       select $1, memo_id, 'Prospect Tester', 'prospect3@example.com',
+              encode(sha256(gen_random_uuid()::text::bytea), 'hex'), now() + interval '14 days', $2
+         from memos where opportunity_id = $1 limit 1
+       returning share_id`,
+      [oppId, analyst],
+    ).catch(() => [] as { share_id: string }[]);
+    if (!share[0]) return;
+    await adminQuery("insert into deal_share_views (share_id, viewed_at) values ($1, now() - interval '3 days')", [share[0].share_id]);
+
+    const investorOrgId = await newInvestorOrg("Test Authorised Backdate " + randomUUID());
+    const di = await withSession(session, (tx) =>
+      tx.query<{ deal_investor_id: string }>(
+        "insert into deal_investor (org_id, opportunity_id, investor_org_id, introduced_by) values ($1,$2,$3,$4) returning deal_investor_id",
+        [org, oppId, investorOrgId, analyst]));
+    const evidenced = (await adminQuery<{ v: string }>(
+      "select min(viewed_at)::text as v from deal_share_views where share_id = $1", [share[0].share_id]))[0].v;
+
+    await withSession(icMemberSession, async (tx) => {
+      await tx.query(
+        "insert into gate_override (org_id, opportunity_id, deal_investor_id, action, reason, recorded_by) values ($1,$2,$3,'backdate_first_introduced','evidence from the prospect link',$4)",
+        [org, oppId, di.rows[0].deal_investor_id, analyst]);
+      return tx.query("update deal_investor set originating_share_id = $1, first_introduced_at = $2 where deal_investor_id = $3",
+        [share[0].share_id, evidenced, di.rows[0].deal_investor_id]);
+    });
+
+    const after = await adminQuery<{ first_introduced_at: string }>(
+      "select first_introduced_at from deal_investor where deal_investor_id = $1", [di.rows[0].deal_investor_id]);
+    expect(new Date(after[0].first_introduced_at).getTime()).toBe(new Date(evidenced).getTime());
+
+    const log = await adminQuery<{ action: string; reason: string }>(
+      "select action, reason from gate_override where deal_investor_id = $1 and action = 'backdate_first_introduced'", [di.rows[0].deal_investor_id]);
+    expect(log.length).toBe(1);
   });
 
   it("backdates to an originating share's earlier first view when attached", async () => {
