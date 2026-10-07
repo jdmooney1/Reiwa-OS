@@ -1,5 +1,6 @@
-import type { Block, ResolvedSection } from "@/lib/memo/compose";
-import { formatMetric, visibleMetrics, NOT_RECORDED } from "@/lib/memo/render";
+import { showsFigures, type Block, type ResolvedSection } from "@/lib/memo/compose";
+import { formatMetric, visibleMetrics, isExternalFormat, NOT_RECORDED } from "@/lib/memo/render";
+import { FigureDisclaimer } from "@/components/shared/figure-disclaimer";
 import type { OutputFormat } from "@/lib/memo/sections";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,7 @@ export function SectionBody({
       {resolved.blocks.map((b, i) => (
         <BlockView key={i} block={b} currency={currency} format={format} surface={surface} />
       ))}
+      {isExternalFormat(format) && showsFigures(resolved) && <FigureDisclaimer />}
     </div>
   );
 }

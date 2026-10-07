@@ -201,10 +201,14 @@ describe("what a prospect is shown", () => {
   }
   const overrides = { executive_summary: "A short written summary.", recommendation: "INTERNAL-override" };
 
-  it("the Teaser carries the seven teaser sections and not one other", () => {
+  it("the Teaser carries teaser sections only, in order, and not one other", () => {
     const t = prospectTeaser(spiked, overrides, "2026-09-01T00:00:00Z")!;
-    expect(t.sections.map((s) => s.key)).toEqual(
-      ["executive_summary", "key_metrics", "asset_overview", "location_market", "investment_thesis", "business_plan", "exit_strategy"]);
+    const teaserOrder = ["executive_summary", "key_metrics", "asset_overview", "location_market", "investment_thesis", "business_plan", "exit_strategy"];
+    const keys = t.sections.map((s) => s.key);
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys).toEqual(teaserOrder.filter((k) => keys.includes(k as never)));
+    // A section with nothing in it is not handed on: an investor copy does not print an empty box.
+    expect(t.sections.every((s) => s.resolved.state !== "empty")).toBe(true);
     expect(JSON.stringify(t)).not.toMatch(/INTERNAL-/);
   });
 

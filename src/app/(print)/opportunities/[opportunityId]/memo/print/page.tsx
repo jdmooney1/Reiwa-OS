@@ -4,7 +4,7 @@ import { requireAuth, toDbSession } from "@/lib/auth/session";
 import { listMemos } from "@/lib/data/memos";
 import { resolveSection, sectionsFor, JAPANESE_KEY } from "@/lib/memo/compose";
 import { FORMAT_BY_KEY, SECTION_LABEL, type OutputFormat } from "@/lib/memo/sections";
-import { TARGETS_DISCLAIMER, isExternalFormat } from "@/lib/memo/render";
+import { TARGETS_DISCLAIMER, INVESTOR_FIGURES_DISCLAIMER, isExternalFormat } from "@/lib/memo/render";
 import { SectionBody } from "@/components/memo/memo-blocks";
 import { AssetSnapshot } from "@/components/memo/asset-snapshot";
 import { PrintNowButton } from "@/components/memo/memo-controls";
@@ -114,7 +114,9 @@ export default async function MemoPrintPage({
           <p className="mt-2 text-sm text-ink-muted">
             {fmt.label}
             <span className="px-2 text-line-strong">|</span>
-            Version {memo.version}{memo.status === "final" && memo.finalizedAt ? `, finalised ${formatDate(memo.finalizedAt)}` : `, draft composed ${formatDate(memo.composedAt)}`}
+            {external && memo.status === "final" && memo.finalizedAt
+              ? `Prepared ${formatDate(memo.finalizedAt)}`
+              : `Version ${memo.version}${memo.status === "final" && memo.finalizedAt ? `, finalised ${formatDate(memo.finalizedAt)}` : `, draft composed ${formatDate(memo.composedAt)}`}`}
           </p>
         </header>
 
@@ -139,26 +141,31 @@ export default async function MemoPrintPage({
             ))
           )
         ) : (
-          sectionsFor(format).map((key) => (
-            <section key={key} className="mt-8">
-              <h2 className="memo-heading section-rule text-2xs font-medium uppercase tracking-eyebrow">{SECTION_LABEL[key]}</h2>
-              <div className="mt-3">
-                <SectionBody
-                  resolved={resolveSection(c.sections[key], memo.overrides[key], format)}
-                  currency={c.currency} format={format} surface="print"
-                />
-              </div>
-              {resolveSection(c.sections[key], memo.overrides[key], format).flags.map((f) => (
-                <p key={f} className="mt-2 text-2xs text-ink-faint">{f}.</p>
-              ))}
-            </section>
-          ))
+          sectionsFor(format).flatMap((key) => {
+            const resolved = resolveSection(c.sections[key], memo.overrides[key], format);
+            // A printed investor copy does not claim what the record does not hold: a section
+            // with nothing in it is left out, not printed as an empty box. The internal memo
+            // keeps its empty sections, because there a reader needs to see the gap.
+            if (external && resolved.state === "empty") return [];
+            return [(
+              <section key={key} className="mt-8">
+                <h2 className="memo-heading section-rule text-2xs font-medium uppercase tracking-eyebrow">{SECTION_LABEL[key]}</h2>
+                <div className="mt-3">
+                  <SectionBody resolved={resolved} currency={c.currency} format={format} surface="print" />
+                </div>
+                {resolved.flags.map((f) => (
+                  <p key={f} className="mt-2 text-2xs text-ink-faint">{f}.</p>
+                ))}
+              </section>
+            )];
+          })
         )}
 
         <footer className="memo-block mt-10 border-t border-line pt-4 text-2xs leading-relaxed text-ink-faint">
           {external ? (
             <>
-              <p>{TARGETS_DISCLAIMER}</p>
+              <p data-disclaimer="figures">{INVESTOR_FIGURES_DISCLAIMER}</p>
+              <p className="mt-1.5">{TARGETS_DISCLAIMER}</p>
               <p className="mt-1.5">Prepared by Reiwa Capital. Confidential.</p>
             </>
           ) : (

@@ -32,6 +32,7 @@ import { figureText } from "@/lib/portal/metrics";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { FigureDisclaimer } from "@/components/shared/figure-disclaimer";
 import { cn } from "@/lib/utils";
 import type { AssetType, Strategy, Currency } from "@/types/database";
 
@@ -395,6 +396,7 @@ function VersionContent({ version: v }: { version: PublicationVersion }) {
             <Figure k="Published" v={formatDate(v.publishedAt)} />
             <Figure k="Currency" v={v.currency} />
           </dl>
+          <FigureDisclaimer className="border-t border-line px-4 py-3" />
         </CardBody>
       </Card>
     </div>

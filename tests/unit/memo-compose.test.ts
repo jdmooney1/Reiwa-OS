@@ -138,14 +138,20 @@ describe("one composition rule per section", () => {
     expect(text(resolveSection(m.sections.business_plan, null, "teaser").blocks)).toBe("");
   });
 
-  it("a section withheld from an external format does not carry flags about content it is not showing", () => {
+  it("how the underwriting stands is for the internal memo only: no external format carries a flag about it", () => {
     const m = composeMemo(base({ basis: { kind: "working", case: { ...CASE, status: "current" } } }));
+    // The composed record and the internal memo keep the flag: it is true and committee readers need it.
     expect(m.sections.investment_thesis.flags).toEqual(["Based on unapproved underwriting"]);
     expect(resolveSection(m.sections.investment_thesis, null, "ic").flags).toEqual(["Based on unapproved underwriting"]);
-    expect(resolveSection(m.sections.investment_thesis, null, "teaser").flags).toEqual([]);
-    // A section that is genuinely empty at source keeps its flags.
+    // An investor-facing format never says so, in a section that is shown...
+    for (const f of ["teaser", "snapshot", "japanese"] as const) {
+      expect(resolveSection(m.sections.investment_thesis, null, f).flags, f).toEqual([]);
+      expect(resolveSection(m.sections.key_metrics, null, f).flags, f).toEqual([]);
+    }
+    // ...or in one that is genuinely empty at source.
     const none = composeMemo(base({ basis: { kind: "working", case: { ...CASE, status: "current", thesis: null } } }));
-    expect(resolveSection(none.sections.investment_thesis, null, "teaser").flags).toEqual(["Based on unapproved underwriting"]);
+    expect(resolveSection(none.sections.investment_thesis, null, "teaser").flags).toEqual([]);
+    expect(resolveSection(none.sections.investment_thesis, null, "ic").flags).toEqual(["Based on unapproved underwriting"]);
   });
 
   it("an override for either section appears in the external formats, exactly as for every other section", () => {

@@ -31,7 +31,7 @@ export default async function PortalHomePage() {
         </h1>
         <p className="mt-3 max-w-measure text-sm leading-relaxed text-ink-muted">
           A curated selection of opportunities released to {investor.investorOrgName} by Reiwa
-          Capital. Each is presented from the approved investment publication.
+          Capital. Each is presented from the investment materials Reiwa Capital has prepared for you.
         </p>
       </header>
 

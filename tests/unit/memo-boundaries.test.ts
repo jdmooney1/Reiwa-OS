@@ -193,7 +193,8 @@ describe("the print footer states the targets disclaimer for every external form
   it("is chosen by format, from the same wording the investor portal carries", () => {
     expect(page).toContain("TARGETS_DISCLAIMER");
     expect(page).toContain("isExternalFormat(format)");
-    expect(code("src/lib/memo/render.ts")).toContain("not forecasts or guarantees, and capital is at risk");
+    expect(code("src/lib/investor-copy.ts")).toContain("not forecasts or guarantees, and capital is at risk");
+    expect(code("src/lib/memo/render.ts")).toContain("TARGETS_DISCLAIMER");
     expect(code("src/components/portal/opportunity-cards.tsx") + code("src/app/(portal)/portal/opportunities/[publicationId]/page.tsx")).toContain("not forecasts or guarantees");
   });
 });

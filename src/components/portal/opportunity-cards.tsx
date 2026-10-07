@@ -6,6 +6,7 @@ import {
 } from "@/lib/portal/metrics";
 import { SaveButton, CompareButton } from "@/components/portal/portal-actions";
 import { visibleHeadlinePhoto } from "@/lib/portal/photos";
+import { FigureDisclaimer } from "@/components/shared/figure-disclaimer";
 
 // ============================================================================
 // The investor feed, set as a memorandum rather than a dashboard.
@@ -62,17 +63,20 @@ function FigureList({
   metrics: { key: string; label: string; value: string }[];
 }) {
   return (
-    <dl className="self-start border-t border-line">
-      {metrics.map((m) => (
-        <div
-          key={m.key}
-          className="flex items-baseline justify-between gap-6 border-b border-line py-3"
-        >
-          <dt className="text-2xs uppercase tracking-label text-ink-faint">{m.label}</dt>
-          <dd className="figure text-base text-ink">{m.value}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="self-start">
+      <dl className="border-t border-line">
+        {metrics.map((m) => (
+          <div
+            key={m.key}
+            className="flex items-baseline justify-between gap-6 border-b border-line py-3"
+          >
+            <dt className="text-2xs uppercase tracking-label text-ink-faint">{m.label}</dt>
+            <dd className="figure text-base text-ink">{m.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <FigureDisclaimer className="mt-3" />
+    </div>
   );
 }
 
@@ -208,16 +212,19 @@ export function OpportunityCard({
         {/* items-end so the figures share a baseline even when one label wraps
             to two lines and its neighbour does not. */}
         {metrics.length > 0 && (
-          <dl className="grid grid-cols-2 items-end gap-x-6 gap-y-4 self-start sm:grid-cols-3">
-            {metrics.map((m) => (
-              <div key={m.key} className="min-w-0">
-                <dt className="text-2xs uppercase leading-snug tracking-label text-ink-faint">
-                  {m.label}
-                </dt>
-                <dd className="figure mt-1 text-sm text-ink">{m.value}</dd>
-              </div>
-            ))}
-          </dl>
+          <div className="self-start">
+            <dl className="grid grid-cols-2 items-end gap-x-6 gap-y-4 sm:grid-cols-3">
+              {metrics.map((m) => (
+                <div key={m.key} className="min-w-0">
+                  <dt className="text-2xs uppercase leading-snug tracking-label text-ink-faint">
+                    {m.label}
+                  </dt>
+                  <dd className="figure mt-1 text-sm text-ink">{m.value}</dd>
+                </div>
+              ))}
+            </dl>
+            <FigureDisclaimer className="mt-3" />
+          </div>
         )}
       </div>
     </article>
