@@ -708,4 +708,18 @@ describe("platform_settings is staff-only, not investor-readable (0052)", () => 
       tx.query<{ key: string }>("select key from platform_settings"));
     expect(rows.map((r) => r.key)).toContain("regulated_disclosure");
   });
+
+  it("an explicit allowlist, not a negative check against 'anon': a role outside GlobalRole's four values is denied too", async () => {
+    await adminQuery("insert into platform_settings (key, value) values ('regulated_disclosure', 'true'::jsonb)");
+    const meiji = await orgIdByName("Meiji Shipping");
+    // Constructed past the GlobalRole union on purpose — this proves the
+    // policy fails closed on an unrecognised role, not merely that it
+    // excludes the specific string 'anon'.
+    const futureRoleSession = {
+      userId: await profileIdByEmail("analyst@meiji.com"), orgIds: [meiji],
+      role: "future_role" as unknown as "org_user", canWrite: true,
+    };
+    const { rows } = await withSession(futureRoleSession, (tx) => tx.query("select * from platform_settings"));
+    expect(rows).toEqual([]);
+  });
 });

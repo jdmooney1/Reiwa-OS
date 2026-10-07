@@ -29,16 +29,17 @@
 --
 -- 2. platform_settings was readable by any authenticated session (0051),
 --    which includes the investor portal — an investor must not be able to
---    read a firm-wide setting at all. Restricted to internal staff via
---    app.current_global_role() <> 'anon', the same idiom
---    app.current_global_role() itself establishes (an investor session
---    carries no global_role claim and defaults to 'anon' there).
+--    read a firm-wide setting at all. Restricted to internal staff by an
+--    explicit allowlist of GlobalRole's four values (reiwa_admin, org_user,
+--    ic_member, investor_viewer) rather than a negative check against
+--    'anon' — a role added to the catalogue later is denied by default
+--    here, not implicitly let in because it happens not to be 'anon'.
 -- ============================================================================
 
 -- ---- Fix 2: platform_settings is staff-only, not every authenticated session
 drop policy if exists platform_settings_select on platform_settings;
 create policy platform_settings_select on platform_settings for select to authenticated
-  using (app.current_global_role() <> 'anon');
+  using (app.current_global_role() in ('reiwa_admin', 'org_user', 'ic_member', 'investor_viewer'));
 -- platform_settings_admin_write (0051) is unchanged: still is_admin()-gated,
 -- and a subset of what staff may now read.
 
