@@ -230,3 +230,18 @@ database refuses it and names the linked document instead.
   literal status-driven reading was intended, it needs a different design.
 - **Hosting for the Session 6 Chromium PDF pipeline** — deferred, per plan, to before
   Session 6, not decided now.
+- **`platform_settings` holding test-import metadata is a workaround, not a design
+  decision.** `scripts/import-capital-pipeline-test-orgs.ts` needed a staff-only place
+  to keep tier/phase/composite/intro-route/trigger/next-action/reputational-flag for
+  each imported `investor_organizations` row — `notes` itself is RLS-row-visible to
+  that organisation's own investor the moment any `investor_contacts` row is ever
+  linked to it (RLS is row-level, not column-level), so the metadata could not stay
+  there. `platform_settings` (0051/0052) was reused as the least-bad existing option
+  because its own purpose is already "settings with nowhere else to live" and its
+  SELECT policy is already staff-only — but it is a flat, global key/value table, not
+  an entity-metadata store, and nothing renders these rows in the investor tracker UI.
+  If a CRM/targets module is ever built on this pack's broader data model (see
+  `imports/targets/CLAUDE_CODE_BRIEF.md`, not otherwise acted on), this metadata should
+  move to a dedicated staff-only table — e.g. `investor_organization_metadata` or
+  similar, keyed on `investor_org_id` — and the test-import script's reliance on
+  `platform_settings` should be retired at the same time.
