@@ -27,7 +27,8 @@ import {
 } from "@/lib/portal-labels";
 import { UPLOAD_ACCEPT } from "@/lib/documents/constraints";
 import { ASSET_TYPE_LABEL, STRATEGY_LABEL } from "@/lib/domain";
-import { formatDate, formatMoneyCompact, formatPct, formatMultiple, formatArea } from "@/lib/format";
+import { formatDate } from "@/lib/format";
+import { figureText } from "@/lib/portal/metrics";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -354,6 +355,8 @@ function DraftEditor({ version, publicationId }: { version: PublicationVersion; 
 // Read-only investor content (what a portal user would see)
 // ============================================================================
 function VersionContent({ version: v }: { version: PublicationVersion }) {
+  // The same text the investor reads: see figureText.
+  const figures = figureText(v);
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <Card>
@@ -383,12 +386,12 @@ function VersionContent({ version: v }: { version: PublicationVersion }) {
         <CardHeader eyebrow="Investor view" title="Headline Figures" />
         <CardBody className="p-0">
           <dl className="grid grid-cols-2 divide-x divide-y divide-line md:grid-cols-4">
-            <Figure k="Headline price" v={formatMoneyCompact(v.headlinePrice, v.currency as Currency)} />
-            <Figure k="Target NIY" v={formatPct(v.targetNiy, 1)} />
-            <Figure k="Target IRR" v={formatPct(v.targetIrr, 1)} />
-            <Figure k="Equity multiple" v={formatMultiple(v.targetEquityMultiple)} />
-            <Figure k="Hold period" v={v.holdPeriodYears != null ? `${v.holdPeriodYears} yrs` : "—"} />
-            <Figure k="Size" v={v.sizeSqft != null ? formatArea(v.sizeSqft, "sqft") : formatArea(v.sizeSqm, "sqm")} />
+            <Figure k="Headline price" v={figures.headlinePrice} />
+            <Figure k="Target NIY" v={figures.targetNiy} />
+            <Figure k="Target IRR" v={figures.targetIrr} />
+            <Figure k="Equity multiple" v={figures.targetEquityMultiple} />
+            <Figure k="Hold period" v={figures.holdPeriodYears} />
+            <Figure k="Size" v={figures.size} />
             <Figure k="Published" v={formatDate(v.publishedAt)} />
             <Figure k="Currency" v={v.currency} />
           </dl>
