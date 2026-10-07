@@ -847,7 +847,8 @@ export function composeSnapshot(src: MemoSource): ComposedSnapshot {
   // stand-in rate would look live and be neither.
   const liveFx = src.fx && !isPlaceholderFxSource(src.fx.source) ? src.fx : null;
   const jpy = src.fxJpy && !isPlaceholderFxSource(src.fxJpy.source) ? src.fxJpy : null;
-  const placeholderRate = (src.fx !== null && liveFx === null) || (src.fxJpy !== null && jpy === null);
+  // The base currency's rate is 1 by definition, so a placeholder GBP row says nothing about a GBP deal.
+  const placeholderRate = (o.currency !== FX_BASE_CURRENCY && src.fx !== null && liveFx === null) || (src.fxJpy !== null && jpy === null);
   const dealRate = o.currency === FX_BASE_CURRENCY ? 1 : liveFx && liveFx.currency === o.currency ? liveFx.rateToGbp : null;
   const dealIsYen = o.currency === "JPY";
   const priceJpy = dealIsYen ? null : convertViaGbp(price, dealRate, jpy?.rateToGbp);

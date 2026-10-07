@@ -211,6 +211,15 @@ describe("a demonstration exchange rate never reaches an investor", () => {
     expect(snap.fx).toBeNull();
   });
 
+  it("a placeholder GBP row says nothing about a GBP deal: the base rate is 1, and a missing JPY rate is reported as missing", () => {
+    const seeded = DEMO("GBP", 1);
+    const withYen = composeSnapshot(snapshotSource({ fx: seeded, fxJpy: LIVE_JPY }));
+    expect(withYen.priceJpy).not.toBeNull();
+    const noYen = composeSnapshot(snapshotSource({ fx: seeded, fxJpy: null }));
+    expect(noYen.priceJpy).toBeNull();
+    expect(noYen.gaps.find((g) => g.key === "jpy")?.why).toMatch(/No JPY exchange rate/);
+  });
+
   it("a live source is untouched: the yen figure and the rate line stay", () => {
     const snap = composeSnapshot(snapshotSource({ fxJpy: LIVE_JPY }));
     expect(snap.priceJpy).not.toBeNull();
