@@ -1,7 +1,7 @@
 import { ReiwaLockup } from "@/components/brand/reiwa-lockup";
 import { AssetSnapshot } from "@/components/memo/asset-snapshot";
 import { SectionBody } from "@/components/memo/memo-blocks";
-import { TARGETS_DISCLAIMER } from "@/lib/memo/render";
+import { TARGETS_DISCLAIMER, INVESTOR_FIGURES_DISCLAIMER } from "@/lib/memo/render";
 import type { ProspectDocument as Doc } from "@/lib/deal-share/document";
 import { formatDate } from "@/lib/format";
 
@@ -11,7 +11,7 @@ import { formatDate } from "@/lib/format";
 // No navigation, no account, no link to any other page, no control that changes
 // anything. It draws the cut-down document from src/lib/deal-share/document.ts, never a
 // stored memo, with the same renderers staff print from (AssetSnapshot, SectionBody) on
-// their print surface, so what a prospect reads is what staff approved.
+// their print surface, so what a prospect reads is what staff printed.
 // ============================================================================
 
 export function ProspectDocument({ view, token }: { view: Doc & { prospectName: string }; token: string }) {
@@ -43,7 +43,7 @@ export function ProspectDocument({ view, token }: { view: Doc & { prospectName: 
               <div className="eyebrow">Reiwa Capital</div>
               <h1 className="mt-3 text-3xl leading-tight tracking-[-0.02em]">{teaser.assetName}</h1>
               <p className="mt-2 text-sm text-ink-muted">
-                Investor Teaser{teaser.finalizedAt ? `, finalised ${formatDate(teaser.finalizedAt)}` : ""}
+                Investor Teaser{teaser.finalizedAt ? `, prepared ${formatDate(teaser.finalizedAt)}` : ""}
               </p>
             </div>
             {teaser.sections.map((s) => (
@@ -57,7 +57,10 @@ export function ProspectDocument({ view, token }: { view: Doc & { prospectName: 
                 ))}
               </section>
             ))}
-            <p className="mt-10 border-t border-line pt-4 text-2xs leading-relaxed text-ink-faint">{TARGETS_DISCLAIMER}</p>
+            <div className="mt-10 border-t border-line pt-4 text-2xs leading-relaxed text-ink-faint">
+              <p data-disclaimer="figures">{INVESTOR_FIGURES_DISCLAIMER}</p>
+              <p className="mt-1.5">{TARGETS_DISCLAIMER}</p>
+            </div>
           </article>
         </section>
       )}

@@ -69,7 +69,9 @@ describe("a printed copy claims only what is recorded", () => {
     expect(t).toContain("Ref RC-LON-0012");
     expect(t).toContain("58 Queens Gate, London, SW7 5JW");
     expect(t).toMatch(/FX ¥192\.3 \/ £1\.00 \(ECB reference rate \(auto\), 27 Aug 2026\)/);
-    expect(t).toContain("Source: Reiwa underwriting v3 (approved)");
+    // One standard line, whatever state the underwriting is in; never the internal source label.
+    expect(t).toContain("Indicative, subject to final underwriting");
+    expect(t).not.toMatch(/Source: Reiwa underwriting|\(approved\)|not yet approved|working version/);
     expect(t).toContain("Reiwa Capital does not provide tax or legal advice.");
   });
 
@@ -117,7 +119,8 @@ describe("a sparse record prints as a shorter page, not a broken one", () => {
     expect(t).not.toContain("JPY EQUIVALENT");
     expect(t).not.toContain("ERV");
     expect(t).not.toContain("OCCUPANCY");
-    expect(t).toContain("working version, not yet approved");
+    expect(t).toContain("Indicative, subject to final underwriting");
+    expect(t).not.toMatch(/working version|not yet approved|unapproved/);
   });
 });
 

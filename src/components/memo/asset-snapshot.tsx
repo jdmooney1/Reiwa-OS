@@ -1,4 +1,5 @@
-import type { ComposedSnapshot } from "@/lib/memo/compose";
+import { withoutPlaceholderFx, type ComposedSnapshot } from "@/lib/memo/compose";
+import { INVESTOR_FIGURES_DISCLAIMER } from "@/lib/investor-copy";
 import { ReiwaLockup } from "@/components/brand/reiwa-lockup";
 import { formatMoneyUnits, formatDate, currencySymbol } from "@/lib/format";
 import type { Currency } from "@/types/database";
@@ -51,7 +52,7 @@ function Cell({
 }
 
 export function AssetSnapshot({
-  data, surface, memoId = null, imageUrl,
+  data: stored, surface, memoId = null, imageUrl,
 }: {
   data: ComposedSnapshot; surface: Surface;
   /** The stored memo this is drawn from. A FROZEN picture is fetched through it. */
@@ -62,6 +63,9 @@ export function AssetSnapshot({
    */
   imageUrl?: (slot: SnapshotSlot) => string | null;
 }) {
+  // A stored Snapshot may carry yen figures computed from a placeholder rate. Every reader of
+  // this component is, or previews, an investor document: those figures are not drawn.
+  const data = withoutPlaceholderFx(stored);
   const photoUrl = data.photo ? (imageUrl ? imageUrl("photo") : snapshotImageUrl(data.photo, memoId, "photo")) : null;
   const mapUrl = data.map ? (imageUrl ? imageUrl("map") : snapshotImageUrl(data.map, memoId, "map")) : null;
   const cur = asCurrency(data.currency);
@@ -160,10 +164,9 @@ export function AssetSnapshot({
 
           {(data.allocation ?? null) && <Allocation data={data} />}
 
-          {data.fx && <FxLine data={data} />}
-          {!data.fx && data.basisLabel && (
+          {data.fx ? <FxLine data={data} /> : (
             <p className="mt-3 text-right font-mono text-[9px] text-ink-faint" data-line="source">
-              Figures as at {formatDate(data.preparedOn)} · Source: {data.basisLabel}
+              Figures as at {formatDate(data.preparedOn)} · {INVESTOR_FIGURES_DISCLAIMER}
             </p>
           )}
 
@@ -275,7 +278,7 @@ function FxLine({ data }: { data: ComposedSnapshot }) {
       Figures as at {formatDate(data.preparedOn)}
       {fx.dealRateToGbp !== null && fx.dealAsOf && <> · {currencySymbol(cur)}1.00 = £{fx.dealRateToGbp.toFixed(4)} ({fx.dealSource}, {formatDate(fx.dealAsOf)})</>}
       {" "}· FX ¥{fx.jpyPerGbp.toFixed(1)} / £1.00 ({fx.jpySource}, {formatDate(fx.jpyAsOf)})
-      {data.basisLabel && <> · Source: {data.basisLabel}</>}
+      {" "}· {INVESTOR_FIGURES_DISCLAIMER}
       {fx.staleNote && <> · <span className="font-semibold text-caution" data-flag="fx-stale">{fx.staleNote}</span></>}
     </p>
   );

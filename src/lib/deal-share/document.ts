@@ -13,7 +13,7 @@
 // would mean reaching property_photos, which this surface never does.
 // ============================================================================
 import {
-  resolveSection, sectionsFor, normaliseContent,
+  resolveSection, sectionsFor, normaliseContent, withoutPlaceholderFx,
   type ComposedSnapshot, type MemoOverrides, type ResolvedSection,
 } from "@/lib/memo/compose";
 import { SECTION_LABEL, type MemoSectionKey } from "@/lib/memo/sections";
@@ -43,7 +43,7 @@ export function prospectSnapshot(rawContent: unknown): ProspectSnapshot | null {
   if (!s) return null;
   const photo = s.photo?.source === "frozen" ? s.photo : null;
   const map = s.map?.source === "frozen" ? s.map : null;
-  return { data: { ...s, photo, map, gaps: [] }, pictures: { photo: photo !== null, map: map !== null } };
+  return { data: withoutPlaceholderFx({ ...s, photo, map, gaps: [] }), pictures: { photo: photo !== null, map: map !== null } };
 }
 
 /** The Teaser's sections only, resolved the way an external reader sees them. */
@@ -53,8 +53,9 @@ export function prospectTeaser(rawContent: unknown, rawOverrides: unknown, final
   const overrides = (rawOverrides && typeof rawOverrides === "object" ? rawOverrides : {}) as MemoOverrides;
   return {
     assetName: memo.assetName, currency: memo.currency, finalizedAt,
-    sections: sectionsFor("teaser").map((key) => ({
-      key, label: SECTION_LABEL[key], resolved: resolveSection(memo.sections[key], overrides[key], "teaser"),
-    })),
+    // A section with nothing in it is not shown: an investor copy does not claim what the record does not hold.
+    sections: sectionsFor("teaser")
+      .map((key) => ({ key, label: SECTION_LABEL[key], resolved: resolveSection(memo.sections[key], overrides[key], "teaser") }))
+      .filter((s) => s.resolved.state !== "empty"),
   };
 }

@@ -16,6 +16,7 @@ import {
   opportunityMetrics, locationLabel, assetTypeLabel, strategyLabel,
 } from "@/lib/portal/metrics";
 import { formatDate } from "@/lib/format";
+import { FigureDisclaimer } from "@/components/shared/figure-disclaimer";
 
 export const dynamic = "force-dynamic";
 
@@ -155,7 +156,8 @@ export default async function PortalOpportunityPage({
                 </div>
               ))}
             </dl>
-            <p className="mt-4 text-2xs leading-relaxed text-ink-faint">
+            <FigureDisclaimer className="mt-4" />
+            <p className="mt-2 text-2xs leading-relaxed text-ink-faint">
               Targets are estimates prepared by Reiwa Capital on the assumptions set out in the
               investment materials. They are not forecasts or guarantees, and capital is at risk.
             </p>

@@ -8,6 +8,7 @@ import {
 } from "@/components/portal/compare-client";
 import { comparisonRows } from "@/lib/portal/metrics";
 import type { PortalOpportunity } from "@/lib/data/portal-feed";
+import { FigureDisclaimer } from "@/components/shared/figure-disclaimer";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export default async function PortalComparePage({
       <PortalPageHeader
         eyebrow={`Prepared for ${investor.investorOrgName}`}
         title="Compare"
-        lede={`Up to ${COMPARE_LIMIT} opportunities, side by side, on the figures approved for release to your organisation.`}
+        lede={`Up to ${COMPARE_LIMIT} opportunities, side by side, on the figures released to your organisation.`}
         aside={opportunities.length > 0 ? <ClearCompare /> : undefined}
       />
 
@@ -97,7 +98,7 @@ function ComparisonTable({ opportunities }: { opportunities: PortalOpportunity[]
       <div className="overflow-x-auto">
         <table className="w-full min-w-[40rem] border-collapse text-sm">
           <caption className="sr-only">
-            Approved investment metrics for the selected opportunities
+            Investment metrics for the selected opportunities
           </caption>
           <thead>
             <tr>
@@ -168,7 +169,8 @@ function ComparisonTable({ opportunities }: { opportunities: PortalOpportunity[]
         </div>
       </section>
 
-      <p className="mt-10 max-w-measure text-2xs leading-relaxed text-ink-faint">
+      <FigureDisclaimer className="mt-10" />
+      <p className="mt-2 max-w-measure text-2xs leading-relaxed text-ink-faint">
         A dash indicates a figure Reiwa Capital has not released for that opportunity. Figures are
         not adjusted or estimated to make this comparison complete, and opportunities may be
         prepared on differing assumptions.
