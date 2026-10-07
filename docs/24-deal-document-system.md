@@ -245,3 +245,30 @@ database refuses it and names the linked document instead.
   move to a dedicated staff-only table — e.g. `investor_organization_metadata` or
   similar, keyed on `investor_org_id` — and the test-import script's reliance on
   `platform_settings` should be retired at the same time.
+- **Migration numbers 0033–0035 collided with the product-polish branch** (merged
+  via `0053_role_constraint_reconciliation.sql`). Both branches independently added a
+  `profiles.global_role` value after migration `0032` — this branch's `0033_ic_member_role.sql`
+  (`ic_member`) and the other branch's `0035_staff_role.sql` (`reiwa_staff`) — and each does a
+  full `drop constraint` / `add constraint` on `profiles_global_role_check` rather than an
+  additive change, so whichever ran last silently dropped the other's role value from the
+  allowed set. The migration runner (`runMigrations()`, `src/lib/db/client.ts`) applies files
+  in plain alphabetical order and treats each as "already applied" purely by filename string,
+  so the two branches' differently-named 0033/0034/0035 files never collided *as filenames* —
+  they just silently overwrote each other's SQL effect. This made the outcome
+  environment-dependent rather than one fixed bug:
+  - **On production** (the other branch's 0033–0035 already applied in an earlier, separate
+    run; this branch's 0033–0052 applied afterwards in one run on top): this branch's
+    `0033_ic_member_role.sql` ran *after* `0035_staff_role.sql`, so `ic_member`'s constraint
+    overwrote `reiwa_staff`'s — **`reiwa_staff` was silently dropped from the allowed values.**
+  - **On a fresh database** (every file from both branches present from the start, one single
+    alphabetical pass): string sort interleaves the two 0033/0034/0035 pairs
+    (`0033_ic_member_role.sql` < `0033_investor_overview.sql`; `0035_doc_type_catalogue.sql` <
+    `0035_staff_role.sql`), so `0035_staff_role.sql` is the later of the two constraint-touching
+    files — **the opposite role, `ic_member`, is the one silently dropped.**
+  Neither environment errors or shows an immediate symptom, because no `profiles` row held the
+  dropped value at the time. `0053_role_constraint_reconciliation.sql`, numbered after
+  everything either branch defines, unconditionally re-asserts the full union of all five
+  `global_role` values; being last by number, it fixes both orderings regardless of which one
+  a given environment happened to apply. A survey of every other `create or replace function`,
+  `create policy` and trigger in both branches' 0033–0035/0033–0052 found no other collision —
+  this constraint was the only shared, non-additively-redefined object.
