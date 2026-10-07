@@ -58,6 +58,10 @@ export function PublicationDetail({
   // A new draft carries its own copy of each document file. When a file was already
   // missing, the draft starts without that document and this says so, until dismissed.
   const [notice, setNotice] = useState<string | undefined>();
+  const refreshFromSource = () => start(async () => {
+    const res = await startDraftFromSourceAction(id);
+    setNotice(res.error ?? res.notice);
+  });
   const startDraft = (versionId: string) => start(async () => {
     const res = await startDraftFromVersionAction(versionId, id);
     setNotice(res.error ?? res.notice);
@@ -215,7 +219,8 @@ export function PublicationDetail({
         {/* ================= Source ================= */}
         <TabsContent value="source" className="px-8 py-6">
           <SourceTab publicationId={id} source={source} display={display}
-            displayDrift={displayDrift} working={working} pending={pending} start={start} />
+            displayDrift={displayDrift} working={working} pending={pending} start={start}
+            refresh={refreshFromSource} />
         </TabsContent>
 
         {/* ================= Documents ================= */}
@@ -397,9 +402,10 @@ function VersionContent({ version: v }: { version: PublicationVersion }) {
 // Source tab — the admin-only side of the boundary
 // ============================================================================
 function SourceTab({
-  publicationId, source, display, displayDrift, working, pending, start,
+  publicationId, source, display, displayDrift, working, pending, start, refresh,
 }: {
   publicationId: string;
+  refresh: () => void;
   source: PublicationSourcePanel | null;
   display: PublicationVersion | null;
   displayDrift: VersionDrift | undefined;
@@ -445,7 +451,10 @@ function SourceTab({
             internal fields (counterparties, probability, internal economics) never carry over.
             After that it is an independent record: <span className="font-medium text-ink">editing
             the internal opportunity never changes what investors see.</span> Bringing fresh internal
-            data across is always an explicit step that creates a new draft for review.
+            data across is always an explicit step that creates a new draft for review. That draft
+            starts as a copy of the latest version, so the headline, highlights, hold period and
+            documents are kept; only the factual fields (title, location, asset type, strategy,
+            currency, figures, size) are taken from the internal record again.
           </p>
           {working ? (
             <p className="text-2xs text-ink-faint">
@@ -454,7 +463,7 @@ function SourceTab({
             </p>
           ) : (
             <button disabled={pending}
-              onClick={() => start(() => startDraftFromSourceAction(publicationId))}
+              onClick={() => refresh()}
               className="flex items-center gap-1.5 rounded border border-line px-3.5 py-2 text-xs font-medium text-ink-muted hover:border-line hover:text-ink disabled:opacity-60">
               {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Start New Draft From Current Internal Data
