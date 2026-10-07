@@ -55,6 +55,13 @@ export function PublicationDetail({
   // Publishing happens on its own screen, which shows the change and asks for a
   // typed sentence. Nothing in this component publishes directly.
   const reviewHref = (versionId: string) => `/admin/publications/${id}/publish/${versionId}`;
+  // A new draft carries its own copy of each document file. When a file was already
+  // missing, the draft starts without that document and this says so, until dismissed.
+  const [notice, setNotice] = useState<string | undefined>();
+  const startDraft = (versionId: string) => start(async () => {
+    const res = await startDraftFromVersionAction(versionId, id);
+    setNotice(res.error ?? res.notice);
+  });
 
   const driftMap = useMemo(() => new Map(drift.map((d) => [d.versionId, d])), [drift]);
   const display = working ?? active ?? versions[0] ?? null;
@@ -115,7 +122,7 @@ export function PublicationDetail({
             {!working && active && (
               <>
                 <HeaderBtn primary disabled={pending}
-                  onClick={() => start(() => startDraftFromVersionAction(active.versionId, id))}>
+                  onClick={() => startDraft(active.versionId)}>
                   <FilePlus2 className="h-3.5 w-3.5" /> New Draft (edit)
                 </HeaderBtn>
                 <HeaderBtn disabled={pending} danger
@@ -133,13 +140,25 @@ export function PublicationDetail({
             )}
             {!working && !active && versions[0] && publication.status === "withdrawn" && (
               <HeaderBtn primary disabled={pending}
-                onClick={() => start(() => startDraftFromVersionAction(versions[0].versionId, id))}>
+                onClick={() => startDraft(versions[0].versionId)}>
                 <FilePlus2 className="h-3.5 w-3.5" /> New Draft from v{versions[0].versionNumber}
               </HeaderBtn>
             )}
           </div>
         </div>
       </div>
+
+      {notice && (
+        <div role="status" data-testid="draft-notice"
+          className="flex items-start justify-between gap-3 border-b border-caution/30 bg-caution/10 px-8 py-3">
+          <div className="flex items-start gap-2.5 text-xs text-ink">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-caution" />
+            <span>{notice}</span>
+          </div>
+          <button type="button" onClick={() => setNotice(undefined)}
+            className="shrink-0 text-2xs text-ink-faint hover:text-ink">Dismiss</button>
+        </div>
+      )}
 
       {/* ---- Source drift warning ---- */}
       {displayDrift?.changed && (
@@ -206,9 +225,6 @@ export function PublicationDetail({
               <DocumentsCard
                 title={`Version ${working.versionNumber} (${VERSION_STATUS_LABEL[working.status]})`}
                 documents={workingDocuments}
-                liveVersion={active && active.versionId !== working.versionId
-                  ? { versionNumber: active.versionNumber, paths: activeDocuments.map((a) => a.storagePath) }
-                  : null}
                 editable={working.status === "draft"}
                 versionId={working.versionId}
                 publicationId={id}
@@ -248,7 +264,7 @@ export function PublicationDetail({
         {/* ================= Versions ================= */}
         <TabsContent value="versions" className="px-8 py-6">
           <VersionsTab publication={publication} versions={versions} driftMap={driftMap}
-            working={working} pending={pending} start={start} />
+            working={working} pending={pending} start={start} startDraft={startDraft} />
         </TabsContent>
       </Tabs>
     </div>
@@ -454,10 +470,8 @@ function SourceTab({
 // Documents
 // ============================================================================
 function DocumentsCard({
-  title, documents, editable, versionId, publicationId, note, liveVersion,
+  title, documents, editable, versionId, publicationId, note,
 }: {
-  /** The live version's files, so a removal can warn when it shares one with it. */
-  liveVersion?: { versionNumber: number; paths: string[] } | null;
   title: string;
   documents: PublicationDocument[];
   editable: boolean;
@@ -564,14 +578,10 @@ function DocumentsCard({
                         <button disabled={pending}
                           aria-label={`Remove ${d.title}`}
                           onClick={() => {
-                            const shared = liveVersion && liveVersion.paths.includes(d.storagePath);
                             if (!window.confirm(
                               `Remove "${d.title}" from this version?\n\n` +
-                              `The file is deleted from storage.` +
-                              (shared
-                                ? `\n\nThis file is also attached to the live version (v${liveVersion.versionNumber}). ` +
-                                  `Deleting it here currently deletes it there too, and investors' downloads of it will fail.`
-                                : ``))) return;
+                              `Its file is deleted. Other versions keep their own copies, so ` +
+                              `nothing already published is affected.`)) return;
                             start(() => removeDocumentAction(d.documentId, publicationId));
                           }}
                           className="rounded border border-line p-1.5 text-ink-muted hover:border-negative/40 hover:text-negative disabled:opacity-50">
@@ -769,7 +779,7 @@ function AccessTab({
 // Version history
 // ============================================================================
 function VersionsTab({
-  publication, versions, driftMap, working, pending, start,
+  publication, versions, driftMap, working, pending, start, startDraft,
 }: {
   publication: Publication;
   versions: PublicationVersion[];
@@ -777,6 +787,7 @@ function VersionsTab({
   working: PublicationVersion | null;
   pending: boolean;
   start: (fn: () => Promise<void>) => void;
+  startDraft: (versionId: string) => void;
 }) {
   const router = useRouter();
   return (
@@ -838,7 +849,7 @@ function VersionsTab({
                       )}
                       {(v.status === "published" || v.status === "superseded") && !working && (
                         <MiniBtn disabled={pending}
-                          onClick={() => start(() => startDraftFromVersionAction(v.versionId, publication.publicationId))}>
+                          onClick={() => startDraft(v.versionId)}>
                           New draft from v{v.versionNumber}
                         </MiniBtn>
                       )}

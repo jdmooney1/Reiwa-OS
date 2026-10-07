@@ -111,10 +111,64 @@ export async function signDocumentObject(
 }
 
 /**
- * Remove an object. Used when its `publication_documents` row is deleted, so a
- * removed document leaves nothing behind in the store.
+ * Remove an object.
+ *
+ * THE OBJECT'S OWNER IS ITS ROW, and each object has exactly one (a unique index on
+ * `publication_documents.storage_path`, migration 0034). Call this only for an object
+ * you have just made yourself (the cleanup after a failed insert), or for the path a
+ * row-delete returned through `removePublicationDocumentAndObject`, which refuses to
+ * return a path anything else still references. Deleting by a path you merely read
+ * from somewhere is how a draft's "remove" once deleted the file a live version was
+ * serving.
  */
 export async function deleteDocumentObject(objectPath: string): Promise<void> {
   const admin = createSupabaseAdminClient();
   await admin.storage.from(DOCUMENT_BUCKET).remove([objectPath]);
 }
+
+/** The stored file a row points at is gone. Distinct from any other copy failure. */
+export class DocumentObjectMissingError extends Error {
+  constructor(readonly objectPath: string) {
+    super(`The stored file ${objectPath} is missing.`);
+    this.name = "DocumentObjectMissingError";
+  }
+}
+
+/**
+ * Copy an object to a NEW server-generated path inside the version that will own it,
+ * and return that path. Server-side: no bytes pass through the application.
+ *
+ * This is what makes a publication version a genuinely frozen snapshot. A draft started
+ * from a version gets its own copy of every file, so nothing done to the draft's
+ * documents can reach the file a live version is serving.
+ */
+export async function copyDocumentObject(
+  sourcePath: string, newVersionId: string, mimeType: string | null,
+): Promise<string> {
+  const admin = createSupabaseAdminClient();
+  const target = newObjectPath(newVersionId, mimeType ?? "");
+  const { error } = await admin.storage.from(DOCUMENT_BUCKET).copy(sourcePath, target);
+  if (error) {
+    const status = String((error as { statusCode?: string | number }).statusCode ?? "");
+    if (status === "404" || /not.?found|does not exist/i.test(error.message)) {
+      throw new DocumentObjectMissingError(sourcePath);
+    }
+    throw new Error(`Could not copy the stored file: ${error.message}`);
+  }
+  return target;
+}
+
+/** What the data layer needs from the store when it copies or discards document files. */
+export interface DocumentObjectStore {
+  copy(sourcePath: string, newVersionId: string, mimeType: string | null): Promise<string>;
+  remove(paths: string[]): Promise<void>;
+}
+
+export const documentObjectStore: DocumentObjectStore = {
+  copy: copyDocumentObject,
+  async remove(paths) {
+    if (paths.length === 0) return;
+    const admin = createSupabaseAdminClient();
+    await admin.storage.from(DOCUMENT_BUCKET).remove(paths);
+  },
+};

@@ -24,6 +24,7 @@ import {
 import { createDraftFromVersion } from "@/lib/data/admin-portal";
 import { loadPortalFeed, loadPortalOpportunity, loadPortalDocuments } from "@/lib/data/portal-feed";
 import { getPublishReview, assertPublishConfirmed, overviewEchoesInternal } from "@/lib/data/publish-review";
+import { ensureDocumentBucket, newObjectPath, putDocumentObject } from "@/lib/documents/storage";
 import { adminSession, orgIdByName, orgUserSession, profileIdByEmail } from "./helpers";
 
 const SECRET = "ZZ-INTERNAL-SECRET: vendor is distressed, bid 15% under guide, do not disclose to investors.";
@@ -178,12 +179,15 @@ describe("B. the publish gate", () => {
     const created = await createPublicationFromOpportunity(adminSession, opp, adminUserId);
     publicationId = created.publicationId;
     v1 = created.versionId;
-    await addPublicationDocument(adminSession, {
-      versionId: v1, title: "Teaser", storagePath: `publications/${v1}/teaser.pdf`, accessLevel: "standard",
-    }, adminUserId);
-    await addPublicationDocument(adminSession, {
-      versionId: v1, title: "Title report", storagePath: `publications/${v1}/title.pdf`, accessLevel: "diligence",
-    }, adminUserId);
+    // Real stored files: a new draft copies each file, so there has to be one to copy.
+    await ensureDocumentBucket();
+    for (const [title, level] of [["Teaser", "standard"], ["Title report", "diligence"]] as const) {
+      const storagePath = newObjectPath(v1, "application/pdf");
+      await putDocumentObject(storagePath, new TextEncoder().encode(title), "application/pdf");
+      await addPublicationDocument(adminSession, {
+        versionId: v1, title, storagePath, mimeType: "application/pdf", accessLevel: level,
+      }, adminUserId);
+    }
   });
 
   it("a draft cannot be published through the gate", async () => {

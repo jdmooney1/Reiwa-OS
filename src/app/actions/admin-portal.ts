@@ -17,7 +17,7 @@ import {
   createInvestorContact, updateInvestorContact,
   createPublicationFromOpportunity, updateDraftVersion,
   submitVersionForReview, returnVersionToDraft, publishVersion, supersedeActiveVersion,
-  addPublicationDocument, removePublicationDocument,
+  addPublicationDocument,
   grantEntitlement, updateEntitlement, revokeEntitlement, setEntitlementPlacement,
   getPublicationProvenance,
   type InvestorOrgStatus, type Placement, type EntitlementDocumentLevel,
@@ -34,6 +34,7 @@ import { AppError, reportError } from "@/lib/errors";
 import { runAction } from "@/lib/actions/run-action";
 import type { ActionResult } from "@/lib/actions/result";
 import { assertPublishConfirmed } from "@/lib/data/publish-review";
+import { removePublicationDocumentAndObject } from "@/lib/documents/publication-documents";
 import { updateOpportunity } from "@/lib/data/opportunities";
 import { parseNumber, PERCENT, NON_NEGATIVE } from "@/lib/validation/numeric";
 
@@ -338,13 +339,27 @@ export async function withdrawPublicationAction(publicationId: string): Promise<
   revalidatePath("/admin/investors");
 }
 
-/** Edit a published publication: copy the version into a fresh draft. */
+/**
+ * Edit a published publication: copy the version into a fresh draft, with its own copy of
+ * every document file. Returns a notice when a document could not be carried across because
+ * its stored file was already missing, so the person knows to re-upload it.
+ */
 export async function startDraftFromVersionAction(
   sourceVersionId: string, publicationId: string,
-): Promise<void> {
+): Promise<ActionResult> {
   const { db, auth } = await requireAdminSession();
-  await createDraftFromVersion(db, sourceVersionId, { copyDocuments: true }, auth.userId);
+  let notice: string | undefined;
+  const result = await runAction("admin.publication.new-draft", { sourceVersionId, publicationId }, async () => {
+    const draft = await createDraftFromVersion(db, sourceVersionId, { copyDocuments: true }, auth.userId);
+    if (draft.missingDocuments.length > 0) {
+      notice =
+        `Version ${draft.versionNumber} was started without: ${draft.missingDocuments.map((t) => `"${t}"`).join(", ")}. ` +
+        `The stored file for ${draft.missingDocuments.length === 1 ? "it was" : "each was"} already missing, so there was nothing to copy. ` +
+        `Upload ${draft.missingDocuments.length === 1 ? "it" : "them"} again on the Documents tab before publishing.`;
+    }
+  });
   refreshPublication(publicationId);
+  return notice ? { ...result, notice } : result;
 }
 
 /**
@@ -437,9 +452,9 @@ export async function removeDocumentAction(
   documentId: string, publicationId: string,
 ): Promise<void> {
   const { db } = await requireAdminSession();
-  // The path comes back from the deleted row, so the object removed is exactly
-  // the one that row owned — the browser never names it.
-  const storagePath = await removePublicationDocument(db, documentId);
-  if (storagePath) await deleteDocumentObject(storagePath);
+  // The row is deleted first, and the file only if no other row still needs it; the path
+  // comes back from the deleted row, so the browser never names it. See
+  // lib/documents/publication-documents.
+  await removePublicationDocumentAndObject(db, documentId);
   refreshPublication(publicationId);
 }

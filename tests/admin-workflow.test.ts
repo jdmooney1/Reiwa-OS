@@ -25,6 +25,7 @@ import {
   getPublicationForOpportunity, createDraftFromVersion, listPublicationSummaries,
   getAdminOverview, listVersionDrift, getPublicationSourcePanel,
 } from "@/lib/data/admin-portal";
+import { ensureDocumentBucket, newObjectPath, putDocumentObject } from "@/lib/documents/storage";
 import { adminSession, orgIdByName, orgUserSession, profileIdByEmail } from "./helpers";
 
 let meiji: string;
@@ -46,6 +47,7 @@ let entitlementA: string;
 let entitlementB: string;
 
 beforeAll(async () => {
+  await ensureDocumentBucket();
   meiji = await orgIdByName("Meiji Shipping");
   staff = orgUserSession([meiji]);
   adminUserId = await profileIdByEmail("admin@reiwa.com");
@@ -158,8 +160,11 @@ describe("The version lifecycle", () => {
     for (const [title, level] of [
       ["Teaser", "standard"], ["Data room index", "diligence"], ["IC memo", "internal"],
     ] as const) {
+      // A real stored file: a new draft copies each one, so there has to be a file to copy.
+      const storagePath = newObjectPath(versionOne, "application/pdf");
+      await putDocumentObject(storagePath, new TextEncoder().encode(title), "application/pdf");
       await addPublicationDocument(adminSession, {
-        versionId: versionOne, title, storagePath: `publications/${versionOne}/${level}.pdf`,
+        versionId: versionOne, title, storagePath, mimeType: "application/pdf",
         accessLevel: level, category: "other",
       }, adminUserId);
     }

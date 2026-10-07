@@ -20,7 +20,9 @@
     "db:storage": "tsx scripts/storage.ts",
     "db:storage:test": "tsx scripts/storage-test.ts",
     "test:e2e": "playwright test",
-    "db:load-deal-seed": "tsx scripts/load-deal-seed.ts"
+    "db:load-deal-seed": "tsx scripts/load-deal-seed.ts",
+    "db:audit-documents": "tsx scripts/audit-publication-documents.ts",
+    "db:unshare-documents": "tsx scripts/unshare-publication-documents.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
