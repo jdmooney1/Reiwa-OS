@@ -428,10 +428,10 @@ describe("Access ends the moment the record is disabled", () => {
     await updateInvestorOrganization(adminSession, portalOrgId, { status: "suspended" });
     expect(await visibleToFixture()).toBe(0);
 
-    // Not even their own organisation row resolves any more.
-    const org = await withInvestorSession(portalUid, (tx) =>
-      tx.query("select * from investor_organizations"));
-    expect(org.rows.length).toBe(0);
+    // Nor does their organisation resolve: identity resolution refuses a non-active organisation.
+    const who = await withInvestorSession(portalUid, (tx) =>
+      tx.query("select app.current_investor_org_id() as id"));
+    expect(who.rows[0].id).toBeNull();
 
     await updateInvestorOrganization(adminSession, portalOrgId, { status: "active" });
     expect(await visibleToFixture()).toBeGreaterThan(0);

@@ -212,10 +212,38 @@ describe("Entitlement isolation between investor organisations", () => {
     expect(rows.map((r) => r.email)).toEqual([KITANO]);
   });
 
-  it("an investor sees only their own investor organisation row", async () => {
+  it("an investor reads nothing from investor_organizations, whichever columns they ask for", async () => {
+    // 0038. The old own-row policy leaked every column on the row: `notes` (internal) and
+    // `linked_internal_organization_id` (a raw internal organisation id). There is no
+    // investor policy any more, so every shape of query returns zero rows.
+    const org = await investorOrgIdByName("Sakura Capital Partners");
+    await adminQuery("update investor_organizations set notes = 'ZZTEST internal note' where investor_org_id = $1", [org]);
+    try {
+      for (const sql of [
+        "select * from investor_organizations",
+        "select name from investor_organizations",
+        "select notes from investor_organizations",
+        "select linked_internal_organization_id from investor_organizations",
+      ]) {
+        const { rows } = await withInvestorSession(sakuraUid, (tx) => tx.query(sql));
+        expect(rows, sql).toEqual([]);
+      }
+    } finally {
+      await adminQuery("update investor_organizations set notes = null where investor_org_id = $1", [org]);
+    }
+  });
+
+  it("the only policies on investor_organizations belong to Reiwa admins", async () => {
+    const pol = await adminQuery<{ policyname: string; qual: string | null }>(
+      "select policyname, qual from pg_policies where tablename = 'investor_organizations' order by 1");
+    expect(pol.map((p) => p.policyname)).toEqual(["investor_organizations_admin"]);
+    expect(pol[0].qual).toContain("is_admin");
+  });
+
+  it("identity resolution still works without the policy (it is security definer)", async () => {
     const { rows } = await withInvestorSession(sakuraUid, (tx) =>
-      tx.query<{ name: string }>("select name from investor_organizations"));
-    expect(rows.map((r) => r.name)).toEqual(["Sakura Capital Partners"]);
+      tx.query<{ id: string | null }>("select app.current_investor_org_id() as id"));
+    expect(rows[0].id).toBe(await investorOrgIdByName("Sakura Capital Partners"));
   });
 });
 

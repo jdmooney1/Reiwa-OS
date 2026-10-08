@@ -1,0 +1,34 @@
+-- ============================================================================
+-- 0038 - An investor can no longer read their own investor_organizations row
+-- ----------------------------------------------------------------------------
+-- WHAT WAS WRONG. 0005 let an investor read their own organisation row
+-- (investor_organizations_self) and granted SELECT on the whole table to
+-- `authenticated`. A row policy filters rows, never columns, so an investor session
+-- (including one calling PostgREST with their own JWT) could `select *` and read:
+--   * notes                            - Reiwa's internal notes about the investor
+--   * linked_internal_organization_id  - a raw internal organisation id
+-- The second breaks the schema's own invariant: not one investor-readable row carries an
+-- internal Reiwa OS identifier. Confirmed on a seeded database: an investor session read
+-- `notes` back verbatim.
+--
+-- WHY NOT COLUMN GRANTS. Reiwa admins and investors both connect as `authenticated`; only
+-- the claims differ. A column-level grant would take the columns away from admins too, and
+-- every admin query on this table would fail. Row policies are the only thing that tells the
+-- two apart, so the fix has to be in the policy.
+--
+-- THE FIX. Remove the investor policy. Nothing an investor does needs it:
+--   * identity resolution (app.current_investor_org_id / _contact_id) is SECURITY DEFINER
+--     and reads the table as its owner;
+--   * the portal's own lookups of the organisation name and status run on the server-side
+--     privileged connection (portal-session, investor-access), never as the investor;
+--   * the investor_feed view and every other investor-readable object select from other
+--     tables.
+-- With no investor policy, row security leaves an investor with zero rows from this table
+-- whichever columns they ask for. Reiwa admins keep the existing app.is_admin() policy.
+--
+-- NOT CHANGED. No column is dropped or moved, no data is touched, no grant changes. The
+-- admin screens read the same columns as before. Rolling back is re-creating the policy
+-- (supabase/rollback/0038_investor_org_no_self_read.down.sql).
+-- ============================================================================
+
+drop policy if exists investor_organizations_self on public.investor_organizations;
