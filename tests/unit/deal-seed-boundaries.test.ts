@@ -74,14 +74,16 @@ describe("the loader creates a draft and publishes nothing", () => {
     expect(l).not.toMatch(/investor_|publication_|entitlement|memos?\b|property_photos|deal_shares/i);
   });
   it("sets the opportunity to stage new, status active, and leaves triage and owner alone", () => {
-    const insert = l.slice(l.indexOf("insert into opportunities"), l.indexOf("returning opportunity_id"));
+    const from = l.indexOf("insert into opportunities");
+    const insert = l.slice(from, l.indexOf("returning opportunity_id", from)); // the UPDATE above it also returns an id
     expect(insert).toContain("'new','active'");
     expect(insert).not.toMatch(/triage_status|triage_priority|priority|stage\s*=\s*'(live|approved|ic)'|published/i);
     expect(insert).toMatch(/owner_user_id\)/);
     expect(l).toContain("'new','active',$19,null");
   });
   it("writes money to the investment case, never onto the opportunity row", () => {
-    const insert = l.slice(l.indexOf("insert into opportunities"), l.indexOf("returning opportunity_id"));
+    const from = l.indexOf("insert into opportunities");
+    const insert = l.slice(from, l.indexOf("returning opportunity_id", from)); // the UPDATE above it also returns an id
     expect(insert).not.toMatch(/target_price|\bniy\b|passing_rent|erv\b/);
     expect(l).toMatch(/insert into investment_cases/);
   });
