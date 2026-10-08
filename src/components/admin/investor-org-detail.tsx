@@ -23,6 +23,9 @@ import {
   INVESTOR_ORG_STATUS_LABEL, INVESTOR_ORG_STATUS_TONE, WORKFLOW_LABEL, WORKFLOW_TONE,
 } from "@/lib/portal-labels";
 import { formatDate } from "@/lib/format";
+import type { ActionResult } from "@/lib/actions/result";
+import type { DeletionGuard } from "@/lib/investor/deletion-guard";
+import { DeleteInvestorOrg } from "@/components/admin/delete-investor-org";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -38,9 +41,11 @@ interface Org {
 }
 
 export function InvestorOrgDetail({
-  org, contacts, assignments, publicationOptions, invites = [],
+  org, contacts, assignments, publicationOptions, invites = [], deletionGuard,
 }: {
   org: Org;
+  /** What the delete panel shows. Omitted = no danger zone (e.g. a test render). */
+  deletionGuard?: DeletionGuard;
   contacts: InvestorContact[];
   assignments: AssignedPublication[];
   publicationOptions: PublicationOption[];
@@ -259,6 +264,8 @@ export function InvestorOrgDetail({
 
           <ContactsCard org={org} contacts={contacts} invites={invites}
             pending={pending} start={start} />
+
+          {deletionGuard && <DeleteInvestorOrg org={org} guard={deletionGuard} />}
         </div>
       </div>
     </div>
@@ -422,17 +429,11 @@ function ContactsCard({
       />
       <CardBody className="p-0">
         {adding && (
-          <form action={async (fd) => {
-            await createInvestorContactAction(org.investorOrgId, fd);
-            setAdding(false);
-          }} className="space-y-3 border-b border-line bg-surface-sunken/50 px-5 py-4">
-            <ContactFields />
-            <div className="flex justify-end">
-              <button type="submit" className="rounded bg-purple px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-purple-70">
-                Add Contact
-              </button>
-            </div>
-          </form>
+          <ContactForm
+            className="border-b border-line bg-surface-sunken/50 px-5 py-4"
+            submitLabel="Add Contact"
+            submit={(fd) => createInvestorContactAction(org.investorOrgId, fd)}
+            onDone={() => setAdding(false)} />
         )}
         {contacts.length === 0 && !adding ? (
           <div className="px-5 py-8 text-center text-xs text-ink-faint">
@@ -443,17 +444,12 @@ function ContactsCard({
             {contacts.map((c) => (
               <li key={c.investorContactId} className={cn("px-5 py-3", !c.isActive && "opacity-60")}>
                 {editingId === c.investorContactId ? (
-                  <form action={async (fd) => {
-                    await updateInvestorContactAction(c.investorContactId, org.investorOrgId, fd);
-                    setEditingId(null);
-                  }} className="space-y-3">
-                    <ContactFields contact={c} />
-                    <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => setEditingId(null)}
-                        className="text-2xs text-ink-faint hover:text-ink">Cancel</button>
-                      <button type="submit" className="rounded bg-purple px-3 py-1.5 text-2xs font-semibold text-surface">Save</button>
-                    </div>
-                  </form>
+                  <ContactForm
+                    contact={c}
+                    submitLabel="Save"
+                    submit={(fd) => updateInvestorContactAction(c.investorContactId, org.investorOrgId, fd)}
+                    onDone={() => setEditingId(null)}
+                    onCancel={() => setEditingId(null)} />
                 ) : (
                   <>
                     <div className="flex items-start justify-between gap-3">
@@ -656,22 +652,83 @@ function ContactAccess({
   );
 }
 
-function ContactFields({ contact }: { contact?: InvestorContact }) {
+/**
+ * The add / edit contact form.
+ *
+ * A refusal (a duplicate address, a blank name) arrives as { error } and is shown under the
+ * fields. The form stays open and the fields are CONTROLLED, so what was typed is still there
+ * to correct; an uncontrolled form can be reset by the framework once its action settles.
+ */
+function ContactForm({
+  contact, submit, submitLabel, onDone, onCancel, className,
+}: {
+  contact?: InvestorContact;
+  submit: (formData: FormData) => Promise<ActionResult>;
+  submitLabel: string;
+  onDone: () => void;
+  onCancel?: () => void;
+  className?: string;
+}) {
+  const [values, setValues] = useState({
+    name: contact?.name ?? "", title: contact?.title ?? "", email: contact?.email ?? "",
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [busy, startSubmit] = useTransition();
+  const set = (key: keyof typeof values) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValues((v) => ({ ...v, [key]: e.target.value }));
+    if (error) setError(null);
+  };
+
+  return (
+    <form
+      className={cn("space-y-3", className)}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        startSubmit(async () => {
+          const result = await submit(fd);
+          if (result.error) setError(result.error);
+          else onDone();
+        });
+      }}>
+      <ContactFields values={values} onChange={set} />
+      {error && (
+        <p role="alert" className="rounded border border-negative/30 bg-negative/5 px-3 py-2 text-xs text-negative">
+          {error}
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        {onCancel && (
+          <button type="button" onClick={onCancel} className="text-2xs text-ink-faint hover:text-ink">Cancel</button>
+        )}
+        <button type="submit" disabled={busy}
+          className="rounded bg-purple px-3.5 py-2 text-2xs font-semibold text-surface hover:bg-purple-70 disabled:opacity-60">
+          {busy ? "Saving…" : submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ContactFields({ values, onChange }: {
+  values: { name: string; title: string; email: string };
+  onChange: (key: "name" | "title" | "email") => (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <label className="block">
         <span className="eyebrow">Name</span>
-        <input name="name" required defaultValue={contact?.name ?? ""}
+        <input name="name" required value={values.name} onChange={onChange("name")}
           className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-line-strong focus:outline-none" />
       </label>
       <label className="block">
         <span className="eyebrow">Title</span>
-        <input name="title" defaultValue={contact?.title ?? ""}
+        <input name="title" value={values.title} onChange={onChange("title")}
           className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-line-strong focus:outline-none" />
       </label>
       <label className="block md:col-span-2">
         <span className="eyebrow">Email</span>
-        <input name="email" type="email" required defaultValue={contact?.email ?? ""}
+        <input name="email" type="email" required value={values.email} onChange={onChange("email")}
           className="mt-1 h-8 w-full rounded border border-line bg-surface-card px-2.5 text-xs text-ink focus:border-line-strong focus:outline-none" />
       </label>
     </div>

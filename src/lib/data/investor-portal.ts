@@ -20,6 +20,7 @@
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
 import { num, str, bool } from "@/lib/data/coerce";
+import { AppError } from "@/lib/errors";
 
 // ---- Types -----------------------------------------------------------------
 export type InvestorOrgStatus = "active" | "suspended" | "closed";
@@ -285,17 +286,50 @@ export interface NewInvestorContact {
   isActive?: boolean;
 }
 
+/**
+ * An email address belongs to ONE contact across the whole portal, not one per organisation:
+ * investor_contacts_email_key is a unique index on lower(email) (0005), and the address is
+ * what a person signs in with, so it has to identify exactly one contact.
+ *
+ * The sentence is shown to an admin as it stands, so it says what to do and names no other
+ * organisation. Which organisation holds an address is a lookup anyone with admin access
+ * could otherwise run one guess at a time.
+ */
+export const DUPLICATE_CONTACT_EMAIL_MESSAGE =
+  "That email address is already used by a contact (possibly on another organisation). " +
+  "Use a different address or edit the existing contact.";
+
+/** True for the database refusing a second contact with an address that is already taken. */
+export function isDuplicateContactEmail(error: unknown): boolean {
+  const e = error as { code?: string; constraint?: string } | null;
+  return e?.code === "23505" && e?.constraint === "investor_contacts_email_key";
+}
+
+/**
+ * Turn the duplicate-address refusal into the sentence above and leave every other failure
+ * alone. Caught here, on the refusal itself, rather than by looking first and inserting after,
+ * so two admins adding the same address at once cannot both pass a check.
+ */
+async function explainDuplicateEmail<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (isDuplicateContactEmail(error)) throw new AppError(DUPLICATE_CONTACT_EMAIL_MESSAGE);
+    throw error;
+  }
+}
+
 export async function createInvestorContact(
   session: Session, input: NewInvestorContact,
 ): Promise<string> {
-  return withSession(session, async (tx) => {
+  return explainDuplicateEmail(() => withSession(session, async (tx) => {
     const { rows } = await tx.query<{ investor_contact_id: string }>(
       `insert into investor_contacts(investor_org_id, email, name, title, auth_user_id, is_active)
        values ($1,$2,$3,$4,$5,$6) returning investor_contact_id`,
       [input.investorOrgId, input.email.trim(), input.name, input.title ?? null,
        input.authUserId ?? null, input.isActive ?? true]);
     return rows[0].investor_contact_id;
-  });
+  }));
 }
 
 const CONTACT_EDITABLE: Record<string, string> = {
@@ -314,9 +348,9 @@ export async function updateInvestorContact(
   const sets = assignments(CONTACT_EDITABLE, patch, params);
   if (sets.length === 0) return;
   params.push(investorContactId);
-  await withSession(session, (tx) =>
+  await explainDuplicateEmail(() => withSession(session, (tx) =>
     tx.query(`update investor_contacts set ${sets.join(", ")}
-              where investor_contact_id = $${params.length}`, params));
+              where investor_contact_id = $${params.length}`, params)));
 }
 
 export async function listInvestorContacts(

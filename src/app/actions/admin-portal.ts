@@ -36,6 +36,7 @@ import type { ActionResult } from "@/lib/actions/result";
 import { assertPublishConfirmed } from "@/lib/data/publish-review";
 import { removePublicationDocumentAndObject } from "@/lib/documents/publication-documents";
 import { updateOpportunity } from "@/lib/data/opportunities";
+import { deleteInvestorOrganization } from "@/lib/data/investor-delete";
 import { parseNumber, PERCENT, NON_NEGATIVE } from "@/lib/validation/numeric";
 
 const MAX_INVESTOR_OVERVIEW = 4000;
@@ -85,38 +86,67 @@ export async function updateInvestorOrgAction(
   refreshInvestor(investorOrgId);
 }
 
+/**
+ * Delete an investor organisation that has never been used (see lib/investor/deletion-guard).
+ * The guard runs again here, in the delete's own transaction: the panel the admin saw may be
+ * minutes old. A refusal comes back as { error } for the panel; a delete redirects to the list.
+ */
+export async function deleteInvestorOrgAction(
+  investorOrgId: string, typedName: string,
+): Promise<ActionResult> {
+  const { db } = await requireAdminSession();
+  const result = await runAction("admin.investor-org.delete", { investorOrgId }, async () => {
+    await deleteInvestorOrganization(db, investorOrgId, typedName);
+  });
+  if (result.error) return result;
+  revalidatePath("/admin");
+  revalidatePath("/admin/investors");
+  redirect("/admin/investors");
+}
+
 // ============================================================================
 // Investor contacts
 // ============================================================================
+/**
+ * The contact forms keep their place on a refusal: a duplicate address, or a missing name, comes
+ * back as { error } for the form to show beside the fields, instead of throwing to the staff
+ * boundary and replacing the whole investor page with "This screen could not be loaded".
+ */
 export async function createInvestorContactAction(
   investorOrgId: string, formData: FormData,
-): Promise<void> {
+): Promise<ActionResult> {
   const { db } = await requireAdminSession();
-  const name = trimmed(formData.get("name"));
-  const email = trimmed(formData.get("email"));
-  if (!name || !email) throw new AppError("A contact needs a name and an email address.");
-  await createInvestorContact(db, {
-    investorOrgId,
-    name,
-    email,
-    title: orNull(formData.get("title")),
+  const result = await runAction("admin.investor-contact.create", { investorOrgId }, async () => {
+    const name = trimmed(formData.get("name"));
+    const email = trimmed(formData.get("email"));
+    if (!name || !email) throw new AppError("A contact needs a name and an email address.");
+    await createInvestorContact(db, {
+      investorOrgId,
+      name,
+      email,
+      title: orNull(formData.get("title")),
+    });
   });
-  refreshInvestor(investorOrgId);
+  if (!result.error) refreshInvestor(investorOrgId);
+  return result;
 }
 
 export async function updateInvestorContactAction(
   investorContactId: string, investorOrgId: string, formData: FormData,
-): Promise<void> {
+): Promise<ActionResult> {
   const { db } = await requireAdminSession();
-  const name = trimmed(formData.get("name"));
-  const email = trimmed(formData.get("email"));
-  if (!name || !email) throw new AppError("A contact needs a name and an email address.");
-  await updateInvestorContact(db, investorContactId, {
-    name,
-    email,
-    title: orNull(formData.get("title")),
+  const result = await runAction("admin.investor-contact.update", { investorContactId, investorOrgId }, async () => {
+    const name = trimmed(formData.get("name"));
+    const email = trimmed(formData.get("email"));
+    if (!name || !email) throw new AppError("A contact needs a name and an email address.");
+    await updateInvestorContact(db, investorContactId, {
+      name,
+      email,
+      title: orNull(formData.get("title")),
+    });
   });
-  refreshInvestor(investorOrgId);
+  if (!result.error) refreshInvestor(investorOrgId);
+  return result;
 }
 
 export async function setContactActiveAction(
