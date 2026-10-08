@@ -10,7 +10,12 @@ import { formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-export function InvestorOrgDirectory({ orgs }: { orgs: InvestorOrgSummary[] }) {
+export function InvestorOrgDirectory({ orgs, neverUsedIds = [] }: {
+  orgs: InvestorOrgSummary[];
+  /** Organisations that pass the deletion guard: never signed in, no activity, entitlement or request. */
+  neverUsedIds?: string[];
+}) {
+  const neverUsed = useMemo(() => new Set(neverUsedIds), [neverUsedIds]);
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -127,9 +132,16 @@ export function InvestorOrgDirectory({ orgs }: { orgs: InvestorOrgSummary[] }) {
                     )}
                   </td>
                   <td className="px-5 py-3">
-                    <Badge tone={INVESTOR_ORG_STATUS_TONE[o.status]} dot>
-                      {INVESTOR_ORG_STATUS_LABEL[o.status]}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge tone={INVESTOR_ORG_STATUS_TONE[o.status]} dot>
+                        {INVESTOR_ORG_STATUS_LABEL[o.status]}
+                      </Badge>
+                      {neverUsed.has(o.investorOrgId) && (
+                        <span title="No sign-in, activity, entitlement, request or saved item. Can be deleted from its page.">
+                          <Badge tone="muted">Never used</Badge>
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="tabular px-5 py-3 text-right text-ink">
                     {o.contactsActive}

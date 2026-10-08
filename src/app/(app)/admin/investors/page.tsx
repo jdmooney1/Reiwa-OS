@@ -1,6 +1,7 @@
 import { requireAdminAuth } from "@/lib/auth/admin";
 import { toDbSession } from "@/lib/auth/session";
 import { listInvestorOrgSummaries } from "@/lib/data/admin-portal";
+import { listNeverUsedOrgIds } from "@/lib/data/investor-delete";
 import { PageHeader } from "@/components/layout/page-header";
 import { InvestorOrgDirectory } from "@/components/admin/investor-org-directory";
 
@@ -8,7 +9,8 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminInvestorsPage() {
   const auth = await requireAdminAuth();
-  const orgs = await listInvestorOrgSummaries(toDbSession(auth));
+  const db = toDbSession(auth);
+  const [orgs, neverUsed] = await Promise.all([listInvestorOrgSummaries(db), listNeverUsedOrgIds(db)]);
 
   return (
     <div className="min-h-full">
@@ -17,7 +19,7 @@ export default async function AdminInvestorsPage() {
         title="Investor Organisations"
         description="The organisations invited into the Reiwa Capital investment portal, their contacts and what each can see."
       />
-      <InvestorOrgDirectory orgs={orgs} />
+      <InvestorOrgDirectory orgs={orgs} neverUsedIds={neverUsed} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { toDbSession } from "@/lib/auth/session";
 import { listInvestorContacts, listPublicationsForInvestorOrg } from "@/lib/data/investor-portal";
 import { getInvestorOrganization, listPublicationOptions } from "@/lib/data/admin-portal";
 import { listInvitesForOrg } from "@/lib/data/investor-invites";
+import { getDeletionGuard } from "@/lib/data/investor-delete";
 import { InvestorOrgDetail } from "@/components/admin/investor-org-detail";
 import { getOrgActivity, listRequests } from "@/lib/data/admin-activity";
 import { OrgActivitySection } from "@/components/admin/activity-sections";
@@ -21,13 +22,14 @@ export default async function AdminInvestorDetailPage({
   const org = await getInvestorOrganization(db, params.investorOrgId).catch(() => null);
   if (!org) notFound();
 
-  const [contacts, assignments, options, invites, activity, requests] = await Promise.all([
+  const [contacts, assignments, options, invites, activity, requests, deletionGuard] = await Promise.all([
     listInvestorContacts(db, org.investorOrgId),
     listPublicationsForInvestorOrg(db, org.investorOrgId),
     listPublicationOptions(db),
     listInvitesForOrg(db, org.investorOrgId),
     getOrgActivity(db, org.investorOrgId),
     listRequests(db, { investorOrgId: org.investorOrgId }),
+    getDeletionGuard(db, org.investorOrgId),
   ]);
 
   return (
@@ -38,6 +40,7 @@ export default async function AdminInvestorDetailPage({
       assignments={assignments}
       publicationOptions={options}
       invites={invites}
+      deletionGuard={deletionGuard ?? undefined}
     />
       <div className="mx-auto w-full max-w-6xl px-6 pb-10">
         <OrgActivitySection

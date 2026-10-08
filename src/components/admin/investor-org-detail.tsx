@@ -24,6 +24,8 @@ import {
 } from "@/lib/portal-labels";
 import { formatDate } from "@/lib/format";
 import type { ActionResult } from "@/lib/actions/result";
+import type { DeletionGuard } from "@/lib/investor/deletion-guard";
+import { DeleteInvestorOrg } from "@/components/admin/delete-investor-org";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -39,9 +41,11 @@ interface Org {
 }
 
 export function InvestorOrgDetail({
-  org, contacts, assignments, publicationOptions, invites = [],
+  org, contacts, assignments, publicationOptions, invites = [], deletionGuard,
 }: {
   org: Org;
+  /** What the delete panel shows. Omitted = no danger zone (e.g. a test render). */
+  deletionGuard?: DeletionGuard;
   contacts: InvestorContact[];
   assignments: AssignedPublication[];
   publicationOptions: PublicationOption[];
@@ -260,6 +264,8 @@ export function InvestorOrgDetail({
 
           <ContactsCard org={org} contacts={contacts} invites={invites}
             pending={pending} start={start} />
+
+          {deletionGuard && <DeleteInvestorOrg org={org} guard={deletionGuard} />}
         </div>
       </div>
     </div>

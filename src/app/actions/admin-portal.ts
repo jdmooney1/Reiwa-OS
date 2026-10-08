@@ -36,6 +36,7 @@ import type { ActionResult } from "@/lib/actions/result";
 import { assertPublishConfirmed } from "@/lib/data/publish-review";
 import { removePublicationDocumentAndObject } from "@/lib/documents/publication-documents";
 import { updateOpportunity } from "@/lib/data/opportunities";
+import { deleteInvestorOrganization } from "@/lib/data/investor-delete";
 import { parseNumber, PERCENT, NON_NEGATIVE } from "@/lib/validation/numeric";
 
 const MAX_INVESTOR_OVERVIEW = 4000;
@@ -83,6 +84,24 @@ export async function updateInvestorOrgAction(
     notes: orNull(formData.get("notes")),
   });
   refreshInvestor(investorOrgId);
+}
+
+/**
+ * Delete an investor organisation that has never been used (see lib/investor/deletion-guard).
+ * The guard runs again here, in the delete's own transaction: the panel the admin saw may be
+ * minutes old. A refusal comes back as { error } for the panel; a delete redirects to the list.
+ */
+export async function deleteInvestorOrgAction(
+  investorOrgId: string, typedName: string,
+): Promise<ActionResult> {
+  const { db } = await requireAdminSession();
+  const result = await runAction("admin.investor-org.delete", { investorOrgId }, async () => {
+    await deleteInvestorOrganization(db, investorOrgId, typedName);
+  });
+  if (result.error) return result;
+  revalidatePath("/admin");
+  revalidatePath("/admin/investors");
+  redirect("/admin/investors");
 }
 
 // ============================================================================
