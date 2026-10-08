@@ -275,7 +275,7 @@ database refuses it and names the linked document instead.
   `create policy` and trigger in both branches' 0033–0035/0033–0052 found no other collision —
   this constraint was the only shared, non-additively-redefined object.
 
-## 13. Session 4a — investor visibility, built (migrations 0054–0059)
+## 13. Session 4a — investor visibility, built (migrations 0054–0060)
 
 Split into three rounds; this section covers 4a only. 4b (watermarking —
 `pdf-lib`, per-document `download_disabled`/`expires_at`) and 4c (staff
@@ -339,6 +339,21 @@ they may actually read right now. `secure-delivery.ts`'s
 tries a `deal_document` version after a publication-document lookup misses,
 refused identically either way; delivery is still a plain signed URL with no
 watermark, expiry or disable yet (4b).
+
+**The entitlement sync (0060) — caught on review, not shipped with the rest
+of 4a.** The Session 4 plan named this explicitly and the first 4a push
+missed it: `deal_document_entitlements` rows were never written by anything.
+A trigger on `deal_investor`, reusing `app.investor_status_rank` (0047) —
+not reimplemented — now grants, cumulatively: every Stage 1 investor-audience
+document once `rank(status) >= rank('nda_signed')`, and every Stage 2+ one
+once `rank(status) >= rank('ioi_received')` — whether that exact intermediate
+status was ever literally set or jumped past, same cumulative rule 0047
+already uses for document *creation*. `investor_nda`, `investor_teaser`
+(exempt) and `underwriting_model` (hard-excluded) are never granted a row
+here, matching 0056. Added beyond the literal spec, flagged for review: a
+`declined` investor has every entitlement they held revoked
+(`is_visible = false`, never deleted) — nothing named this, but leaving a
+declined investor's entitlements visible would be a real exposure.
 
 **Not re-litigated, flagged instead:** `platform_settings_select` (0052) was
 **not** widened to admit `reiwa_staff` — left exactly as decided.

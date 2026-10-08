@@ -224,6 +224,49 @@ describe("investor_nda and investor_teaser are exempt from the entitlement gate 
       await expect(canReadDealDocument(contactB.authUserId, ndaDocIdA)).resolves.toBe(false);
     });
   });
+
+  it("the exemption is per-deal: an investor matched only on deal X cannot read deal Y's teaser or NDA", async () => {
+    const otherOpp = await withSession(session, (tx) =>
+      tx.query<{ opportunity_id: string }>(
+        `insert into opportunities (org_id, name, market, asset_type, strategy, currency, created_by)
+         values ($1,$2,'London','office','value_add','GBP',$3) returning opportunity_id`,
+        [org, "91 Other Deal Fixture " + randomUUID(), analyst]));
+    const oppY = otherOpp.rows[0].opportunity_id;
+
+    // Deal Y's own teaser and NDA, and its own (unrelated) investor.
+    const teaserY = await withSession(session, (tx) =>
+      tx.query<{ deal_document_id: string }>(
+        "insert into deal_document(org_id, opportunity_id, doc_type_key) values ($1,$2,'investor_teaser') returning deal_document_id",
+        [org, oppY]));
+    const teaserYDocId = teaserY.rows[0].deal_document_id;
+
+    const orgY = await adminQuery<{ investor_org_id: string }>(
+      "insert into investor_organizations(name) values ($1) returning investor_org_id",
+      ["Deal Room Investor Y " + randomUUID()]);
+    const diY = await withSession(session, (tx) =>
+      tx.query<{ deal_investor_id: string }>(
+        "insert into deal_investor(org_id, opportunity_id, investor_org_id, introduced_by) values ($1,$2,$3,$4) returning deal_investor_id",
+        [org, oppY, orgY[0].investor_org_id, analyst]));
+    const ndaY = await withSession(session, (tx) =>
+      tx.query<{ deal_document_id: string }>(
+        "insert into deal_document(org_id, opportunity_id, deal_investor_id, doc_type_key) values ($1,$2,$3,'investor_nda') returning deal_document_id",
+        [org, oppY, diY.rows[0].deal_investor_id]));
+    const ndaYDocId = ndaY.rows[0].deal_document_id;
+
+    await withDealRoomEnabled(async () => {
+      // Investor A is matched on deal X (oppId) only — never on deal Y.
+      await expect(canReadDealDocument(contactA.authUserId, teaserYDocId)).resolves.toBe(false);
+      await expect(canReadDealDocument(contactA.authUserId, ndaYDocId)).resolves.toBe(false);
+      // Sanity: deal Y's own investor CAN read deal Y's own teaser/NDA — the
+      // exemption works per-deal, it isn't simply broken.
+      const contactY = await createInvestorContact(orgY[0].investor_org_id, `deal-room-y-${randomUUID()}@example.com`, "Deal Room Contact Y");
+      await expect(canReadDealDocument(contactY.authUserId, teaserYDocId)).resolves.toBe(true);
+      await expect(canReadDealDocument(contactY.authUserId, ndaYDocId)).resolves.toBe(true);
+    });
+
+    await adminQuery("delete from opportunities where opportunity_id = $1", [oppY]);
+    await adminQuery("delete from investor_organizations where investor_org_id = $1", [orgY[0].investor_org_id]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -447,5 +490,116 @@ describe("document_version.is_manual_override (decision F)", () => {
     await expect(insertDocumentVersion({
       dealDocumentId: offerLetterDocId, language: "EN", isGoverning: true, isManualOverride: true,
     })).rejects.toThrow(/investor-facing Produce doc_types/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("deal_document_entitlements syncs automatically from deal_investor.status (0060)", () => {
+  async function newSyncInvestor(label: string) {
+    const orgRow = await adminQuery<{ investor_org_id: string }>(
+      "insert into investor_organizations(name) values ($1) returning investor_org_id",
+      [`Deal Room Sync Investor ${label} ` + randomUUID()]);
+    const investorOrgId = orgRow[0].investor_org_id;
+    const diRow = await withSession(session, (tx) =>
+      tx.query<{ deal_investor_id: string }>(
+        "insert into deal_investor(org_id, opportunity_id, investor_org_id, introduced_by) values ($1,$2,$3,$4) returning deal_investor_id",
+        [org, oppId, investorOrgId, analyst]));
+    const dealInvestorId = diRow.rows[0].deal_investor_id;
+    const contact = await createInvestorContact(investorOrgId, `deal-room-sync-${label}-${randomUUID()}@example.com`, `Deal Room Sync ${label}`);
+    return { investorOrgId, dealInvestorId, contact };
+  }
+
+  async function cleanupSyncInvestor(i: { investorOrgId: string; dealInvestorId: string }) {
+    await adminQuery("delete from deal_document_entitlements where deal_investor_id = $1", [i.dealInvestorId]);
+    await adminQuery("delete from deal_investor where deal_investor_id = $1", [i.dealInvestorId]);
+    await adminQuery("delete from investor_organizations where investor_org_id = $1", [i.investorOrgId]);
+  }
+
+  it("nda_signed grants every Stage 1 investor-audience document, never the exempt or hard-excluded ones", async () => {
+    const investor = await newSyncInvestor("C");
+    await withDealRoomEnabled(async () => {
+      await expect(canReadDealDocument(investor.contact.authUserId, tenancyDocId)).resolves.toBe(false);
+
+      await withSession(session, (tx) =>
+        tx.query("update deal_investor set status = 'nda_signed' where deal_investor_id = $1", [investor.dealInvestorId]));
+
+      await expect(canReadDealDocument(investor.contact.authUserId, tenancyDocId)).resolves.toBe(true);
+      await expect(canReadDealDocument(investor.contact.authUserId, pitchPackDocId)).resolves.toBe(true);
+
+      // underwriting_model: no entitlement row was written at all, not merely one left false.
+      const uwRows = await adminQuery<{ n: number }>(
+        "select count(*)::int as n from deal_document_entitlements where deal_investor_id = $1 and deal_document_id = $2",
+        [investor.dealInvestorId, underwritingDocId]);
+      expect(uwRows[0].n).toBe(0);
+      await expect(canReadDealDocument(investor.contact.authUserId, underwritingDocId)).resolves.toBe(false);
+
+      // investor_nda/investor_teaser: readable (via the exemption), but still no entitlement row for
+      // either — including THIS investor's own NDA, which 0047's own trigger auto-creates the
+      // moment nda_signed is reached (cumulative past teaser_sent), not ndaDocIdA/B (a different
+      // investor's row, which would trivially have no entitlement for this investor regardless).
+      await expect(canReadDealDocument(investor.contact.authUserId, teaserDocId)).resolves.toBe(true);
+      const ownNda = await adminQuery<{ deal_document_id: string }>(
+        "select deal_document_id from deal_document where deal_investor_id = $1 and doc_type_key = 'investor_nda'",
+        [investor.dealInvestorId]);
+      expect(ownNda.length).toBe(1); // confirms 0047's own auto-create fired, so this is a real check
+      const ndaRows = await adminQuery<{ n: number }>(
+        "select count(*)::int as n from deal_document_entitlements where deal_investor_id = $1 and deal_document_id in ($2,$3)",
+        [investor.dealInvestorId, teaserDocId, ownNda[0].deal_document_id]);
+      expect(ndaRows[0].n).toBe(0);
+    });
+    await cleanupSyncInvestor(investor);
+  });
+
+  it("jumping straight to ioi_received grants both Stage 1 AND Stage 2+ documents — cumulative, same as 0047's own rule", async () => {
+    const investor = await newSyncInvestor("D");
+    const stage4 = await withSession(session, (tx) =>
+      tx.query<{ deal_document_id: string }>(
+        "insert into deal_document(org_id, opportunity_id, doc_type_key) values ($1,$2,'completion_report') returning deal_document_id",
+        [org, oppId]));
+    const stage4DocId = stage4.rows[0].deal_document_id;
+
+    // investor_ioi must be Final for the 0058 status gate to allow this jump at all.
+    const ioiDoc = await withSession(session, (tx) =>
+      tx.query<{ deal_document_id: string }>(
+        "insert into deal_document(org_id, opportunity_id, deal_investor_id, doc_type_key, status) values ($1,$2,$3,'investor_ioi','final') returning deal_document_id",
+        [org, oppId, investor.dealInvestorId]));
+
+    await withDealRoomEnabled(async () => {
+      await withSession(session, (tx) =>
+        tx.query("update deal_investor set status = 'ioi_received' where deal_investor_id = $1", [investor.dealInvestorId]));
+
+      await expect(canReadDealDocument(investor.contact.authUserId, tenancyDocId)).resolves.toBe(true); // Stage 1
+      await expect(canReadDealDocument(investor.contact.authUserId, stage4DocId)).resolves.toBe(true);  // Stage 4, "Stage 2+"
+    });
+
+    await adminQuery("delete from deal_document where deal_document_id = any($1::uuid[])", [[stage4DocId, ioiDoc.rows[0].deal_document_id]]);
+    await cleanupSyncInvestor(investor);
+  });
+
+  it("declining an investor revokes every entitlement they held, without deleting the rows", async () => {
+    const investor = await newSyncInvestor("E");
+    await withSession(session, (tx) =>
+      tx.query("update deal_investor set status = 'nda_signed' where deal_investor_id = $1", [investor.dealInvestorId]));
+
+    const before = await adminQuery<{ n: number }>(
+      "select count(*)::int as n from deal_document_entitlements where deal_investor_id = $1 and is_visible",
+      [investor.dealInvestorId]);
+    expect(before[0].n).toBeGreaterThan(0);
+
+    await withSession(session, (tx) =>
+      tx.query("update deal_investor set status = 'declined' where deal_investor_id = $1", [investor.dealInvestorId]));
+
+    const after = await adminQuery<{ n: number }>(
+      "select count(*)::int as n from deal_document_entitlements where deal_investor_id = $1", [investor.dealInvestorId]);
+    const stillVisible = await adminQuery<{ n: number }>(
+      "select count(*)::int as n from deal_document_entitlements where deal_investor_id = $1 and is_visible",
+      [investor.dealInvestorId]);
+    expect(after[0].n).toBe(before[0].n); // rows kept, not deleted
+    expect(stillVisible[0].n).toBe(0);    // every one revoked
+
+    await withDealRoomEnabled(async () => {
+      await expect(canReadDealDocument(investor.contact.authUserId, tenancyDocId)).resolves.toBe(false);
+    });
+    await cleanupSyncInvestor(investor);
   });
 });
