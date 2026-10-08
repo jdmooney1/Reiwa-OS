@@ -6,6 +6,8 @@ import {
 } from "@/lib/data/investor-portal";
 import { getOpportunity } from "@/lib/data/opportunities";
 import { PublicationSection, type PublicationView } from "@/components/workspace/publication-section";
+import { matchingInvestorsForOpportunity } from "@/lib/data/investor-mandates";
+import { MatchingInvestorsCard } from "@/components/admin/mandate-matches";
 
 export const dynamic = "force-dynamic";
 
@@ -66,13 +68,23 @@ export default async function PublicationPage({
     };
   }
 
+  // Staff only (this branch is the portal-admin one). Hidden until 0050 is applied.
+  const investorMatches = await matchingInvestorsForOpportunity(session, params.opportunityId);
+
   return (
-    <PublicationSection
-      opportunityId={params.opportunityId}
-      publication={view}
-      portalAdmin
-      investorOverview={opportunity?.investorOverview ?? null}
-      internalSummary={opportunity?.summary ?? null}
-    />
+    <>
+      <PublicationSection
+        opportunityId={params.opportunityId}
+        publication={view}
+        portalAdmin
+        investorOverview={opportunity?.investorOverview ?? null}
+        internalSummary={opportunity?.summary ?? null}
+      />
+      {investorMatches.available && (
+        <div className="px-8 pb-8">
+          <MatchingInvestorsCard mandateCount={investorMatches.mandateCount} investors={investorMatches.investors} />
+        </div>
+      )}
+    </>
   );
 }
