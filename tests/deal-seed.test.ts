@@ -270,3 +270,106 @@ describe("the database refuses what the loader never writes", () => {
     await expect(adminQuery(sql).then(() => "applied")).resolves.toBe("applied");
   });
 });
+
+describe("a reference that matches CLOSED history is held, never written to", () => {
+  const snapshot = async (id: string) => (await adminQuery<{ j: unknown }>("select to_jsonb(o) as j from opportunities o where opportunity_id = $1", [id]))[0].j;
+  const propCount = async () => Number((await adminQuery<{ n: string }>("select count(*)::text n from properties where org_id = $1", [orgId]))[0].n);
+
+  /** Load a deal, blank a field the seed would refill, then close the record. */
+  async function loaded(close: (id: string) => Promise<void>) {
+    const d = parse(unique(fullDeal()));
+    const first = await seed(d);
+    expect(first.outcome).toBe("created");
+    await adminQuery("update opportunities set broker_name = null, source = null where opportunity_id = $1", [first.opportunityId]);
+    await close(first.opportunityId!);
+    return { d, id: first.opportunityId! };
+  }
+
+  it("an ARCHIVED record is not updated; the hold names it as archived, with its status", async () => {
+    const { d, id } = await loaded((i) => adminQuery("update opportunities set status = 'withdrawn', archived_at = now() where opportunity_id = $1", [i]).then(() => undefined));
+    const before = await snapshot(id);
+    const props = await propCount();
+    const r = await seed(d);
+    expect(r.outcome).toBe("held");
+    expect(r.collisions[0]).toMatchObject({ opportunityId: id, why: "already_archived", status: "withdrawn", reference: d.reference });
+    expect(await snapshot(id)).toEqual(before);                       // not one column touched (the blanked broker is still blank)
+    expect((await opp(id)).broker_name).toBeNull();
+    expect(await propCount()).toBe(props);                            // and the held attempt left no property behind
+    expect(await adminQuery("select 1 from opportunities where org_id = $1 and reference = $2", [orgId, d.reference])).toHaveLength(1);
+  });
+
+  it("--allow-existing does not override it: closed history is not written to", async () => {
+    const { d, id } = await loaded((i) => adminQuery("update opportunities set status = 'lost', archived_at = now() where opportunity_id = $1", [i]).then(() => undefined));
+    const before = await snapshot(id);
+    const r = await seed(d, { allowExisting: true });
+    expect(r.outcome).toBe("held");
+    expect(r.collisions[0].why).toBe("already_archived");
+    expect(await snapshot(id)).toEqual(before);
+  });
+
+  it("a held closed reference does not break the next deal in the same transaction", async () => {
+    const { d } = await loaded((i) => adminQuery("update opportunities set status = 'rejected', archived_at = now() where opportunity_id = $1", [i]).then(() => undefined));
+    const ok = parse(unique(thinDeal()));
+    const [a, b] = await withSession(adminSession, async (tx) => [await seedDeal(tx, ctx, d), await seedDeal(tx, ctx, ok)]);
+    expect([a.outcome, b.outcome]).toEqual(["held", "created"]);
+  });
+
+  it("a MERGED record is not updated; the hold carries the merge pointer and the survivor's name", async (t) => {
+    const hasPointer = (await adminQuery("select 1 from information_schema.columns where table_name = 'opportunities' and column_name = 'merged_into_opportunity_id'")).length === 1;
+    if (!hasPointer) return t.skip(); // needs migration 0036 (merged status + pointer); runs once that is in the schema
+    const survivor = await seed(parse(unique(thinDeal())));
+    const survivorName = (await opp(survivor.opportunityId!)).name as string;
+    const { d, id } = await loaded((i) => adminQuery(
+      "update opportunities set status = 'merged', archived_at = now(), merged_into_opportunity_id = $2 where opportunity_id = $1", [i, survivor.opportunityId]).then(() => undefined));
+    const before = await snapshot(id);
+    const r = await seed(d);
+    expect(r.outcome).toBe("held");
+    expect(r.collisions[0]).toMatchObject({ opportunityId: id, why: "already_merged", status: "merged", mergedInto: survivor.opportunityId, mergedIntoName: survivorName });
+    expect(await snapshot(id)).toEqual(before);
+    expect((await opp(id)).broker_name).toBeNull();
+    const rAllow = await seed(d, { allowExisting: true });
+    expect(rAllow.outcome).toBe("held");
+  });
+
+  it("a LIVE record with the same reference is still updated, as before", async () => {
+    const d = parse(unique(fullDeal()));
+    const first = await seed(d);
+    await adminQuery("update opportunities set broker_name = null where opportunity_id = $1", [first.opportunityId]);
+    const again = await seed(d);
+    expect(again.outcome).toBe("updated");
+    expect((await opp(first.opportunityId!)).broker_name).toBe("Example Partners LLP");
+  });
+});
+
+describe("a name variant is now a collision (the Emerald Theatre / Theater gap)", () => {
+  async function existingNamed(name: string) {
+    return createOpportunity({ ...adminSession, orgIds: [orgId] },
+      { orgId, name, address: `1 Elsewhere Road ${RUN}${++n}`, city: "London", market: "London", assetType: "office" } as never);
+  }
+  const named = (name: string) => {
+    const raw = unique(fullDeal());
+    const tag = raw.opportunity.name.split(" ")[0];
+    raw.opportunity.name = `${tag} ${name}`;
+    return { d: parse(raw), tag };
+  };
+
+  it("Theater in the seed row, Theatre already in the pipeline: held as a similar name", async () => {
+    const { d, tag } = named("Emerald Theater, Covent Garden");
+    const existingId = await existingNamed(`${tag} Emerald Theatre, Covent Garden`);
+    const r = await seed(d);
+    expect(r.outcome).toBe("held");
+    expect(r.collisions).toEqual([expect.objectContaining({ opportunityId: existingId, why: "similar_name" })]);
+  });
+
+  it("and the other way round", async () => {
+    const { d, tag } = named("Emerald Theatre, Covent Garden");
+    await existingNamed(`${tag} Emerald Theater, Covent Garden`);
+    expect((await seed(d)).outcome).toBe("held");
+  });
+
+  it("a different building with a similar name is not held", async () => {
+    const { d, tag } = named("Emerald Hotel, Covent Garden");
+    await existingNamed(`${tag} Emerald Theatre, Covent Garden`);
+    expect((await seed(d)).outcome).toBe("created");
+  });
+});

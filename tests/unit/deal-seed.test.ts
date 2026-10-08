@@ -1,7 +1,7 @@
 // The deal seed parser: what it maps, what it keeps, what it refuses, and what it flags.
 import { describe, it, expect } from "vitest";
 import { parseDealSeed, parseSourcing, seedReference } from "@/lib/ingestion/deal-seed";
-import { similarNames } from "@/lib/data/deal-seed";
+import { similarNames, normaliseName, NAME_VARIANTS, closedRecordCollision, describeCollision } from "@/lib/data/deal-seed";
 import { fullDeal, waultDeal, earlyDeal, thinDeal, conflictDeal, file } from "./deal-seed.fixture";
 
 const one = (d: unknown) => parseDealSeed(file(d))[0];
@@ -218,5 +218,82 @@ describe("similarNames (the duplicate guard)", () => {
     expect(similarNames("9 Conduit Street", "16 Conduit Street")).toBe(false);
     expect(similarNames("16 Conduit Street", "Herengracht 472")).toBe(false);
     expect(similarNames("Ab", "Abc House")).toBe(false); // too short to mean anything
+  });
+});
+
+describe("similarNames: spelling and naming variants of one building", () => {
+  it("catches the Emerald Theatre / Theater gap, with the punctuation the real names carried", () => {
+    expect(similarNames("Emerald Theater, Covent Garden", "Emerald Theatre, Covent Garden")).toBe(true);
+    expect(similarNames("Emerald Theatre", "emerald  THEATER")).toBe(true);
+  });
+
+  it.each([
+    ["Canary Wharf Centre", "Canary Wharf Center"],
+    ["Harbour Point", "Harbor Point"],
+    ["Colour Works", "Color Works"],
+    ["Metre House", "Meter House"],
+  ])("British and American spelling: %s = %s", (a, b) => {
+    expect(similarNames(a, b)).toBe(true);
+  });
+
+  it.each([
+    ["25 Watling Street", "25 Watling St"],
+    ["St James's Square", "Saint James Sq"],
+    ["14 Bedford Road", "14 Bedford Rd"],
+    ["Bow Lane Buildings", "Bow Ln Bldg"],
+  ])("street-type and place abbreviations: %s = %s", (a, b) => {
+    expect(similarNames(a, b)).toBe(true);
+  });
+
+  it("spelled-out numbers, a leading 'the', possessives and ampersands", () => {
+    expect(similarNames("One Fleet Place", "1 Fleet Pl")).toBe(true);
+    expect(similarNames("The Corn Exchange", "Corn Exchange")).toBe(true);
+    expect(similarNames("Queen's Gate House", "Queens Gate House")).toBe(true);
+    expect(similarNames("Marks & Spencer House", "Marks and Spencer House")).toBe(true);
+    expect(similarNames("Emerald Theatres Arcade", "Emerald Theater Arcade")).toBe(true); // a plural too
+    expect(similarNames("Covent Garden Estate", "Covent Gardens Estate")).toBe(true);
+  });
+
+  it("still tells different buildings apart", () => {
+    expect(similarNames("Emerald Theatre", "Emerald Hotel")).toBe(false);
+    expect(similarNames("9 Conduit Street", "16 Conduit Street")).toBe(false);
+    expect(similarNames("One Fleet Place", "2 Fleet Place")).toBe(false);
+    expect(similarNames("Theatre Royal", "Royal Exchange")).toBe(false);
+    expect(similarNames("", "Emerald Theatre")).toBe(false);
+  });
+
+  it("normaliseName is the same for every spelling, and idempotent in effect", () => {
+    expect(normaliseName("Emerald Theater Covent Garden")).toBe("emeraldtheatercoventgdns");
+    expect(normaliseName("The Emerald Theatre, Covent-Garden")).toBe("emeraldtheatercoventgdns");
+  });
+
+  it("the variant table is well formed: single lowercase words, no entry maps to itself, no chains", () => {
+    for (const [k, v] of Object.entries(NAME_VARIANTS)) {
+      expect(k, k).toMatch(/^[a-z]+$/);
+      expect(v, k).toMatch(/^[a-z0-9]+$/);
+      expect(k).not.toBe(v);
+      expect(Object.hasOwn(NAME_VARIANTS, v), `${k} -> ${v} chains`).toBe(false);
+    }
+  });
+});
+
+describe("a reference that matches closed history is reported by name", () => {
+  const row = { opportunity_id: "b5c09009-0000-0000-0000-000000000001", reference: "LON-009", name: "Emerald Theater", broker_name: "Example Partners", target_price: "26000000", status: "merged", merged_into: "0f4d3e03-0000-0000-0000-000000000002" };
+
+  it("a merged record carries its merge pointer and the survivor's name", () => {
+    const c = closedRecordCollision(row, "Emerald Theatre, Covent Garden");
+    expect(c).toMatchObject({ why: "already_merged", status: "merged", mergedInto: row.merged_into, mergedIntoName: "Emerald Theatre, Covent Garden", price: 26_000_000 });
+    expect(describeCollision(c)).toBe(`already loaded and merged into ${row.merged_into} ("Emerald Theatre, Covent Garden") [LON-009]`);
+  });
+
+  it("an archived record says what happened to it, and does not claim a merge", () => {
+    const c = closedRecordCollision({ ...row, status: "withdrawn", merged_into: null }, null);
+    expect(c).toMatchObject({ why: "already_archived", status: "withdrawn" });
+    expect(c.mergedInto).toBeUndefined();
+    expect(describeCollision(c)).toBe("already loaded and archived (status withdrawn) [LON-009]");
+  });
+
+  it("is told apart from the two ordinary collisions in the report text", () => {
+    expect(describeCollision({ opportunityId: "x", reference: "LON-001", name: "n", brokerName: null, price: null, why: "same_property" })).toBe("same_property LON-001");
   });
 });

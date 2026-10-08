@@ -17,6 +17,10 @@
 //   * A deal is never created next to one that already exists. If another opportunity is bound
 //     to the same property, or has a near-identical name, the deal is HELD and reported, and
 //     written only on --allow-existing. Two records for one building is the failure this guards.
+//   * Closed history is never written to. A reference that matches an ARCHIVED or MERGED
+//     opportunity is not "the deal this seed already loaded": that record is finished. The deal is
+//     HELD, whatever --allow-existing says, and the report names what happened to it (merged into
+//     which survivor, or archived with which status).
 // ============================================================================
 import type { Queryable } from "@/lib/db/client";
 import { resolveProperty } from "@/lib/data/properties";
@@ -36,7 +40,38 @@ export interface Collision {
   name: string;
   brokerName: string | null;
   price: number | null;
-  why: "same_property" | "similar_name";
+  why: CollisionWhy;
+  /** Closed-history collisions only: the record's status (e.g. "merged", "withdrawn"). */
+  status?: string;
+  /** already_merged only: the opportunity it was merged into, and that record's name. */
+  mergedInto?: string | null;
+  mergedIntoName?: string | null;
+}
+
+export type CollisionWhy = "same_property" | "similar_name" | "already_merged" | "already_archived";
+
+/** One line for a report or a load-row reason: says what the record IS, not just that it collides. */
+export function describeCollision(c: Collision): string {
+  const ref = c.reference ?? c.opportunityId;
+  if (c.why === "already_merged") {
+    return `already loaded and merged into ${c.mergedInto ?? "an unknown record"}${c.mergedIntoName ? ` ("${c.mergedIntoName}")` : ""} [${ref}]`;
+  }
+  if (c.why === "already_archived") return `already loaded and archived (status ${c.status ?? "unknown"}) [${ref}]`;
+  return `${c.why} ${ref}`;
+}
+
+/** What a seed reference that matches a closed (archived or merged) record reports. Pure, so it is tested directly. */
+export function closedRecordCollision(
+  row: { opportunity_id: string; reference: string | null; name: string; broker_name: string | null; target_price: string | null; status: string; merged_into: string | null },
+  survivorName: string | null,
+): Collision {
+  const merged = row.status === "merged" || row.merged_into !== null;
+  return {
+    opportunityId: row.opportunity_id, reference: row.reference, name: row.name, brokerName: row.broker_name,
+    price: row.target_price === null ? null : Number(row.target_price),
+    why: merged ? "already_merged" : "already_archived", status: row.status,
+    ...(merged ? { mergedInto: row.merged_into, mergedIntoName: survivorName } : {}),
+  };
 }
 
 export type SeedOutcome = "created" | "updated" | "held";
@@ -50,22 +85,67 @@ export interface SeededDeal {
   collisions: Collision[];
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "");
+/**
+ * Spelling and naming variants that mean the same word in a building's name, each mapped to ONE form.
+ * A small table, on purpose: the failure it closes is "Emerald Theatre" and "Emerald Theater" reading
+ * as two buildings, and the next one will be a pair like it. Not a fuzzy matcher: a variant belongs
+ * here only when two spellings are the same word.
+ *
+ * Keys are single lowercase words (tests hold that, and that no value is itself a key, so mapping
+ * never chains). To extend: add the pair, add a test for it.
+ */
+export const NAME_VARIANTS: Readonly<Record<string, string>> = {
+  // British / American spelling
+  theatre: "theater", centre: "center", harbour: "harbor", colour: "color", grey: "gray",
+  metre: "meter", neighbourhood: "neighborhood", programme: "program",
+  // Street-type and place abbreviations (street and saint share "st": both abbreviate to it)
+  street: "st", saint: "st", road: "rd", avenue: "ave", av: "ave", square: "sq", place: "pl",
+  court: "ct", garden: "gdns", gardens: "gdns", lane: "ln", terrace: "ter", mount: "mt",
+  building: "bldg", buildings: "bldg", bldgs: "bldg",
+  // Spelled-out numbers: "One Fleet Place" and "1 Fleet Place"
+  one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10",
+};
+
+/**
+ * A building name reduced to what identifies it: lowercase, "&" read as "and", apostrophes and a plural or
+ * possessive "s" dropped (so "Queen's", "Queens" and "Queen" agree), punctuation ignored, "the" ignored, and
+ * each variant word mapped to its one form.
+ */
+export function normaliseName(s: string): string {
+  return s.toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/['\u2019`]s\b/g, "")   // a possessive: "James's" is "James"
+    .replace(/['\u2019`]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t !== "" && t !== "the")
+    .map((t) => NAME_VARIANTS[t] ?? NAME_VARIANTS[stem(t)] ?? stem(t))
+    .join("");
+}
+
+/** A plural or possessive "s" dropped, so "Queen's", "Queens" and "Queen" agree and "James's" is "James". */
+const stem = (t: string): string => (t.length > 3 && t.endsWith("s") && !t.endsWith("ss") ? t.slice(0, -1) : t);
 
 /** Whether two names are plausibly the same building: equal, or one contains the other (min 6 characters). */
 export function similarNames(a: string, b: string): boolean {
-  const x = norm(a), y = norm(b);
+  const x = normaliseName(a), y = normaliseName(b);
   if (!x || !y) return false;
   if (x === y) return true;
   const [short, long] = x.length <= y.length ? [x, y] : [y, x];
   return short.length >= 6 && long.includes(short);
 }
 
+/** A live opportunity: not archived and not merged. The only kind a seed reference may update. */
+const LIVE = "archived_at is null and status <> 'merged'";
+/** Closed history: the exact complement of LIVE (written with the `o` alias used where it is read). */
+const CLOSED = "(o.archived_at is not null or o.status = 'merged')";
+
 export async function seedDeal(tx: Queryable, ctx: SeedContext, deal: SeedDeal): Promise<SeededDeal> {
   await tx.query("savepoint seed_deal");
 
+  // The record this seed already loaded: LIVE ones only. An archived or merged record is closed
+  // history; matching it here used to send the loader into the update branch below, writing into it.
   const existing = await tx.query<{ opportunity_id: string; property_id: string | null }>(
-    "select opportunity_id, property_id from opportunities where org_id = $1 and reference = $2",
+    `select opportunity_id, property_id from opportunities where org_id = $1 and reference = $2 and ${LIVE}`,
     [ctx.orgId, deal.reference]);
 
   // ---- Property ----
@@ -83,12 +163,30 @@ export async function seedDeal(tx: Queryable, ctx: SeedContext, deal: SeedDeal):
       "select identity_key from properties where property_id = $1", [propertyId])).rows[0]?.identity_key ?? null;
   }
 
-  // ---- Collisions: only for a deal not already loaded by this seed ----
+  // ---- Collisions: only for a deal not already loaded (and still live) by this seed ----
   const collisions: Collision[] = [];
+  let closedHistory = false;
   if (!existing.rows[0]) {
+    // The reference may match a CLOSED record. That is a hold of its own kind, reported first and
+    // by name, and no flag overrides it: the reference is taken (it is unique per organisation),
+    // and closed history is not written to.
+    const closed = await tx.query<{ opportunity_id: string; reference: string | null; name: string; broker_name: string | null; target_price: string | null; status: string; merged_into: string | null }>(
+      `select o.opportunity_id, o.reference, o.name, o.broker_name, o.target_price, o.status,
+              to_jsonb(o) ->> 'merged_into_opportunity_id' as merged_into
+         from opportunities o
+        where o.org_id = $1 and o.reference = $2 and ${CLOSED}`,
+      [ctx.orgId, deal.reference]);
+    if (closed.rows[0]) {
+      closedHistory = true;
+      const survivor = closed.rows[0].merged_into
+        ? (await tx.query<{ name: string }>("select name from opportunities where opportunity_id = $1", [closed.rows[0].merged_into])).rows[0]?.name ?? null
+        : null;
+      collisions.push(closedRecordCollision(closed.rows[0], survivor));
+    }
+
     const others = await tx.query<{ opportunity_id: string; reference: string | null; name: string; broker_name: string | null; target_price: string | null; property_id: string | null }>(
       `select opportunity_id, reference, name, broker_name, target_price, property_id
-         from opportunities where org_id = $1 and archived_at is null`, [ctx.orgId]);
+         from opportunities where org_id = $1 and ${LIVE}`, [ctx.orgId]);
     for (const o of others.rows) {
       const why = o.property_id === propertyId ? "same_property" : similarNames(o.name, deal.name) ? "similar_name" : null;
       if (why) collisions.push({
@@ -96,7 +194,7 @@ export async function seedDeal(tx: Queryable, ctx: SeedContext, deal: SeedDeal):
         price: o.target_price === null ? null : Number(o.target_price), why,
       });
     }
-    if (collisions.length > 0 && !ctx.allowExisting) {
+    if (closedHistory || (collisions.length > 0 && !ctx.allowExisting)) {
       // Undo the property this call may have created: a held deal leaves no trace.
       await tx.query("rollback to savepoint seed_deal");
       return { reference: deal.reference, outcome: "held", collisions };
@@ -109,7 +207,7 @@ export async function seedDeal(tx: Queryable, ctx: SeedContext, deal: SeedDeal):
   let outcome: SeedOutcome;
   if (existing.rows[0]) {
     opportunityId = existing.rows[0].opportunity_id;
-    await tx.query(
+    const updated = await tx.query(
       `update opportunities set
          property_id        = coalesce(property_id, $3),
          market             = coalesce(market, $4),
@@ -123,10 +221,14 @@ export async function seedDeal(tx: Queryable, ctx: SeedContext, deal: SeedDeal):
          photo_url          = case when photo_reference_type is null then $12 else photo_url end,
          source_attachments = case when photo_reference_type is null then $13::jsonb else source_attachments end,
          source_facts       = $14::jsonb || source_facts
-       where org_id = $1 and reference = $2`,
+       where org_id = $1 and reference = $2 and ${LIVE}
+       returning opportunity_id`,
       [ctx.orgId, deal.reference, propertyId, deal.market, deal.sourcing, deal.brokerName, deal.sourceContactName,
        deal.sizeSqft, deal.dealStage, deal.dataCompleteness, p.type, p.url, JSON.stringify(p.attachments),
        JSON.stringify(deal.sourceFacts)]);
+    // The row was found live a moment ago in this transaction; if the update touched anything else,
+    // something is badly wrong and the run must stop rather than carry on.
+    if (updated.rows.length !== 1) throw new Error(`seed update for ${deal.reference} touched ${updated.rows.length} rows, expected 1`);
     outcome = "updated";
   } else {
     const ins = await tx.query<{ opportunity_id: string }>(

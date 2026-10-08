@@ -24,7 +24,7 @@ import { requireEnv } from "./env";
 import { getPool, closePool, withSessionOn, adminQuery, type Session } from "@/lib/db/client";
 import { parseUserRef, type UserRef } from "@/lib/ingestion/user-ref";
 import { parseDealSeed } from "@/lib/ingestion/deal-seed";
-import { seedDeal, type SeededDeal } from "@/lib/data/deal-seed";
+import { seedDeal, describeCollision, type SeededDeal } from "@/lib/data/deal-seed";
 
 interface Args { file: string; org: string; user?: UserRef; write: boolean; allowExisting: boolean }
 
@@ -99,7 +99,7 @@ async function main(): Promise<void> {
          values ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9)`,
         [orgId, batchId, deal.reference, JSON.stringify(rawFile.deals[i]),
          r.outcome === "held" ? "skipped" : r.outcome,
-         r.outcome === "held" ? `held: ${r.collisions.map((c) => `${c.why} ${c.reference ?? c.opportunityId}`).join("; ")}` : null,
+         r.outcome === "held" ? `held: ${r.collisions.map(describeCollision).join("; ")}` : null,
          r.opportunityId ?? null, r.propertyId ?? null, r.propertyUnkeyed ?? false]);
     }
     const n = (o: string) => results.filter((r) => r.outcome === o).length;
@@ -125,7 +125,12 @@ async function main(): Promise<void> {
       if (r.propertyUnkeyed) say("   property: no identity key (no house number in the address); recorded 1:1 and cannot be matched to another record by address");
       for (const f of d.flags) say(`   FLAG ${f.code}: ${f.message}`);
       for (const c of r.collisions) {
-        say(`   ${r.outcome === "held" ? "HELD BECAUSE" : "NOTE"} an opportunity already exists (${c.why}): "${c.name}" [${c.reference ?? "no ref"}] broker ${c.brokerName ?? "-"} price ${money(c.price)}`);
+        if (c.why === "already_merged" || c.why === "already_archived") {
+          // Closed history, not a similar building: said differently so the person reading knows which it is.
+          say(`   HELD BECAUSE this reference is ${describeCollision(c)}: "${c.name}" broker ${c.brokerName ?? "-"} price ${money(c.price)}. Closed records are never written to, and --allow-existing does not change that.`);
+        } else {
+          say(`   ${r.outcome === "held" ? "HELD BECAUSE" : "NOTE"} an opportunity already exists (${c.why}): "${c.name}" [${c.reference ?? "no ref"}] broker ${c.brokerName ?? "-"} price ${money(c.price)}`);
+        }
       }
       say("");
     }
