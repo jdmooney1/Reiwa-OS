@@ -131,7 +131,7 @@ describe("only a Reiwa admin can reach it", () => {
   });
 
   it("a Reiwa staff user (not admin) reads nothing and writes nothing", async () => {
-    const staff = await createStaffSession("zztest.mandate.staff@example.invalid", "ZZTEST Staff", [await orgIdByName("Meiji Shipping")]);
+    const staff = await createStaffSession("zztest.mandate.staff@fixture.example", "ZZTEST Staff", [await orgIdByName("Meiji Shipping")]);
     expect((await withSession(staff, (tx) => tx.query("select * from investor_mandates"))).rows).toEqual([]);
     const other = await org("staffwrite");
     await expect(withSession(staff, (tx) =>
@@ -213,7 +213,7 @@ describe("matching, end to end", () => {
   });
 
   it("a non-admin gets nothing from the matching either", async () => {
-    const staff = await createStaffSession("zztest.mandate.staff@example.invalid", "ZZTEST Staff", [await orgIdByName("Meiji Shipping")]);
+    const staff = await createStaffSession("zztest.mandate.staff@fixture.example", "ZZTEST Staff", [await orgIdByName("Meiji Shipping")]);
     expect((await listActiveMandates(staff)).investors).toEqual([]);
   });
 });
