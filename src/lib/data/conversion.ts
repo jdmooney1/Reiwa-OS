@@ -6,13 +6,28 @@
 //   underwriting business_plan v1 (immutable baseline), and marks the
 //   opportunity acquired/converted. Idempotent: a second call returns the
 //   asset already created for that opportunity.
+//
+// Session 3 addition, landing with migration 0048 (I1): converting now
+// requires a Stage-4 `stage_transition` clearance to already exist, or this
+// function grants it itself in the same transaction — natural, if the
+// Session 3 gate evaluator finds every Stage 3 gate document Final/Signed
+// and the investor-scoped Stage 3 rule satisfied, or logged, with a reason
+// and admin/ic_member authority (enforced by RLS on stage_transition,
+// migration 0041 — a non-privileged override attempt fails there, not here).
+// This is the "I1 trigger + conversion.ts update in the same change" — see
+// docs/24 §3.1.
 // ============================================================================
 import { withSession, type Session, type Queryable } from "@/lib/db/client";
+import { evaluateStageExit } from "@/lib/deal-gates/evaluate";
+import { loadGateContext } from "@/lib/data/deal-gates";
+import { AppError } from "@/lib/errors";
 
 export interface ConvertOptions {
   acquisitionDate?: string | null; // defaults to current_date
   equityInvested?: number | null;
   debt?: number | null;
+  /** Required only when Stage 3's gates are not yet satisfied. */
+  override?: { reason: string } | null;
 }
 
 export async function convertToAsset(
@@ -134,6 +149,46 @@ export async function convertToAsset(
          c.noi, c.occupancy_pct, c.valuation, c.capex, c.debt, c.ltv_pct, c.target_irr, c.target_equity_multiple
        from investment_cases c where c.case_id = $4`,
       [orgId, assetId, acquisitionDate, caseId]);
+
+    // I1 clearance: grant it in this same transaction, before the update
+    // that now requires it (migration 0048). A clearance already on record
+    // (e.g. granted earlier from the deal readiness checklist) is reused,
+    // never duplicated.
+    //
+    // Mirrors 0048/0050's own exemption: `legacy_exempt` (0050) is a fact
+    // about THIS opportunity, true only for deals that existed before the
+    // readiness tracker shipped. Every opportunity created since defaults to
+    // false and is held to Stage 3/4 clearance regardless of whether it ever
+    // touched document_stage — unlike the `document_stage > 0` check this
+    // replaced, a new deal cannot opt itself out just by never engaging the
+    // tracker.
+    const alreadyCleared = await tx.query(
+      "select 1 from stage_transition where opportunity_id = $1 and to_stage = 4 limit 1", [opportunityId]);
+    if (!(opp.legacy_exempt as boolean) && !alreadyCleared.rows[0]) {
+      const ctx = await loadGateContext(tx, opportunityId);
+      const exit = evaluateStageExit(3, ctx.docTypes, ctx.dealDocuments, ctx.investors, ctx.flags);
+      if (exit.satisfied) {
+        await tx.query(
+          "insert into stage_transition (org_id, opportunity_id, from_stage, to_stage, recorded_by) values ($1,$2,$3,4,$4)",
+          [orgId, opportunityId, Number(opp.document_stage), session.userId]);
+      } else if (opts.override?.reason) {
+        // Permission is enforced by RLS on stage_transition (0041) — a
+        // non-admin/ic_member session fails here with the database's own
+        // refusal, not a check duplicated in this function.
+        await tx.query(
+          `insert into stage_transition (org_id, opportunity_id, from_stage, to_stage, override, override_reason, recorded_by)
+           values ($1,$2,$3,4,true,$4,$5)`,
+          [orgId, opportunityId, Number(opp.document_stage), opts.override.reason, session.userId]);
+      } else {
+        const blocking = [
+          ...exit.blockingDealDocs,
+          ...(exit.investorRequirement.satisfied ? [] : [exit.investorRequirement.detail]),
+        ];
+        throw new AppError(
+          `This opportunity is not yet ready to close: ${blocking.join("; ")}. Provide an override reason to convert anyway.`,
+        );
+      }
+    }
 
     // Mark the opportunity acquired & converted.
     await tx.query("update opportunities set stage = 'acquired', status = 'converted' where opportunity_id = $1", [opportunityId]);

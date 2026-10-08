@@ -5,7 +5,7 @@ import type { OppStage } from "@/lib/data/opportunity-types";
 import { ASSET_TYPE_LABEL, STRATEGY_LABEL } from "@/lib/domain";
 import { Badge } from "@/components/ui/badge";
 import type { AssetType, Strategy } from "@/types/database";
-import { STAGE_LABEL, STATUS_LABEL, STATUS_TONE, PRIORITY_LABEL } from "@/lib/workspace/labels";
+import { STAGE_LABEL, STATUS_LABEL, STATUS_TONE, PRIORITY_LABEL, DOCUMENT_STAGE_LABEL } from "@/lib/workspace/labels";
 import { WorkspaceNav } from "@/components/workspace/workspace-nav";
 
 /**
@@ -50,6 +50,18 @@ export function WorkspaceHeader({
                 ASSET_TYPE_LABEL[o.assetType as AssetType] ?? o.assetType,
                 o.strategy ? STRATEGY_LABEL[o.strategy as Strategy] ?? o.strategy : null,
               ])}
+            </div>
+            {/*
+              The combined status strip (docs/24 §A): pipeline stage and deal
+              readiness are two independent progressions on the same record —
+              read out side by side rather than merged into one label, so
+              neither is mistaken for the other. A read-out here too, same as
+              the stage badge above: changing it happens on the Deal readiness
+              section, not in passing.
+            */}
+            <div className="mt-1.5 flex items-center gap-1.5 text-2xs text-ink-faint">
+              <span>Deal readiness:</span>
+              <Badge tone="muted">{DOCUMENT_STAGE_LABEL[o.documentStage]}</Badge>
             </div>
           </div>
 

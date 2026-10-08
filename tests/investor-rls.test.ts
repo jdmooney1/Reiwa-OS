@@ -6,11 +6,12 @@
 // permission function is mocked and no query is routed around a policy: a leak
 // in migration 0005 fails these tests.
 // ============================================================================
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { adminQuery, withInvestorSession, withSession } from "@/lib/db/client";
+import { createOpportunity } from "@/lib/data/opportunities";
 import {
   adminSession, investorAuthUserId, investorContactIdByEmail, investorOrgIdByName,
-  orgIdByName, orgUserSession, publicationByOpportunityName,
+  orgIdByName, orgUserSession, profileIdByEmail, publicationByOpportunityName,
 } from "./helpers";
 
 const KITANO = "principal@kitano-fo.example";     // featured: Queens Gate, diligence tier
@@ -70,6 +71,10 @@ describe("Investors have zero access to internal Reiwa OS data", () => {
     "organizations", "organization_members", "profiles", "properties", "portfolios",
     "opportunities", "investment_cases", "transactions", "assets", "business_plans",
     "performance_periods", "asset_risks", "asset_decisions", "valuations", "fx_rates",
+    // docs/24: deal_document/document_version gained a narrow, conditional investor
+    // read path (0056) — these four did not. Listed explicitly so a future change
+    // that widens one of them by accident fails here, not in production.
+    "deal_investor", "gate_override", "stage_transition", "deal_document_entitlements",
   ];
 
   it("reads nothing from any internal table", async () => {
@@ -633,5 +638,132 @@ describe("The investor_feed projection carries the same guarantees", () => {
     const sakura = await withInvestorSession(sakuraUid, (tx) =>
       tx.query<{ publication_id: string }>("select publication_id from investor_feed"));
     expect(sakura.rows.map((r) => r.publication_id)).toEqual([fenchurch.publicationId]);
+  });
+});
+
+describe("Staff visibility into investor_organizations via deal_investor (0049)", () => {
+  it("an investor still cannot see another investor org through this new policy either", async () => {
+    // 0049 adds a policy keyed on app.has_org(deal_investor.org_id) — an
+    // investor session carries no org_ids claim at all (withInvestorSession's
+    // doc comment: "every internal policy denies them by construction"), so
+    // this new policy must grant an investor nothing beyond what
+    // investor_organizations_self (0005) already did.
+    const { rows } = await withInvestorSession(kitanoUid, (tx) =>
+      tx.query<{ name: string }>("select name from investor_organizations"));
+    expect(rows.map((r) => r.name)).toEqual(["Kitano Family Office"]);
+  });
+
+  it("internal staff see an investor org once it is linked to their own org via deal_investor", async () => {
+    const meiji = await orgIdByName("Meiji Shipping");
+    const staff = orgUserSession([meiji]);
+    const kitanoOrgId = await investorOrgIdByName("Kitano Family Office");
+    const sakuraOrgId = await investorOrgIdByName("Sakura Capital Partners");
+
+    // Before any link: neither investor org is visible to Meiji's staff.
+    const before = await withSession(staff, (tx) => tx.query<{ name: string }>("select name from investor_organizations"));
+    expect(before.rows).toEqual([]);
+
+    const oppId = await createOpportunity(staff, {
+      orgId: meiji, name: "0049 RLS Link Test", market: "London", assetType: "office",
+      strategy: "value_add", currency: "GBP",
+    });
+    await withSession(staff, (tx) =>
+      tx.query("insert into deal_investor (org_id, opportunity_id, investor_org_id) values ($1,$2,$3)",
+        [meiji, oppId, kitanoOrgId]));
+
+    const after = await withSession(staff, (tx) => tx.query<{ name: string }>("select name from investor_organizations"));
+    expect(after.rows.map((r) => r.name)).toEqual(["Kitano Family Office"]);
+    // Sakura was never linked to Meiji via any deal_investor row — stays invisible.
+    expect(after.rows.map((r) => r.name)).not.toContain("Sakura Capital Partners");
+
+    // And by exact id, not just by the unfiltered list.
+    const targeted = await withSession(staff, (tx) =>
+      tx.query("select * from investor_organizations where investor_org_id = $1", [sakuraOrgId]));
+    expect(targeted.rows.length).toBe(0);
+  });
+
+  it("an internal org with no deal_investor link of its own sees no investor org at all", async () => {
+    const aoyama = orgUserSession([await orgIdByName("Aoyama Holdings")], await profileIdByEmail("user@aoyama.com"));
+    const { rows } = await withSession(aoyama, (tx) => tx.query<{ name: string }>("select name from investor_organizations"));
+    expect(rows).toEqual([]);
+  });
+
+  it("a Reiwa admin is unaffected by 0049 — the pre-existing admin policy already covered everything", async () => {
+    const { rows } = await withSession(adminSession, (tx) => tx.query<{ n: number }>("select count(*)::int as n from investor_organizations"));
+    expect(rows[0].n).toBeGreaterThan(0);
+  });
+});
+
+describe("platform_settings is staff-only, not investor-readable (0052)", () => {
+  afterEach(async () => {
+    await adminQuery("delete from platform_settings where key = 'regulated_disclosure'");
+  });
+
+  it("an investor session reads nothing from platform_settings, even once a row exists", async () => {
+    await adminQuery("insert into platform_settings (key, value) values ('regulated_disclosure', 'true'::jsonb)");
+    const { rows } = await withInvestorSession(kitanoUid, (tx) => tx.query("select * from platform_settings"));
+    expect(rows).toEqual([]);
+  });
+
+  it("internal staff (org_user) can read it", async () => {
+    await adminQuery("insert into platform_settings (key, value) values ('regulated_disclosure', 'true'::jsonb)");
+    const meiji = await orgIdByName("Meiji Shipping");
+    const { rows } = await withSession(orgUserSession([meiji]), (tx) =>
+      tx.query<{ key: string }>("select key from platform_settings"));
+    expect(rows.map((r) => r.key)).toContain("regulated_disclosure");
+  });
+
+  it("an explicit allowlist, not a negative check against 'anon': a role outside GlobalRole's four values is denied too", async () => {
+    await adminQuery("insert into platform_settings (key, value) values ('regulated_disclosure', 'true'::jsonb)");
+    const meiji = await orgIdByName("Meiji Shipping");
+    // Constructed past the GlobalRole union on purpose — this proves the
+    // policy fails closed on an unrecognised role, not merely that it
+    // excludes the specific string 'anon'.
+    const futureRoleSession = {
+      userId: await profileIdByEmail("analyst@meiji.com"), orgIds: [meiji],
+      role: "future_role" as unknown as "org_user", canWrite: true,
+    };
+    const { rows } = await withSession(futureRoleSession, (tx) => tx.query("select * from platform_settings"));
+    expect(rows).toEqual([]);
+  });
+});
+
+describe("capital-pipeline test-import metadata is not investor-readable", () => {
+  // scripts/import-capital-pipeline-test-orgs.ts writes exactly this shape:
+  // investor_organizations.notes holds ONLY the tag, and every pipeline
+  // field (tier, phase, composite, intro route, ...) lives in
+  // platform_settings instead, keyed by that same tag. This proves the
+  // split actually holds even in the one case that matters: an investor
+  // whose own organisation happens to be one of these test rows — RLS is
+  // row-level, not column-level (investor_organizations_self, 0005, matches
+  // by investor_org_id alone), so the only thing stopping a leak here is
+  // that `notes` itself never contains the metadata.
+  it("an investor reading their own (test-imported) org sees only the tag, and cannot read its platform_settings metadata", async () => {
+    const tag = "[test-import:capital-pipeline:rls-probe-co]";
+    const org = await adminQuery<{ investor_org_id: string }>(
+      "insert into investor_organizations (name, notes) values ('RLS Probe Co', $1) returning investor_org_id",
+      [tag]);
+    const investorOrgId = org[0].investor_org_id;
+    await adminQuery(
+      "insert into platform_settings (key, value) values ($1, $2::jsonb)",
+      [tag, JSON.stringify({ tier: "A", composite: 99, nextAction: "Should never reach the portal" })]);
+
+    const authUser = await adminQuery<{ id: string }>(
+      "insert into auth.users (email) values ('rls-probe@example.com') returning id");
+    await adminQuery(
+      "insert into investor_contacts (investor_org_id, email, name, auth_user_id) values ($1,'rls-probe@example.com','RLS Probe Contact',$2)",
+      [investorOrgId, authUser[0].id]);
+
+    // The investor CAN read their own org row (that part of 0005 is by
+    // design) — but all they get is the inert tag.
+    const { rows: own } = await withInvestorSession(authUser[0].id, (tx) =>
+      tx.query<{ notes: string }>("select notes from investor_organizations where investor_org_id = $1", [investorOrgId]));
+    expect(own).toEqual([{ notes: tag }]);
+    expect(own[0].notes).not.toMatch(/tier|composite|next.?action/i);
+
+    // The metadata itself, in platform_settings, is unreachable regardless.
+    const { rows: settings } = await withInvestorSession(authUser[0].id, (tx) =>
+      tx.query("select * from platform_settings where key = $1", [tag]));
+    expect(settings).toEqual([]);
   });
 });

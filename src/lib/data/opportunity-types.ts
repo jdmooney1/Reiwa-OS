@@ -41,6 +41,8 @@ export interface Opportunity {
   strategy: string | null;
   stage: OppStage;
   status: OppStatus;
+  /** Deal-readiness progression (docs/24 §2.2) — independent of `stage`. */
+  documentStage: 0 | 1 | 2 | 3 | 4;
   currency: string;
   targetPrice: number | null;
   niy: number | null;

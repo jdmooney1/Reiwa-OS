@@ -16,6 +16,7 @@ import { withoutLocation, type Opportunity, type LocationField } from "@/lib/dat
 import type { UnderwritingVersion } from "@/lib/data/underwriting-types";
 import { getOpportunity, listOpportunitiesOn } from "@/lib/data/opportunities";
 import { listVersions } from "@/lib/data/underwriting";
+import { readinessSummary, type ReadinessSummaryRow } from "@/lib/data/deal-gates";
 
 export interface OpportunityFile {
   opportunity: Opportunity;
@@ -34,7 +35,12 @@ export interface OpportunityFile {
     risksOpen: number;
     decisions: number;
     documents: number;
+    investors: number;
+    /** Gate documents at the CURRENT document_stage not yet Final/Signed. */
+    readinessOpen: number;
   };
+  /** docs/24 — the deal-readiness progression, read alongside `stage`. */
+  readiness: ReadinessSummaryRow[];
 }
 
 export async function getOpportunityFile(
@@ -64,23 +70,29 @@ export async function getOpportunityFile(
          (select count(*) from opportunity_risks
            where opportunity_id = $1 and status = 'open')                      as risks_open,
          (select count(*) from ic_decisions where opportunity_id = $1)         as decisions,
-         (select count(*) from opportunity_documents where opportunity_id = $1) as documents`,
+         (select count(*) from opportunity_documents where opportunity_id = $1) as documents,
+         (select count(*) from deal_investor where opportunity_id = $1)        as investors`,
       [opportunityId]);
     const r = rows[0];
     return {
       ddOpen: Number(r.dd_open), ddIssues: Number(r.dd_issues),
       ddOverdue: Number(r.dd_overdue), ddTotal: Number(r.dd_total),
       risksOpen: Number(r.risks_open), decisions: Number(r.decisions),
-      documents: Number(r.documents),
+      documents: Number(r.documents), investors: Number(r.investors),
     };
   });
+
+  const readiness = await readinessSummary(session, opportunityId);
+  const current = readiness.find((row) => row.stage === opportunity.documentStage);
+  const readinessOpen = current ? current.gateDocTotal - current.gateDocCleared : 0;
 
   return {
     opportunity,
     authoritative,
     basis: approved ? "approved" : working ? "working" : "none",
     versionCount: versions.length,
-    counts,
+    counts: { ...counts, readinessOpen },
+    readiness,
   };
 }
 

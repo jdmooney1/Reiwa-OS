@@ -253,7 +253,9 @@ describe("3. delivery holds no rule of its own", () => {
     expect(route).not.toMatch(/getSession\(|toDbSession|mayReadPhoto/);
     const staff = stripComments(read("src/app/api/asset-photos/[photoId]/route.ts"));
     expect(staff).not.toMatch(/getPortalSession|withInvestorSession|issuePortalPhotoDownload/);
-    expect(stripComments(read("src/lib/photos/access.ts"))).toContain('role === "reiwa_admin" || role === "reiwa_staff" || role === "org_user"');
+    expect(stripComments(read("src/lib/photos/access.ts"))).toContain(
+      'role === "reiwa_admin" || role === "org_user" || role === "ic_member" || role === "reiwa_staff"',
+    );
   });
 
   it("the thumbnail variant is honoured only for an exact match, with the same authorisation", () => {

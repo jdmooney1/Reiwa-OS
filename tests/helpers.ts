@@ -165,3 +165,25 @@ export async function createStaffSession(email: string, name: string, orgIds: st
   }
   return { userId, orgIds, role: "reiwa_staff", canWrite: true };
 }
+
+/**
+ * A real investor contact: a Supabase Auth account plus an `investor_contacts`
+ * row, active, under the named investor organisation. Same posture as
+ * createStaffSession — a real identity through the real provisioning path, not
+ * a synthetic uuid — so `withInvestorSession(authUserId, ...)` resolves it
+ * exactly as auth.uid() would for a real sign-in.
+ */
+export async function createInvestorContact(
+  investorOrgId: string, email: string, name: string,
+): Promise<{ authUserId: string; investorContactId: string }> {
+  const { createSupabaseAdminClient, ensureAuthUser } = await import("@/lib/supabase/admin");
+  const { DEMO_PASSWORD } = await import("@/lib/db/seed");
+  const authUserId = await ensureAuthUser(createSupabaseAdminClient(), { email, password: DEMO_PASSWORD, name });
+  const rows = await adminQuery<{ investor_contact_id: string }>(
+    `insert into investor_contacts(investor_org_id, email, name, auth_user_id, is_active)
+     values ($1,$2,$3,$4,true)
+     on conflict (lower(email)) do update set investor_org_id = excluded.investor_org_id, auth_user_id = excluded.auth_user_id, is_active = true
+     returning investor_contact_id`,
+    [investorOrgId, email, name, authUserId]);
+  return { authUserId, investorContactId: rows[0].investor_contact_id };
+}

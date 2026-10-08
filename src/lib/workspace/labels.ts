@@ -12,6 +12,18 @@ export const STAGE_LABEL: Record<OppStage, string> = {
   ic: "IC", approved: "Approved", acquired: "Acquired",
 };
 
+/** docs/24 §2.2 — deal-readiness, independent of the pipeline `stage` above. */
+export const DOCUMENT_STAGE_LABEL: Record<0 | 1 | 2 | 3 | 4, string> = {
+  0: "Screen", 1: "Pitch-ready", 2: "Soft-circled", 3: "Closing", 4: "Hold",
+};
+
+export const DEAL_INVESTOR_STATUS_LABEL: Record<string, string> = {
+  matched: "Matched", teaser_sent: "Teaser sent", nda_signed: "NDA signed",
+  pack_released: "Pack released", ioi_received: "IOI received",
+  soft_circled: "Soft-circled", committed: "Committed", completed: "Completed",
+  declined: "Declined",
+};
+
 export const STATUS_LABEL: Record<OppStatus, string> = {
   active: "Active", rejected: "Rejected", withdrawn: "Withdrawn",
   lost: "Lost", converted: "Converted",

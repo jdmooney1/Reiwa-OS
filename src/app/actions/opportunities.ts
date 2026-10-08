@@ -123,10 +123,11 @@ export async function reactivateAction(id: string): Promise<void> {
   revalidatePath("/pipeline");
 }
 
-export async function convertToAssetAction(id: string): Promise<void> {
+export async function convertToAssetAction(id: string, overrideReason?: string | null): Promise<void> {
   const session = await requireDbSession();
-  const { assetId } = await convertToAsset(session, id);
+  const { assetId } = await convertToAsset(session, id, overrideReason ? { override: { reason: overrideReason } } : {});
   revalidatePath("/portfolio");
   revalidatePath("/pipeline");
+  revalidatePath(`/opportunities/${id}`, "layout");
   redirect(`/assets/${assetId}`);
 }

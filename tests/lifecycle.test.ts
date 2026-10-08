@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { adminQuery, type Session } from "@/lib/db/client";
+import { adminQuery, withSession, type Session } from "@/lib/db/client";
 import {
   createOpportunity, getOpportunity, listOpportunities, setStage,
 } from "@/lib/data/opportunities";
@@ -8,7 +8,7 @@ import { getAssetFile, listAssetFiles, addPerformancePeriod } from "@/lib/data/a
 import { getPortfolioData } from "@/lib/data/portfolio";
 import { portfolioAggregate } from "@/lib/asset-intelligence/metrics";
 import { threeWay, variance, varianceTone } from "@/lib/asset-intelligence/metrics";
-import { orgIdByName, orgUserSession } from "./helpers";
+import { adminSession, orgIdByName, orgUserSession } from "./helpers";
 
 let meiji: string;
 let session: Session;
@@ -47,6 +47,12 @@ describe("Opportunity → Asset conversion", () => {
     for (const s of ["screening", "underwriting", "ic", "approved"] as const) {
       await setStage(session, id, s);
     }
+    // This test is about conversion's own mechanics (the underwriting
+    // baseline, idempotency), not deal-document readiness gating (I1,
+    // migration 0048/0050) — exempt it the same way every opportunity that
+    // predates that feature already is.
+    await withSession(adminSession, (tx) =>
+      tx.query("update opportunities set legacy_exempt = true where opportunity_id = $1", [id]));
     const { assetId, alreadyExisted } = await convertToAsset(session, id, {
       acquisitionDate: "2026-08-27", equityInvested: 20000000, debt: 20000000,
     });

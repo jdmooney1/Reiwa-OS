@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run --config vitest.unit.config.mts",
+    "db:whoami": "tsx scripts/whoami-db.ts",
     "db:reset": "tsx scripts/reset.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
@@ -21,6 +22,9 @@
     "db:storage:test": "tsx scripts/storage-test.ts",
     "test:e2e": "playwright test",
     "db:load-deal-seed": "tsx scripts/load-deal-seed.ts",
+    "db:seed-doc-types": "tsx scripts/seed-doc-types.ts",
+    "db:import-capital-pipeline": "tsx scripts/import-capital-pipeline-test-orgs.ts",
+    "db:remove-capital-pipeline-import": "tsx scripts/remove-capital-pipeline-import.ts",
     "db:audit-documents": "tsx scripts/audit-publication-documents.ts",
     "db:unshare-documents": "tsx scripts/unshare-publication-documents.ts"
   },
@@ -59,5 +63,9 @@
   },
   "overrides": {
     "uuid": "^11.0.0"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "unrs-resolver": true
   }
 }

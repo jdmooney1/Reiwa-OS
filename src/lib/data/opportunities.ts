@@ -20,7 +20,8 @@ function mapOpp(r: Record<string, any>): Opportunity {
   return {
     opportunityId: r.opportunity_id, orgId: r.org_id, propertyId: r.property_id ?? null,
     name: r.name, market: str(r.market), submarket: str(r.submarket), assetType: r.asset_type,
-    strategy: str(r.strategy), stage: r.stage, status: r.status, currency: r.currency,
+    strategy: str(r.strategy), stage: r.stage, status: r.status,
+    documentStage: Number(r.document_stage) as 0 | 1 | 2 | 3 | 4, currency: r.currency,
     targetPrice: num(r.target_price), niy: num(r.niy), reversionaryYield: num(r.reversionary_yield),
     passingRent: num(r.passing_rent), erv: num(r.erv), capexBudget: num(r.capex_budget),
     targetIrr: num(r.target_irr), equityMultiple: num(r.equity_multiple), probability: num(r.probability),

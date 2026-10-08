@@ -4,13 +4,17 @@ Two different document stories live under this heading. Phase 0 separated them,
 because conflating them was how an unbuilt feature borrowed the credibility of a
 built one.
 
-> **Status after Phase 0.**
+> **Status, corrected.** This status block previously listed the opportunity-scoped
+> vault as something "Phase 1 must build." That became stale once migration `0008`
+> shipped `opportunity_documents`, and stayed stale — uncorrected — until the docs/24
+> audit caught it. Three document stories now live under this heading, not two.
 >
 > | | |
 > | --- | --- |
 > | **Exists today, in production** | **Investor document delivery** — private bucket, tier-gated entitlements, 60-second signed URLs, append-only download trail. Described in §1. |
-> | **Reusable domain logic** | `src/lib/documents/catalog.ts` — the 15-category taxonomy and its mapping to DD sections. Pure, kept intact. |
-> | **Phase 1 must build** | An opportunity-scoped document vault: a `documents` table keyed on `opportunity_id`, upload through Storage, and the vault screen. §2. |
+> | **Exists today, built** | **The opportunity document vault** — `opportunity_documents` (migration `0008`), `org_id`-scoped, real Storage upload, the vault screen at `/opportunities/[opportunityId]/documents`. §2, corrected below. |
+> | **Exists today, built, a third system** | **The deal document catalogue** (`deal_document`, docs/24) — catalogue-driven, versioned, gated documents, deliberately kept separate from the ad-hoc vault above. See §2a. |
+> | **Reusable domain logic** | `src/lib/documents/catalog.ts` — the 15-category taxonomy and its mapping to DD sections. Pure, kept intact, used by §2. |
 > | **Deleted, deliberately** | The "AI document ingestion" engine. §3. |
 
 ---
@@ -49,7 +53,7 @@ Phase 1 must not touch any of this.
 
 ---
 
-## 2. Opportunity document vault (to build)
+## 2. Opportunity document vault (built)
 
 ### Categories (15) — preserved
 
@@ -64,18 +68,36 @@ and Tenancy*, EPC → *ESG and Compliance*, Title → *Tenure and Ownership*, an
 That mapping is the genuinely valuable part and survived Phase 0 intact. It is what
 turns a folder of files into structured diligence memory rather than a file dump.
 
-### What Phase 1 must build
+### What was built (migration `0008`, `src/lib/data/opportunity-documents.ts`)
 
-- A `documents` table keyed on `opportunity_id`, `org_id`-scoped, with the standard
-  RLS policies: `storage_path`, `category`, `file_name`, `mime_type`, `size_bytes`,
-  `version`, `uploaded_by`, `uploaded_at`.
-- Real upload to Supabase Storage. The previous vault added placeholder rows in
-  client state and uploaded nothing.
-- A vault screen: filters by category, and the link from a document to the DD
-  section its category maps to.
+- `opportunity_documents`, keyed on `opportunity_id`, `org_id`-scoped, the standard
+  RLS policies: `storage_path`, `category` (free text, the 15-category taxonomy
+  above is an app-layer convention, not a DB enum), `file_name`, `mime_type`,
+  `size_bytes`, `access_level` (`standard`/`diligence`/`internal`), `uploaded_by`,
+  `created_at`. (No `version` column — this table is for ad-hoc, single-shot
+  uploads; a document that needs real versioning belongs in `deal_document` instead,
+  §2a.)
+- Real upload to Supabase Storage, in the **same** private bucket as investor
+  document delivery (`publication-documents`) — a relationship, not a second storage
+  system.
+- The vault screen at `/opportunities/[opportunityId]/documents`, filtered by
+  category, linked to the DD section its category maps to.
 
-Reuse the delivery discipline from §1 — private bucket, server-minted short-lived
-signed URLs, authorisation decided by a policy rather than by application code.
+Reuses the delivery discipline from §1, exactly as planned — private bucket,
+server-minted short-lived signed URLs, authorisation decided by a policy rather than
+by application code.
+
+## 2a. The deal document catalogue — a deliberately separate third system
+
+`opportunity_documents` is for a stray file with no catalogue entry, no gate, no
+version history. `deal_document` (docs/24) exists only for rows that name a
+`doc_type` catalogue entry: it is versioned (`document_version`), stage-gated, and
+investor/counterparty-scoped where the catalogue says so. The two are enforced apart,
+not left to convention — `deal_document.doc_type_key not null references
+doc_type(key)` makes a catalogue type unable to live anywhere else, and a trigger on
+`opportunity_documents` (migration `0039`) refuses a new row whose free-text category
+collides with a catalogue key or name. See `24-deal-document-system.md` §9 for the
+full reasoning.
 
 ---
 
