@@ -7,9 +7,11 @@ decisions (`05`, migration `0008`), the memo composer (`07`), the investor porta
 (`12`–`15`), and the prospect-link surface (`20`) — extends each rather than
 duplicating it.
 
-> **Status.** Session 2 (schema + catalogue seed) complete. Session 3 (gate
-> evaluator, checklist/tracker UI, I1 enforcement) not yet built. Sessions 4–8
-> await a real deal run through Sessions 2–3 first.
+> **Status.** Sessions 2–3 (schema, catalogue seed, gate evaluator, checklist/
+> tracker UI) complete. Session 4a (investor visibility RLS on deal_document/
+> document_version, §13) complete. Session 4b (watermarking, per-document
+> expiry/download-disable) and 4c (staff engagement view, deal_shares ↔
+> deal_document linkage, EN/JA investor labels, override UI) not yet built.
 
 ---
 
@@ -272,3 +274,80 @@ database refuses it and names the linked document instead.
   a given environment happened to apply. A survey of every other `create or replace function`,
   `create policy` and trigger in both branches' 0033–0035/0033–0052 found no other collision —
   this constraint was the only shared, non-additively-redefined object.
+
+## 13. Session 4a — investor visibility, built (migrations 0054–0059)
+
+Split into three rounds; this section covers 4a only. 4b (watermarking —
+`pdf-lib`, per-document `download_disabled`/`expires_at`) and 4c (staff
+engagement view, `deal_shares` ↔ `deal_document` linkage, EN/JA investor
+labels, the action-gate override UI) are not built yet.
+
+**The entitlement bridge (decision A).** `deal_document_entitlements` (0054)
+is a sibling to `publication_entitlements` (0005), not a widening of it —
+same default-deny shape, keyed on `(deal_investor_id, deal_document_id)`
+instead of `(investor_org_id, publication_id)`. Zero schema change to the
+existing publication flow. It follows docs/24's own RLS convention
+(`org_id` + `app.has_org()`) rather than 0005's `app.is_admin()`-only one,
+because it belongs to the `deal_document` family, not the investor-portal
+one.
+
+**The missing rule, added on review.** `investor_nda` and `investor_teaser`
+are exempt from the entitlement gate entirely — readable by a matched
+investor from the moment they exist, independent of `deal_investor.status`:
+an investor must be able to read the NDA in order to sign it, and the teaser
+is pre-NDA marketing collateral. The exemption is still subject to
+`deal_room_enabled` and to `investor_nda`'s own per-investor scope (investor
+A can never read investor B's NDA row) — see `app.investor_may_read_deal_document`
+(0056) and `tests/deal-document-investor-access.test.ts`.
+
+**`underwriting_model` is excluded by key**, in
+`app.investor_document_audience_ok` (0056), not derived from
+`doc_type.audience` — the same posture as §6's memo-backing boundaries: an
+absolute rule is hard-coded so it cannot drift from a catalogue edit nobody
+notices.
+
+**Decision B, enforced in `deal_investor` itself (0058).**
+`deal_document.status` is authoritative. A `deal_investor` row cannot move to
+`nda_signed` unless its `investor_nda` document is `signed`, nor to
+`ioi_received` unless its `investor_ioi` document is `final` — or a
+`gate_override` (action `deal_investor_status_override`, keyed by
+`gate_doc_type_key`) was recorded in the *same transaction*, same `go.at =
+now()` correlation as 0038/0046. Deliberately narrow: only these two target
+values are gated; the funnel's sequencing is otherwise unenforced, as before.
+
+**Decision C, enforced on `document_version` (0056).** No version of a
+document is investor-visible until `deal_document.status` reaches
+`final`/`signed` — the governing version's own lifecycle gates every version,
+including a non-governing JA one, which additionally needs
+`translation_status = 'reviewed'` on top of that.
+
+**Decision F — unblocking delivery before Session 6 (0059).**
+`document_version.is_manual_override` lets a PDF be manually uploaded for any
+investor-facing Produce `doc_type` even when its catalogue
+`generation_mode` is `template_fill`/`memo_backed`/`none` (not only
+`manual_upload`) — a trigger refuses it for a non-Produce or non-investor
+type, and for one already `manual_upload` (pointless). The catalogue's own
+`generation_mode` is unchanged; Session 6 is expected to make this the
+exception again once real generation exists.
+
+**The view-log write path (0057) and the delivery route.**
+`document_view_log`'s only INSERT policy was staff-only
+(`app.has_org()`, unreachable by an investor session) — 0057 adds the
+investor's own, scoped to their own `investor_contact_id` and to a version
+they may actually read right now. `secure-delivery.ts`'s
+`issueDocumentDownload` — "the only path from an investor to a byte" — now
+tries a `deal_document` version after a publication-document lookup misses,
+refused identically either way; delivery is still a plain signed URL with no
+watermark, expiry or disable yet (4b).
+
+**Not re-litigated, flagged instead:** `platform_settings_select` (0052) was
+**not** widened to admit `reiwa_staff` — left exactly as decided.
+
+**Tests:** `tests/deal-document-investor-access.test.ts` (integration,
+real RLS) and `tests/unit/deal-room-boundaries.test.ts` (structural). Neither
+has been run against a real database in the environment this was written in
+— no `TEST_DATABASE_URL`/`TEST_SUPABASE_*` were configured there; see `28` for
+the exact setup runbook. `tests/investor-rls.test.ts`'s zero-access table list
+was extended with `deal_investor`, `gate_override`, `stage_transition` and
+`deal_document_entitlements` — none of which gained any investor-facing
+policy in this round, unlike `deal_document`/`document_version`.

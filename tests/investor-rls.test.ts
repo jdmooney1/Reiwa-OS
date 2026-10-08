@@ -71,6 +71,10 @@ describe("Investors have zero access to internal Reiwa OS data", () => {
     "organizations", "organization_members", "profiles", "properties", "portfolios",
     "opportunities", "investment_cases", "transactions", "assets", "business_plans",
     "performance_periods", "asset_risks", "asset_decisions", "valuations", "fx_rates",
+    // docs/24: deal_document/document_version gained a narrow, conditional investor
+    // read path (0056) — these four did not. Listed explicitly so a future change
+    // that widens one of them by accident fails here, not in production.
+    "deal_investor", "gate_override", "stage_transition", "deal_document_entitlements",
   ];
 
   it("reads nothing from any internal table", async () => {
