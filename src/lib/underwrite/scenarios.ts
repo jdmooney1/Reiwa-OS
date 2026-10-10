@@ -170,15 +170,23 @@ export function applyTerms(leases: Lease[], params: Params, t: ProposedTerms): {
     const total = (y * 12 + (m - 1)) + k;
     return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   };
+  // Space vacant now, or whose lease or guarantee ends within a year, is what a
+  // vendor guarantee or top-up would cover. An extra guarantee runs from the later
+  // of completion and the unit's current end, at the passing rent or, for empty
+  // space, at market rent.
   let affectedRent = 0;
   const out = leases.map((l) => {
-    const end = startIdx(l.guaranteeUntil ?? l.expiry);
+    const end = startIdx(l.guaranteeUntil ?? l.expiry ?? (l.rentPa > 0 ? null : params.startDate));
     const soon = end !== null && end <= 12;
     if (!soon) return l;
-    affectedRent += l.rentPa > 0 ? l.rentPa : (l.ervPa ?? (l.ervPsf ?? 0) * l.areaSqft);
-    if (t.extraGuaranteeMonths <= 0 || !l.guaranteeUntil) return l;
-    const g = addMonths(l.guaranteeUntil, Math.round(t.extraGuaranteeMonths));
-    return { ...l, guaranteeUntil: g, expiry: l.expiry && l.expiry < g ? g : l.expiry };
+    const market = l.ervPa ?? (l.ervPsf != null ? l.ervPsf * l.areaSqft : 0);
+    const covered = l.rentPa > 0 ? l.rentPa : market;
+    affectedRent += covered;
+    if (t.extraGuaranteeMonths <= 0 || covered <= 0) return l;
+    const from = l.guaranteeUntil ?? l.expiry ?? params.startDate;
+    const base = from < params.startDate ? params.startDate : from;
+    const g = addMonths(base, Math.round(t.extraGuaranteeMonths));
+    return { ...l, rentPa: covered, guaranteeUntil: g, expiry: !l.expiry || l.expiry < g ? g : l.expiry };
   });
   return {
     leases: out,

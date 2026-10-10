@@ -104,6 +104,12 @@ export function AssessmentView({
             <p className="text-base font-medium text-ink">{a.headline}</p>
             <p className="mt-2 whitespace-pre-line text-sm text-ink-muted">{a.rationale}</p>
             <Provenance>Written by {run.model} from the figures below. Judgement, not a figure: every number on this page is the engine&apos;s.</Provenance>
+            {(r.unsourcedFigures?.length ?? 0) > 0 && (
+              <p className="mt-2 rounded border border-caution/40 bg-caution/10 px-3 py-1.5 text-xs text-ink" role="status">
+                The written view mentions {r.unsourcedFigures!.join(", ")}, which {r.unsourcedFigures!.length > 1 ? "do" : "does"} not match any figure
+                the engine produced. Treat {r.unsourcedFigures!.length > 1 ? "them" : "it"} as the writer&apos;s, not the model&apos;s.
+              </p>
+            )}
           </div>
         )}
         {r.gaps.length > 0 && (

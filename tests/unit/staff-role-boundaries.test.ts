@@ -21,6 +21,7 @@ function walk(dir: string, out: string[] = []): string[] {
 const stripSqlComments = (s: string) => s.replace(/--[^\n]*/g, "");
 const MIGRATIONS = readdirSync(join(root, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
 const NEW = "0035_staff_role.sql";
+const ASSESSMENTS = "0036_deal_assessments.sql";
 
 describe("the role is a database fact", () => {
   it("the type and the profile constraint both know reiwa_staff", () => {
@@ -42,8 +43,14 @@ describe("the role is a database fact", () => {
 describe("staff is admitted in exactly two places, and nowhere investor-facing", () => {
   const files = MIGRATIONS.map((f) => ({ f, sql: stripSqlComments(read(`supabase/migrations/${f}`)) }));
 
-  it("app.is_staff() appears in no migration but 0035", () => {
-    for (const { f, sql } of files.filter((x) => x.f !== NEW)) expect(sql, f).not.toContain("is_staff");
+  it("app.is_staff() appears in no migration but 0035, and 0036 on deal assessments only", () => {
+    for (const { f, sql } of files.filter((x) => x.f !== NEW && x.f !== ASSESSMENTS)) expect(sql, f).not.toContain("is_staff");
+    const sql = files.find((x) => x.f === ASSESSMENTS)!.sql;
+    const policies = [...sql.matchAll(/create policy (\w+) on (?:public\.)?(\w+) for (\w+)[\s\S]*?;/g)];
+    const admitting = policies.filter((p) => p[0].includes("is_staff"));
+    expect(admitting.map((p) => p[2])).toEqual(["deal_assessments", "deal_assessments"]);
+    // Staff is a further restriction there, never a widening: every one also asks has_org.
+    for (const p of admitting) expect(p[0]).toContain("app.has_org(org_id)");
   });
 
   it("and in 0035 it is the function, its grant, and policies on the two memo drafting aids only", () => {

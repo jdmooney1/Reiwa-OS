@@ -163,11 +163,17 @@ export interface EngineResult {
 // Arithmetic helpers
 // ---------------------------------------------------------------------------
 
-/** Annual IRR by bisection; NaN when the flows do not change sign. */
+/**
+ * Annual IRR by bisection. NaN when it does not exist or is not meaningful: a
+ * non-finite flow, flows that do not start with an outlay, or no sign change in
+ * the bracket. A NaN must never come back as the bracket's end point (-99%).
+ */
 export function irr(flows: number[]): number {
+  if (flows.length < 2 || !flows.every(Number.isFinite) || flows[0] >= 0) return NaN;
   const f = (r: number) => flows.reduce((s, c, t) => s + c / Math.pow(1 + r, t), 0);
   let lo = -0.99, hi = 2;
-  if (f(lo) * f(hi) > 0) return NaN;
+  const flo = f(lo), fhi = f(hi);
+  if (!Number.isFinite(flo) || !Number.isFinite(fhi) || flo * fhi > 0) return NaN;
   for (let i = 0; i < 200; i++) {
     const mid = (lo + hi) / 2;
     if (f(mid) > 0) lo = mid; else hi = mid;
@@ -177,12 +183,25 @@ export function irr(flows: number[]): number {
 
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-/** Whole months from `start` to `date` (negative when before). Null for an absent or bad date. */
+/**
+ * Months from `start` to `date`, to the nearest month boundary: a date in the
+ * second half of a month counts from the next one, so a lease ending on
+ * 31 December keeps December's rent. Negative when before. Null for an absent
+ * or bad date.
+ */
 export function monthIndex(start: string, date: string | null | undefined): number | null {
   if (!date) return null;
   const a = ISO.exec(start), b = ISO.exec(date.trim());
   if (!a || !b) return null;
-  return (Number(b[1]) - Number(a[1])) * 12 + (Number(b[2]) - Number(a[2]));
+  const whole = (Number(b[1]) - Number(a[1])) * 12 + (Number(b[2]) - Number(a[2]));
+  return whole + (Number(b[3]) >= 16 ? 1 : 0);
+}
+
+/** The calendar year a month index falls in. */
+function yearOfMonth(start: string, t: number): number {
+  const m = ISO.exec(start);
+  if (!m) return 0;
+  return Math.floor((Number(m[1]) * 12 + Number(m[2]) - 1 + t) / 12);
 }
 
 function startYear(start: string): number {
@@ -214,63 +233,90 @@ function ervAt(lease: Lease, p: Params, t: number, ervShock: number): number {
   return base * (1 + ervShock) * Math.pow(1 + p.ervGrowth[lease.use], t / 12);
 }
 
+/** Rent reviews happen at this interval unless a lease says otherwise (UK five-yearly convention). */
+const REVIEW_EVERY = 60;
+
 /**
  * Monthly rent, void cost and capex for one unit over `n` months.
  *
- * Expiry follows a blended path: a share `renewalProb` renews at market with a
- * short incentive, the rest leaves and is re-let after a void with a longer one.
- * The blend is applied to the void and incentive lengths, which keeps one
- * deterministic path per unit (the usual market-leasing-profile convention).
+ * At an expiry a share `renewalProb` renews at market with a short incentive and
+ * the rest leaves and is re-let after a void with a longer one. The blend is
+ * applied to the void and incentive lengths, which keeps one deterministic path
+ * per unit (the usual market-leasing-profile convention). Nobody can renew space
+ * that is vacant, guaranteed by the vendor, or vacated at a break, so the first
+ * re-letting of those is a full void; later re-lettings use the blend.
  */
 function unitFlows(lease: Lease, p: Params, n: number, shock: Shock): UnitFlows {
   const rent = new Array(n).fill(0), headline = new Array(n).fill(0), voidCost = new Array(n).fill(0), capex = new Array(n).fill(0);
-  const stay = lease.renewalProb ?? p.renewalProb;
-  const q = 1 - stay;
-  const voidM = Math.round((p.voidMonths + shock.voidAdd) * q);
-  const rfM = Math.round((p.rentFreeMonths + shock.rfAdd) * q + (lease.renewalRentFreeMonths ?? p.renewalRentFreeMonths) * stay);
-  const fee = p.lettingFeePct * (q + 0.5 * stay);
-  const cpx = (lease.reletCapexPsf ?? 0) * lease.areaSqft * q;
+  const blend = (stay: number) => {
+    const q = 1 - stay;
+    return {
+      voidM: Math.round((p.voidMonths + shock.voidAdd) * q),
+      rfM: Math.round((p.rentFreeMonths + shock.rfAdd) * q + (lease.renewalRentFreeMonths ?? p.renewalRentFreeMonths) * stay),
+      fee: p.lettingFeePct * (q + 0.5 * stay),
+      cpx: (lease.reletCapexPsf ?? 0) * lease.areaSqft * q,
+    };
+  };
+  const usual = lease.renewalProb ?? p.renewalProb;
 
   let rate = lease.rentPa;
   let end = monthIndex(p.startDate, lease.expiry);
+  let broken = false;
   if (shock.breaksExercised && lease.breakDate) {
     const b = monthIndex(p.startDate, lease.breakDate);
-    if (b !== null && (end === null || b < end)) end = b;
+    if (b !== null && (end === null || b < end)) { end = b; broken = true; }
   }
-  const review = monthIndex(p.startDate, lease.reviewDate ?? null);
   const guarantee = monthIndex(p.startDate, lease.guaranteeUntil ?? null);
-  if (guarantee !== null && (end === null || guarantee > end)) end = Math.max(0, guarantee);
-  if (lease.rentPa <= 0 && guarantee === null) end = 0; // vacant at completion
+  // A guarantee covers a vacant or expiring unit; it never shortens an open-ended lease.
+  if (guarantee !== null && end !== null && guarantee > end) end = guarantee;
+  const vacant = lease.rentPa <= 0;
+  if (vacant) end = 0; // vacant at completion; a guarantee needs a guaranteed rent (refused at input)
   if (end !== null && end < 0) end = 0;
+  const noTenant = vacant || guarantee !== null || broken;
+
+  // Reviews of the current lease: the stated date and every five years after it.
+  // A date at or before completion has already happened. An open-ended lease with
+  // no stated date reviews five-yearly from completion.
+  const basis = lease.reviewBasis ?? "upward_only";
+  const first = monthIndex(p.startDate, lease.reviewDate ?? null);
+  const reviews = new Set<number>();
+  if (basis !== "none") {
+    let r = first ?? (end === null ? REVIEW_EVERY : null);
+    if (r !== null) {
+      while (r <= 0) r += REVIEW_EVERY;
+      for (; r < n; r += REVIEW_EVERY) reviews.add(r);
+    }
+  }
 
   let t = 0;
-  // Current lease.
   const stop = end === null ? n : Math.min(n, end);
   for (; t < stop; t++) {
-    if (review !== null && t === review && review > 0) {
+    if (reviews.has(t)) {
       const m = ervAt(lease, p, t, shock.ervShock);
-      rate = lease.reviewBasis === "open_market" ? m : lease.reviewBasis === "none" ? rate : Math.max(rate, m);
+      rate = basis === "open_market" ? m : Math.max(rate, m);
     }
     rent[t] = rate / 12;
     headline[t] = rate / 12;
   }
   // Successive re-lettings to the end of the horizon.
+  let cycle = 0;
   while (t < n) {
-    const letAt = t + voidM;
+    const b = blend(cycle === 0 && noTenant ? 0 : usual);
+    cycle++;
+    const letAt = t + b.voidM;
     for (let k = t; k < Math.min(n, letAt); k++) {
       voidCost[k] += (p.voidCostPsf * lease.areaSqft / 12) * Math.pow(1 + p.costInflation, k / 12);
       headline[k] = ervAt(lease, p, k, shock.ervShock) / 12;
     }
     if (letAt >= n) break;
     const newRent = ervAt(lease, p, letAt, shock.ervShock);
-    capex[letAt] += fee * newRent + cpx * Math.pow(1 + p.costInflation, letAt / 12);
+    capex[letAt] += b.fee * newRent + b.cpx * Math.pow(1 + p.costInflation, letAt / 12);
     const term = Math.max(1, Math.round(p.newLeaseYears * 12));
-    const reviewAt = letAt + Math.round(term / 2);
     let r = newRent;
     for (let k = letAt; k < Math.min(n, letAt + term); k++) {
-      if (k === reviewAt) r = Math.max(r, ervAt(lease, p, k, shock.ervShock));
+      if (k > letAt && (k - letAt) % REVIEW_EVERY === 0) r = Math.max(r, ervAt(lease, p, k, shock.ervShock));
       headline[k] = r / 12;
-      if (k >= letAt + rfM) rent[k] = r / 12;
+      if (k >= letAt + b.rfM) rent[k] = r / 12;
     }
     t = letAt + term;
   }
@@ -425,17 +471,18 @@ export function runEngine(leases: Lease[], params: Params, shock: Shock = NO_SHO
   const annual: AnnualRow[] = [];
   for (let t = 1; t <= H; t++) {
     annual.push({
-      year: Math.floor(startYear(p.startDate)) + t - 1,
+      year: yearOfMonth(p.startDate, t * 12 - 1),
       gross: G[t - 1], groundRent: GR[t - 1], opex: OX[t - 1], noi: NOI[t - 1], capex: CX[t - 1],
       interest: interest[t - 1], amFee, tax: tax[t - 1], distribution: dist[t - 1],
     });
   }
-  const icr = debt > 0 ? Math.min(...NOI.slice(0, H).map((x, i) => x / (interest[i] || Infinity))) : null;
+  const covers = NOI.slice(0, H).flatMap((x, i) => (interest[i] > 0 ? [x / interest[i]] : []));
+  const icr = debt > 0 && covers.length ? Math.min(...covers) : null;
 
   return {
     holdYears: H, annual, equity, debt,
     exit: {
-      year: Math.floor(startYear(p.startDate)) + H - 1, forwardNet, exitYield: y, relativity: rel,
+      year: yearOfMonth(p.startDate, H * 12 - 1), forwardNet, exitYield: y, relativity: rel,
       unexpiredYears: unexpired, gross: exitGross, net: exitNet, taxOnGain, promote,
       proceeds: exitNet - debt - taxOnGain - promote,
     },

@@ -28,6 +28,7 @@ import { buildReport, toStorable, withTerms, ENGINE_VERSION } from "@/lib/underw
 import { ASSESSMENT_SYSTEM_PROMPT, buildAssessmentPrompt } from "@/lib/underwrite/prompt";
 import { runAssessment } from "@/lib/underwrite/assess";
 import { boundTerms } from "@/lib/underwrite/assessment";
+import { unsourcedFigures } from "@/lib/underwrite/figures";
 
 export async function runDealAssessmentAction(
   opportunityId: string, withModel: boolean,
@@ -56,6 +57,8 @@ export async function runDealAssessmentAction(
       model = out.model;
       // The proposed levers are inputs; the engine prices them before anything is stored.
       report = withTerms(report, resolved.leases, resolved.params, boundTerms(out.assessment.proposedTerms));
+      // Prose can still carry a figure the schema cannot; any that match nothing it was shown are flagged.
+      report = { ...report, unsourcedFigures: unsourcedFigures(out.assessment, text) };
     }
 
     await recordAssessment(db, {

@@ -111,3 +111,39 @@ describe("a stored report", () => {
     expect(JSON.stringify(toStorable(rep))).not.toContain("NaN");
   });
 });
+
+describe("edge cases found in review", () => {
+  const P = { ...MH_PARAMS, renewalProb: 0.5 };
+  it("an IRR over a non-finite flow is NaN, never -99%", () => {
+    expect(irr([-100, NaN, 120])).toBeNaN();
+    expect(irr([100, -110])).toBeNaN();
+  });
+  it("space vacant at completion earns nothing in year 1: nobody can renew it", () => {
+    const r = runEngine([{ unit: "v", tenant: null, use: "office", areaSqft: 10000, rentPa: 0, expiry: null, ervPsf: 100 }], P);
+    expect(r.annual[0].gross).toBe(0);
+  });
+  it("a guarantee never shortens an open-ended lease", () => {
+    const r = runEngine([{ unit: "g", tenant: "t", use: "office", areaSqft: 10000, rentPa: 1_000_000, expiry: null, guaranteeUntil: "2028-01-01", ervPa: 1_000_000 }], P);
+    expect(r.annual[1].gross).toBeCloseTo(1_000_000, -3);
+  });
+  it("an open-ended lease is reviewed every five years, upward only", () => {
+    const r = runEngine([{ unit: "o", tenant: "t", use: "office", areaSqft: 10000, rentPa: 500_000, expiry: null, ervPa: 1_000_000 }], { ...P, holdYears: 12 });
+    expect(r.annual[4].gross).toBeCloseTo(500_000, -3);
+    expect(r.annual[5].gross).toBeGreaterThan(1_000_000);
+    expect(r.annual[10].gross).toBeGreaterThan(r.annual[9].gross);
+  });
+  it("a lease ending on 31 December keeps December's rent", () => {
+    const r = runEngine([{ unit: "d", tenant: "t", use: "office", areaSqft: 1000, rentPa: 120_000, expiry: "2027-12-31", ervPa: 120_000 }], MH_PARAMS);
+    expect(r.annual[0].gross).toBeCloseTo(120_000, -1);
+  });
+  it("labels a period by the year it ends in, so a sale in March 2032 says 2032", () => {
+    const r = runEngine(MH_LEASES, { ...MH_PARAMS, startDate: "2027-04-01" });
+    expect(r.annual[0].year).toBe(2028);
+    expect(r.exit.year).toBe(2032);
+  });
+  it("the extra-guarantee lever covers vacant space too", () => {
+    const leases = [{ unit: "v", tenant: null, use: "office" as const, areaSqft: 10000, rentPa: 0, expiry: null, ervPsf: 100 }];
+    const am = applyTerms(leases, P, { priceFactor: 1, deferredShare: 0, extraGuaranteeMonths: 12, topUpMonths: 0, acqFeePct: 0.01 });
+    expect(runEngine(am.leases, am.params).annual[0].gross).toBeCloseTo(1_000_000, -3);
+  });
+});

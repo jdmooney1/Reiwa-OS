@@ -117,6 +117,8 @@ export const RentRollRowSchema = z.object({
   guaranteeUntil: isoDate.nullable().default(null),
   reletCapexPsf: z.number().min(0).max(10_000).nullable().default(null),
   renewalProb: z.number().min(0).max(1).nullable().default(null),
+}).refine((r) => !(r.guaranteeUntil && r.rentPa <= 0), {
+  message: "a guaranteed unit needs the guaranteed rent in rent_pa", path: ["rentPa"],
 });
 export type RentRollRow = z.infer<typeof RentRollRowSchema>;
 export const RentRollSchema = z.array(RentRollRowSchema).max(500);
@@ -131,7 +133,8 @@ export function rentRollToCsv(rows: RentRollRow[]): string {
   const cell = (v: unknown) => {
     if (v === null || v === undefined) return "";
     const s = String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    const flat = s.replace(/[\r\n\t]+/g, " ");
+    return /[",]/.test(flat) ? `"${flat.replace(/"/g, '""')}"` : flat;
   };
   const lines = rows.map((r) => [
     r.unit, r.tenant, r.use, r.areaSqft, r.rentPa, r.expiry, r.breakDate, r.reviewDate, r.reviewBasis,
@@ -140,7 +143,7 @@ export function rentRollToCsv(rows: RentRollRow[]): string {
   return [RENT_ROLL_COLUMNS.join(","), ...lines].join("\n");
 }
 
-function splitCsvLine(line: string): string[] {
+function splitCsvLine(line: string, sep: "," | "\t"): string[] {
   const out: string[] = [];
   let cur = "", q = false;
   for (let i = 0; i < line.length; i++) {
@@ -150,7 +153,7 @@ function splitCsvLine(line: string): string[] {
       else if (ch === '"') q = false;
       else cur += ch;
     } else if (ch === '"') q = true;
-    else if (ch === "," || ch === "\t") { out.push(cur); cur = ""; }
+    else if (ch === sep) { out.push(cur); cur = ""; }
     else cur += ch;
   }
   out.push(cur);
@@ -165,7 +168,10 @@ function splitCsvLine(line: string): string[] {
 export function parseRentRollCsv(text: string): { ok: true; rows: RentRollRow[] } | { ok: false; errors: string[] } {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "");
   if (lines.length === 0) return { ok: true, rows: [] };
-  const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, "_"));
+  // One separator for the whole table, taken from the header: a tab-separated
+  // paste from a spreadsheet keeps "1,200,000" as one figure.
+  const sep: "," | "\t" = lines[0].includes("\t") ? "\t" : ",";
+  const header = splitCsvLine(lines[0], sep).map((h) => h.toLowerCase().replace(/\s+/g, "_"));
   const unknown = header.filter((h) => !(RENT_ROLL_COLUMNS as readonly string[]).includes(h));
   if (unknown.length) return { ok: false, errors: [`Unknown column${unknown.length > 1 ? "s" : ""}: ${unknown.join(", ")}. Expected: ${RENT_ROLL_COLUMNS.join(", ")}.`] };
   for (const need of ["unit", "use", "area_sqft", "rent_pa"]) {
@@ -179,7 +185,11 @@ export function parseRentRollCsv(text: string): { ok: true; rows: RentRollRow[] 
     return Number.isFinite(n) ? n : NaN;
   };
   lines.slice(1).forEach((line, i) => {
-    const cells = splitCsvLine(line);
+    const cells = splitCsvLine(line, sep);
+    if (cells.length > header.length) {
+      errors.push(`Row ${i + 2}: ${cells.length} cells for ${header.length} columns. Quote any figure written with commas ("1,200,000") or paste tab-separated.`);
+      return;
+    }
     const get = (k: string) => cells[header.indexOf(k)] ?? "";
     const renewal = num(get("renewal_pct"));
     const candidate = {
@@ -340,6 +350,10 @@ export function resolveInputs(f: DealFacts, today: string): Resolved {
     ?? (c?.noi != null ? c.noi / (1 - OTHER_DEFAULTS.nonRecoverablePct) : null)
     ?? (pos(price) && pos(f.opportunity.niy) ? price * (f.opportunity.niy / 100) * (1 + M.purchaseCostsPct) : null);
   const incomeSrc: InputSource = c?.grossRentalIncome != null ? "case" : f.opportunity.passingRent != null ? "opportunity" : "derived";
+  const incomeBasis = c?.grossRentalIncome != null ? "Investment case"
+    : f.opportunity.passingRent != null ? "Passing rent on the opportunity"
+    : c?.noi != null ? "Grossed up from the NOI on the investment case: no rent figure recorded"
+    : "Back-solved from the quoted NIY and price: no rent figure recorded";
 
   const missing: string[] = [];
   if (!pos(price)) missing.push("a price (investment case or guide price)");
@@ -393,7 +407,7 @@ export function resolveInputs(f: DealFacts, today: string): Resolved {
     }));
     if (ervVacant > 0) leases.push({ unit: "Vacant space", tenant: null, use, areaSqft: area * (1 - (occ ?? 1)), rentPa: 0, expiry: startDate, ervPa: ervVacant });
     lines.push({ key: "income", value: `${money(income!, ccy)} a year`, source: incomeSrc,
-      basis: incomeSrc === "derived" ? "Back-solved from the quoted NIY and price: no rent figure recorded" : incomeSrc === "case" ? "Investment case" : "Passing rent on the opportunity" });
+      basis: incomeBasis });
     lines.push({ key: "market_rent", value: ervTotal != null ? `${money(ervTotal, ccy)} a year` : "Not recorded: re-let at passing rent",
       source: ervTotal != null ? (c?.erv != null ? "case" : "opportunity") : "default",
       basis: ervTotal != null ? "Headline ERV, not unit by unit" : "No ERV, so no reversion is modelled" });
@@ -413,14 +427,15 @@ export function resolveInputs(f: DealFacts, today: string): Resolved {
   lines.push({ key: "letting", value: `${voidMonths} months void, ${rentFreeMonths} months rent free, ${Math.round(renewalProb * 100)}% renew`,
     source: lettingSet ? "case" : "default", basis: lettingSet ? "Investment case" : `Default for ${use}` });
 
+  // A yield of zero would value the building at infinity: treated as not recorded.
   const exitYield = o.exitYieldPct !== undefined ? o.exitYieldPct / 100
-    : c?.exitYieldPct != null ? c.exitYieldPct / 100
-    : c?.entryYieldPct != null ? c.entryYieldPct / 100
-    : f.opportunity.niy != null ? f.opportunity.niy / 100 : null;
-  const exitSrc: InputSource = o.exitYieldPct !== undefined || c?.exitYieldPct != null ? "case" : c?.entryYieldPct != null ? "case" : f.opportunity.niy != null ? "opportunity" : "default";
+    : pos(c?.exitYieldPct) ? c!.exitYieldPct! / 100
+    : pos(c?.entryYieldPct) ? c!.entryYieldPct! / 100
+    : pos(f.opportunity.niy) ? f.opportunity.niy / 100 : null;
+  const exitSrc: InputSource = o.exitYieldPct !== undefined || pos(c?.exitYieldPct) || pos(c?.entryYieldPct) ? "case" : pos(f.opportunity.niy) ? "opportunity" : "default";
   const ey = exitYield ?? 0.06;
   lines.push({ key: "exit_yield", value: pct(ey), source: exitSrc,
-    basis: o.exitYieldPct !== undefined || c?.exitYieldPct != null ? "Investment case" : exitYield !== null ? "Assumed equal to the entry yield: no compression or expansion" : "No yield recorded: 6% assumed" });
+    basis: o.exitYieldPct !== undefined || pos(c?.exitYieldPct) ? "Investment case" : exitYield !== null ? "Assumed equal to the entry yield: no compression or expansion" : "No yield recorded: 6% assumed" });
 
   const hold = o.holdYears ?? (c?.holdPeriodYears ? Math.round(c.holdPeriodYears) : OTHER_DEFAULTS.holdYears);
   lines.push({ key: "hold", value: `${hold} years from ${startDate}`, source: o.holdYears !== undefined || c?.holdPeriodYears ? "case" : "default",

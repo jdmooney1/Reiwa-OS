@@ -21,6 +21,9 @@ export default async function AssessmentPage({
   searchParams: { run?: string };
 }) {
   const auth = await requireAuth();
+  // Reiwa's internal committee view: a client organisation's own users never see it
+  // (the table's policies say the same; this keeps the page from rendering empty).
+  if (!isInternalStaff(auth)) notFound();
   const session = toDbSession(auth);
   const opp = await getOpportunity(session, params.opportunityId);
   if (!opp) notFound();
@@ -34,7 +37,7 @@ export default async function AssessmentPage({
         assessmentId: r.assessmentId, createdAt: r.createdAt, createdByName: r.createdByName,
         tier: r.tier, verdict: r.verdict, caseVersion: r.caseVersion, hasAssessment: r.assessment !== null,
       }))}
-      canRun={isInternalStaff(auth)}
+      canRun
       modelConfigured={assessmentIsConfigured()}
     />
   );

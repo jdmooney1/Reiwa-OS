@@ -33,6 +33,8 @@ export interface Report {
   reverse: ReverseStress;
   price: number;
   terms: TermsComparison | null;
+  /** Figures in the written assessment that match nothing the model was shown (figures.ts). */
+  unsourcedFigures?: string[];
 }
 
 export function buildReport(

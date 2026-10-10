@@ -27,9 +27,15 @@
 -- and INSERT only: "what did the assessment say before the IC" must have one
 -- answer later. Rows follow their opportunity on delete.
 --
--- ORGANISATION-SCOPED, like every pipeline table (0002, 0024): app.has_org() to
--- read, plus app.can_write() to insert. No investor, prospect or portal surface
--- reads this table.
+-- REIWA STAFF ONLY, AND ORGANISATION-SCOPED. Both policies require app.is_staff()
+-- (the same posture as the memo drafting aids in 0035) AND app.has_org(org_id):
+-- a client organisation's own users can see its pipeline, but an assessment is
+-- Reiwa's internal committee view and is not theirs to read or write. No
+-- investor, prospect or portal surface reads this table.
+--
+-- WHO AND WHEN ARE NOT THE CALLER'S TO SAY. The insert trigger stamps created_at
+-- with now() and refuses a created_by that is not the signed-in user, so a run
+-- cannot be backdated or attributed to a colleague.
 -- ============================================================================
 create table if not exists deal_assessments (
   assessment_id  uuid primary key default gen_random_uuid(),
@@ -50,9 +56,11 @@ create table if not exists deal_assessments (
 
   -- The case must belong to the opportunity it is recorded against (0008 made
   -- (case_id, opportunity_id) unique for exactly this kind of reference).
+  -- Deleting a draft case keeps its runs (append-only) and forgets which
+  -- version they read; only the case id is cleared.
   constraint deal_assessments_case_fkey
     foreign key (case_id, opportunity_id)
-    references investment_cases(case_id, opportunity_id) on delete cascade,
+    references investment_cases(case_id, opportunity_id) on delete set null (case_id),
   -- An assessment, its model and its verdict arrive together or not at all.
   constraint deal_assessments_model_with_assessment
     check ((assessment is null) = (model is null) and (assessment is null) = (verdict is null))
@@ -63,7 +71,8 @@ create index if not exists idx_deal_assessments_opp on deal_assessments(opportun
 comment on table deal_assessments is
   'One run of the deal assessment engine (src/lib/underwrite) over an opportunity, with an optional structured model assessment. Figures come from code; the assessment is judgement and carries no figures. Append-only, organisation-scoped. Never written back to investment_cases.';
 
--- The organisation on a row is the organisation of its opportunity, always.
+-- The organisation on a row is the organisation of its opportunity, always; the
+-- author is the signed-in user and the time is now.
 create or replace function app.deal_assessments_org() returns trigger
   language plpgsql
   set search_path = ''
@@ -74,6 +83,10 @@ create or replace function app.deal_assessments_org() returns trigger
     if o is null or o <> new.org_id then
       raise exception 'Assessment organisation does not match its opportunity';
     end if;
+    if auth.uid() is not null and new.created_by is distinct from auth.uid() then
+      raise exception 'An assessment is recorded by the signed-in user';
+    end if;
+    new.created_at := now();
     return new;
   end;
   $fn$;
@@ -86,10 +99,10 @@ alter table deal_assessments enable row level security;
 
 drop policy if exists deal_assessments_select on deal_assessments;
 create policy deal_assessments_select on deal_assessments for select to authenticated
-  using (app.has_org(org_id));
+  using (app.is_staff() and app.has_org(org_id));
 drop policy if exists deal_assessments_insert on deal_assessments;
 create policy deal_assessments_insert on deal_assessments for insert to authenticated
-  with check (app.has_org(org_id) and app.can_write());
+  with check (app.is_staff() and app.has_org(org_id) and app.can_write());
 
 -- Supabase's default privileges hand `anon` rights on every new table; take them
 -- back and grant only what is used (0005, 0006, 0029, 0030).

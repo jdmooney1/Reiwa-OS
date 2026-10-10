@@ -159,3 +159,33 @@ describe("model settings text", () => {
     expect(parseOverridesText("ltvPct = 95").ok).toBe(false);
   });
 });
+
+describe("rent roll CSV, cases found in review", () => {
+  it("reads a tab-separated paste with comma thousands as whole figures", () => {
+    const p = parseRentRollCsv("unit\tuse\trent_pa\tarea_sqft\n1\toffice\t1,200,000\t12,500");
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.rows[0].rentPa).toBe(1_200_000);
+    expect(p.rows[0].areaSqft).toBe(12_500);
+  });
+  it("refuses a comma row with unquoted thousands instead of truncating it", () => {
+    const p = parseRentRollCsv("unit,use,rent_pa,area_sqft\n1,office,1,200,000,12,500");
+    expect(p.ok).toBe(false);
+  });
+  it("refuses a guarantee with no guaranteed rent", () => {
+    expect(parseRentRollCsv("unit,use,area_sqft,rent_pa,guarantee_until\n1,office,100,0,2028-01-01").ok).toBe(false);
+  });
+  it("keeps a tenant name with a line break round-trippable", () => {
+    const p = parseRentRollCsv("unit,tenant,use,area_sqft,rent_pa\n1,A,office,1,1");
+    if (!p.ok) throw new Error("expected rows");
+    const rows = [{ ...p.rows[0], tenant: "Shop\nLtd" }];
+    const again = parseRentRollCsv(rentRollToCsv(rows));
+    expect(again.ok).toBe(true);
+  });
+  it("treats a zero exit yield as not recorded", () => {
+    const r = resolveInputs(facts({ opportunity: { targetPrice: 20_000_000, niy: 0, passingRent: 1_000_000, erv: null, capexBudget: null } }), TODAY);
+    if (!r.ok) throw new Error("expected a run");
+    expect(r.params.exitYield).toBeGreaterThan(0);
+    expect(r.lines.find((l) => l.key === "exit_yield")!.source).toBe("default");
+  });
+});

@@ -9,6 +9,7 @@ import { AssessmentSchema, boundTerms } from "@/lib/underwrite/assessment";
 import { buildAssessmentPrompt, ASSESSMENT_SYSTEM_PROMPT } from "@/lib/underwrite/prompt";
 import { buildReport } from "@/lib/underwrite/report";
 import { INPUT_KEYS } from "@/lib/underwrite/inputs";
+import { unsourcedFigures } from "@/lib/underwrite/figures";
 import { MH_LEASES, MH_PARAMS } from "./deal-engine.fixture";
 
 const root = join(__dirname, "../..");
@@ -16,7 +17,7 @@ const read = (p: string) => readFileSync(join(root, p), "utf8");
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "").replace(/--.*$/gm, "");
 
 describe("the engine and the inputs are pure", () => {
-  for (const f of ["engine.ts", "scenarios.ts", "inputs.ts", "defaults.ts", "report.ts", "prompt.ts", "assessment.ts"]) {
+  for (const f of ["engine.ts", "scenarios.ts", "inputs.ts", "defaults.ts", "report.ts", "prompt.ts", "assessment.ts", "figures.ts"]) {
     it(`${f} opens no connection, calls no model and reads no clock`, () => {
       const src = strip(read(`src/lib/underwrite/${f}`));
       expect(src).not.toMatch(/@\/lib\/db|@\/lib\/data|anthropic|fetch\(|server-only/i);
@@ -52,9 +53,14 @@ describe("the table is append-only and organisation-scoped", () => {
     expect(sql).toMatch(/grant select, insert on deal_assessments to authenticated/);
     expect(sql).not.toMatch(/for (update|delete|all) to authenticated/);
   });
-  it("scopes by organisation and never admits staff by role", () => {
-    expect(sql).toMatch(/using \(app\.has_org\(org_id\)\)/);
-    expect(sql).not.toContain("is_staff");
+  it("is for Reiwa staff within the organisation, never a client's own users", () => {
+    expect(sql).toMatch(/using \(app\.is_staff\(\) and app\.has_org\(org_id\)\)/);
+    expect(sql).toMatch(/with check \(app\.is_staff\(\) and app\.has_org\(org_id\) and app\.can_write\(\)\)/);
+  });
+  it("stamps the time and refuses another author; a deleted case keeps its runs", () => {
+    expect(sql).toMatch(/new\.created_at := now\(\)/);
+    expect(sql).toMatch(/new\.created_by is distinct from auth\.uid\(\)/);
+    expect(sql).toMatch(/on delete set null \(case_id\)/);
   });
 });
 
@@ -124,5 +130,20 @@ describe("nothing investor- or prospect-facing reads an assessment", () => {
   ].filter((f) => /\.(ts|tsx)$/.test(f));
   it("no portal, prospect or publication file imports the assessment", () => {
     for (const f of facing) expect(read(f), f).not.toMatch(/deal-assessment|lib\/underwrite\//);
+  });
+});
+
+describe("figures in the written view are checked against what was shown", () => {
+  const base = {
+    verdict: "pass" as const, headline: "", rationale: "", strengths: [], concerns: [], mostExposedTo: "exit_yield" as const,
+    exposureReason: "x", evidence: [], icQuestions: [], dataGaps: [],
+    proposedTerms: { priceFactor: 1, deferredShare: 0, extraGuaranteeMonths: 0, topUpMonths: 0, acqFeePct: 0.01, rationale: [], otherTerms: [] },
+  };
+  const shown = "investor IRR 8.04% | hedged yen 5.44% | value 75.84M | multiple 1.44x";
+  it("accepts figures that round to one it was shown", () => {
+    expect(unsourcedFigures({ ...base, headline: "Yen 5.4%, sterling 8%, value £75.8M, 1.44x" }, shown)).toEqual([]);
+  });
+  it("flags figures it was never shown", () => {
+    expect(unsourcedFigures({ ...base, rationale: "At £58M the yen return would be 7.1%." }, shown)).toEqual(["7.1%", "£58M"]);
   });
 });

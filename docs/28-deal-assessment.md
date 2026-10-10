@@ -16,7 +16,10 @@ named inputs.** The assessment's schema has no field that can carry a result. Th
 only numbers it may write are five *levers* (price factor, deferred share, months of
 extra guarantee, months of rent top-up, acquisition fee). They are inputs: the engine
 prices them before the run is stored, and the tab shows the engine's figures for them.
-A unit test pins that list.
+A unit test pins that list. Prose can still carry a figure the schema cannot, so
+`figures.ts` checks every percentage, amount and multiple in the written fields against
+what the model was shown; any that match nothing are listed on the tab as the writer's,
+not the model's.
 
 ## Two tiers, decided by the data
 
@@ -55,6 +58,11 @@ approved, and carried forward to the next version like every other field.
 
 ## Conventions the engine uses
 
+- Dates count to the nearest month boundary (a lease ending 31 December keeps December).
+- Reviews: the stated date and every five years after; an open-ended lease reviews
+  five-yearly from completion; new leases review five-yearly. Upward only unless stated.
+- Nobody renews space that is vacant, guaranteed by the vendor, or vacated at a break, so
+  its first re-letting is a full void; later ones use the renewal blend.
 - Exit at the end of the hold on the next twelve months' **headline** rent less ground
   rent, capitalised at the exit yield grossed up for purchaser's costs; rent still lost
   to voids or rent-free in that year is deducted (valuer's convention).
@@ -91,11 +99,18 @@ On demand only: never on save, never on a timer.
 `deal_assessments` (migration `0036`): one row per run with the inputs, the full report,
 the assessment (or NULL), the model id, the verdict, the underwriting version it read,
 and who ran it. **Append-only** (select and insert granted, no update or delete policy):
-"what did the assessment say before the IC" keeps one answer. Organisation-scoped like
-every pipeline table. A stored run is shown exactly as recorded and never recomputed.
+"what did the assessment say before the IC" keeps one answer. The trigger stamps the time
+and refuses an author other than the signed-in user. Deleting a draft case keeps its runs
+(the case id is cleared). A stored run is shown exactly as recorded and never recomputed.
+
+**Reiwa staff only, within the organisation**: both policies require `app.is_staff()` and
+`app.has_org(org_id)`, so a client organisation's own users can neither read nor write an
+assessment even though they can see their pipeline; the page returns 404 for them too.
 
 Running is for Reiwa staff (`requireStaffSession`), the same posture as the memo drafting
-aids. Nothing investor- or prospect-facing imports it; a unit test checks that. Nothing
+aids. Revising the underwriting replaces the rent roll or model settings only when the box
+was edited, so stored assumptions this version of the form cannot read are carried forward
+untouched. Nothing investor- or prospect-facing imports it; a unit test checks that. Nothing
 in the module writes to `investment_cases`, `opportunities` or `properties`.
 
 ## Tests
