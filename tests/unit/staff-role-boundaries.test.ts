@@ -21,6 +21,7 @@ function walk(dir: string, out: string[] = []): string[] {
 const stripSqlComments = (s: string) => s.replace(/--[^\n]*/g, "");
 const MIGRATIONS = readdirSync(join(root, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
 const NEW = "0035_staff_role.sql";
+const ASSESSMENTS = "0036_deal_assessments.sql";
 
 describe("the role is a database fact", () => {
   it("the type and the profile constraint both know reiwa_staff", () => {
@@ -42,8 +43,14 @@ describe("the role is a database fact", () => {
 describe("staff is admitted in exactly two places, and nowhere investor-facing", () => {
   const files = MIGRATIONS.map((f) => ({ f, sql: stripSqlComments(read(`supabase/migrations/${f}`)) }));
 
-  it("app.is_staff() appears in no migration but 0035", () => {
-    for (const { f, sql } of files.filter((x) => x.f !== NEW)) expect(sql, f).not.toContain("is_staff");
+  it("app.is_staff() appears in no migration but 0035, and 0036 on deal assessments only", () => {
+    for (const { f, sql } of files.filter((x) => x.f !== NEW && x.f !== ASSESSMENTS)) expect(sql, f).not.toContain("is_staff");
+    const sql = files.find((x) => x.f === ASSESSMENTS)!.sql;
+    const policies = [...sql.matchAll(/create policy (\w+) on (?:public\.)?(\w+) for (\w+)[\s\S]*?;/g)];
+    const admitting = policies.filter((p) => p[0].includes("is_staff"));
+    expect(admitting.map((p) => p[2])).toEqual(["deal_assessments", "deal_assessments"]);
+    // Staff is a further restriction there, never a widening: every one also asks has_org.
+    for (const p of admitting) expect(p[0]).toContain("app.has_org(org_id)");
   });
 
   it("and in 0035 it is the function, its grant, and policies on the two memo drafting aids only", () => {
@@ -125,16 +132,22 @@ describe("the application layer agrees with the database, and is never the only 
     expect((fx.match(/isPortalAdmin\(session\)/g) ?? []).length).toBe(2);
   });
 
-  it("requireStaffSession is used by the three memo drafting actions and nothing else", () => {
+  it("requireStaffSession is used by the three memo drafting actions and the deal assessment, nothing else", () => {
+    // The deal assessment (docs/28) is a pre-investor staff tool, like the memo aids:
+    // it reads the underwriting and records a run, and touches no investor-facing table.
     const users = walk("src").filter((f) => f !== "src/lib/auth/admin.ts" && read(f).includes("requireStaffSession()"));
     expect(users.sort()).toEqual([
+      "src/app/actions/deal-assessment.ts",
       "src/app/actions/memo-review.ts", "src/app/actions/memo-translation-accept.ts", "src/app/actions/memo-translation.ts",
     ]);
   });
 
-  it("isInternalStaff is used by that gate and by the memo page's two offers, nowhere else", () => {
+  it("isInternalStaff is used by that gate, the memo page's two offers and the assessment's run button, nowhere else", () => {
     const users = walk("src").filter((f) => f !== "src/lib/auth/admin.ts" && /isInternalStaff\(/.test(read(f)));
-    expect(users).toEqual(["src/app/(app)/opportunities/[opportunityId]/memo/page.tsx"]);
+    expect(users.sort()).toEqual([
+      "src/app/(app)/opportunities/[opportunityId]/assessment/page.tsx",
+      "src/app/(app)/opportunities/[opportunityId]/memo/page.tsx",
+    ]);
   });
 
   it("the investor admin area, the sharing control and the investor Overview editor stay admin-only", () => {

@@ -7,6 +7,7 @@ import { createVersionAction } from "@/app/actions/workspace";
 import { ACTION_IDLE } from "@/lib/actions/result";
 import { ActionError } from "@/components/workspace/primitives";
 import { currencySymbol } from "@/lib/format";
+import { RENT_ROLL_COLUMNS, RentRollSchema, rentRollToCsv, overridesToText, readOverrides } from "@/lib/underwrite/inputs";
 import type { Currency } from "@/types/database";
 import {
   deriveReducer, initDerive, isAutoFilled, reconcile, type Warning,
@@ -131,6 +132,9 @@ function VersionFields({
   const sym = currencySymbol(currency);
 
   const warnings = reconcile(derive.values, currency);
+  const [rrTouched, setRrTouched] = useState(false);
+  const [msTouched, setMsTouched] = useState(false);
+  const unreadable = unreadableStored(seed);
   const costsTouched = derive.touched.has("acquisitionCosts");
 
   return (
@@ -222,6 +226,53 @@ function VersionFields({
         />
       </label>
 
+      <details className="rounded border border-line px-4 py-3" open={Boolean(seedRentRoll(seed)) || unreadable.length > 0}>
+        <summary className="cursor-pointer text-sm font-medium text-ink">Rent roll and model settings (for the Assessment tab)</summary>
+        <input type="hidden" name="rentRollTouched" value={rrTouched ? "1" : ""} />
+        <input type="hidden" name="modelSettingsTouched" value={msTouched ? "1" : ""} />
+        {unreadable.length > 0 && (
+          <p className="mt-2 rounded border border-caution/40 bg-caution/10 px-3 py-1.5 text-xs text-ink" role="status">
+            The stored {unreadable.join(" and ")} could not be read by this version of the form, so {unreadable.length > 1 ? "they are" : "it is"} not
+            shown below. Leave the box alone and {unreadable.length > 1 ? "they carry" : "it carries"} forward unchanged; type in it to replace it.
+          </p>
+        )}
+        <label className="mt-3 block">
+          <span className="eyebrow">Rent roll (CSV, one unit per row)</span>
+          <textarea
+            name="rentRoll"
+            onChange={() => setRrTouched(true)}
+            rows={6}
+            defaultValue={seedRentRoll(seed)}
+            placeholder={RENT_ROLL_COLUMNS.join(",")}
+            spellCheck={false}
+            className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 font-mono text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30"
+          />
+          <span className="mt-1 block text-2xs text-ink-faint">
+            Header row first. Required: unit, use (office, retail, residential, industrial, hotel, other), area_sqft, rent_pa.
+            Dates as yyyy-mm-dd; review_basis upward_only, open_market or none; renewal_pct 0-100. A guaranteed vacant unit
+            carries its guaranteed rent in rent_pa and the end date in guarantee_until. Leave empty for the screening model.
+          </span>
+        </label>
+        <label className="mt-3 block">
+          <span className="eyebrow">Model settings (one per line, key = value)</span>
+          <textarea
+            name="modelSettings"
+            onChange={() => setMsTouched(true)}
+            rows={3}
+            defaultValue={seedSettings(seed)}
+            placeholder={"exitYieldPct = 6.5\npurchaseCostsPct = 1.8\nrentGrowthPct = 2"}
+            spellCheck={false}
+            className="mt-1 w-full rounded border border-line bg-surface-card px-3 py-2 font-mono text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-purple/30"
+          />
+          <span className="mt-1 block text-2xs text-ink-faint">
+            Overrides the assessment&apos;s market defaults for this version: startDate, holdYears, exitYieldPct, purchaseCostsPct,
+            saleCostsPct, rentGrowthPct, voidMonths, rentFreeMonths, renewalPct, waultYears, ltvPct, debtRatePct, refiRatePct,
+            taxRatePct, acqFeePct, amFeePct, promotePct, hurdlePct, hedgeRatioPct, fxExitSpot, groundRentPct, nonRecoverablePct,
+            fixedCostsPa. Percentages as typed (6.5 means 6.5%).
+          </span>
+        </label>
+      </details>
+
       <div className="flex items-center gap-2 border-t border-line pt-4">
         <button
           type="submit"
@@ -311,4 +362,23 @@ function Field({
       </span>
     </label>
   );
+}
+
+/** The seed's rent roll as CSV, carried forward like every other field. */
+function seedRentRoll(seed: UnderwritingVersion | null): string {
+  const parsed = RentRollSchema.safeParse(seed?.assumptions?.rentRoll);
+  return parsed.success && parsed.data.length ? rentRollToCsv(parsed.data) : "";
+}
+
+function seedSettings(seed: UnderwritingVersion | null): string {
+  return overridesToText(readOverrides(seed?.assumptions).overrides);
+}
+
+/** Stored assumptions this form cannot show, so the person is told rather than shown an empty box. */
+function unreadableStored(seed: UnderwritingVersion | null): string[] {
+  const out: string[] = [];
+  const a = seed?.assumptions;
+  if (a?.rentRoll !== undefined && !RentRollSchema.safeParse(a.rentRoll).success) out.push("rent roll");
+  if (a?.model !== undefined && readOverrides(a).problems.length > 0) out.push("model settings");
+  return out;
 }

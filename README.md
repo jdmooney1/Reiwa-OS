@@ -30,6 +30,7 @@ yet. See the documents below before any implementation begins.
 | [`docs/12-investor-portal-p1.md`](docs/12-investor-portal-p1.md) | P1: Investment Portal data foundation, publication boundary, investor RLS |
 | [`docs/18-launch-hardening-p6.md`](docs/18-launch-hardening-p6.md) | P6: secure document delivery, privilege hardening, invitation hand-off, connection resilience, accessibility |
 | [`docs/17-operations-runbook.md`](docs/17-operations-runbook.md) | **Running it in production:** environment, Supabase/SMTP/storage config, deployment, provisioning the first investor, emergency access removal, rollback, monitoring |
+| [`docs/28-deal-assessment.md`](docs/28-deal-assessment.md) | Deal assessment: the cash-flow engine, scenarios and hold periods, and the written assessment over them |
 | [`supabase/schema.sql`](supabase/schema.sql) | Concrete proposed Postgres schema (enums, tables, RLS) |
 
 ---

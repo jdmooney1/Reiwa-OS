@@ -22,7 +22,8 @@
     "test:e2e": "playwright test",
     "db:load-deal-seed": "tsx scripts/load-deal-seed.ts",
     "db:audit-documents": "tsx scripts/audit-publication-documents.ts",
-    "db:unshare-documents": "tsx scripts/unshare-publication-documents.ts"
+    "db:unshare-documents": "tsx scripts/unshare-publication-documents.ts",
+    "db:run-assessments": "tsx scripts/run-assessments.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
