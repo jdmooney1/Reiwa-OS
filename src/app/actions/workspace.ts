@@ -21,7 +21,8 @@ import { requireDbSession } from "@/lib/auth/session";
 import { AppError } from "@/lib/errors";
 import { runAction } from "@/lib/actions/run-action";
 import type { ActionResult } from "@/lib/actions/result";
-import { createVersion, makeCurrent, type UnderwritingInput } from "@/lib/data/underwriting";
+import { createVersion, currentVersion, listVersions, makeCurrent, type UnderwritingInput } from "@/lib/data/underwriting";
+import { parseOverridesText, parseRentRollCsv } from "@/lib/underwrite/inputs";
 import { applyDdTemplate, updateDdItem, addDdItem, type DdItemPatch } from "@/lib/data/due-diligence";
 import { createRisk, promoteFindingToRisk, updateRisk, type RiskPatch } from "@/lib/data/opportunity-risks";
 import { recordDecision, amendDecision, type IcOutcome } from "@/lib/data/ic-decisions";
@@ -95,6 +96,9 @@ export async function createVersionAction(
     if (!alloc.ok) throw new AppError(alloc.error);
     input.depreciationYears = alloc.depreciationYears;
     input.depreciationMethod = alloc.depreciationMethod;
+    if (formData.has("rentRoll") || formData.has("modelSettings")) {
+      input.assumptions = await nextAssumptions(session, opportunityId, formData);
+    }
     await createVersion(session, opportunityId, input);
     refresh(opportunityId);
   }, {
@@ -102,6 +106,34 @@ export async function createVersionAction(
       "This underwriting version could not be created. An approved or superseded " +
       "version cannot be altered — revise by creating the next version.",
   });
+}
+
+/**
+ * The structured assumptions for the next version. Everything the previous
+ * version carried is carried forward (the column is the strategy-specific
+ * pressure valve, and a revision must not drop what it did not touch); the rent
+ * roll and model settings are replaced by what the form posted. Only called when
+ * the form posted them; a caller that does not is unchanged. Either field that
+ * does not parse refuses the whole version, with every problem listed.
+ */
+async function nextAssumptions(
+  session: Awaited<ReturnType<typeof requireDbSession>>, opportunityId: string, formData: FormData,
+): Promise<Record<string, unknown>> {
+  const prev = (await currentVersion(session, opportunityId)) ?? (await listVersions(session, opportunityId))[0] ?? null;
+  const out: Record<string, unknown> = { ...(prev?.assumptions ?? {}) };
+  const rr = formData.get("rentRoll");
+  if (typeof rr === "string") {
+    const parsed = parseRentRollCsv(rr);
+    if (!parsed.ok) throw new AppError(`The rent roll could not be read. ${parsed.errors.slice(0, 5).join(" ")}`);
+    if (parsed.rows.length) out.rentRoll = parsed.rows; else delete out.rentRoll;
+  }
+  const ms = formData.get("modelSettings");
+  if (typeof ms === "string") {
+    const parsed = parseOverridesText(ms);
+    if (!parsed.ok) throw new AppError(`The model settings could not be read. ${parsed.errors.slice(0, 5).join(" ")}`);
+    if (Object.keys(parsed.overrides).length) out.model = parsed.overrides; else delete out.model;
+  }
+  return out;
 }
 
 export async function makeCurrentVersionAction(

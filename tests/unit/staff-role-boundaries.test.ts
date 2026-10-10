@@ -125,16 +125,22 @@ describe("the application layer agrees with the database, and is never the only 
     expect((fx.match(/isPortalAdmin\(session\)/g) ?? []).length).toBe(2);
   });
 
-  it("requireStaffSession is used by the three memo drafting actions and nothing else", () => {
+  it("requireStaffSession is used by the three memo drafting actions and the deal assessment, nothing else", () => {
+    // The deal assessment (docs/28) is a pre-investor staff tool, like the memo aids:
+    // it reads the underwriting and records a run, and touches no investor-facing table.
     const users = walk("src").filter((f) => f !== "src/lib/auth/admin.ts" && read(f).includes("requireStaffSession()"));
     expect(users.sort()).toEqual([
+      "src/app/actions/deal-assessment.ts",
       "src/app/actions/memo-review.ts", "src/app/actions/memo-translation-accept.ts", "src/app/actions/memo-translation.ts",
     ]);
   });
 
-  it("isInternalStaff is used by that gate and by the memo page's two offers, nowhere else", () => {
+  it("isInternalStaff is used by that gate, the memo page's two offers and the assessment's run button, nowhere else", () => {
     const users = walk("src").filter((f) => f !== "src/lib/auth/admin.ts" && /isInternalStaff\(/.test(read(f)));
-    expect(users).toEqual(["src/app/(app)/opportunities/[opportunityId]/memo/page.tsx"]);
+    expect(users.sort()).toEqual([
+      "src/app/(app)/opportunities/[opportunityId]/assessment/page.tsx",
+      "src/app/(app)/opportunities/[opportunityId]/memo/page.tsx",
+    ]);
   });
 
   it("the investor admin area, the sharing control and the investor Overview editor stay admin-only", () => {
