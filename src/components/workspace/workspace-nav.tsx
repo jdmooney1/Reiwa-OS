@@ -38,6 +38,7 @@ export function WorkspaceNav({
   const sections: { href: string; label: string; badge?: number; tone?: "issue" }[] = [
     { href: base, label: "Summary" },
     { href: `${base}/underwriting`, label: "Underwriting" },
+    { href: `${base}/assessment`, label: "Assessment" },
     { href: `${base}/score`, label: "Score" },
     {
       href: `${base}/diligence`,

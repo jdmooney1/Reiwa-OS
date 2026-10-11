@@ -33,12 +33,20 @@ const PROPERTY_COLUMNS = ["heritage_status", "tenure", "unexpired_term_years", "
 const OPPORTUNITY_COLUMNS = ["deal_stage", "photo_reference_type", "photo_url", "source_attachments", "data_completeness", "source_facts"];
 const ALL = [...PROPERTY_COLUMNS, ...OPPORTUNITY_COLUMNS];
 
+// The deal assessment (docs/28) is the first internal screen to READ these facts:
+// its data layer selects them and its pure modules carry them as fields. All
+// three are staff-only and imported by nothing investor- or prospect-facing,
+// which tests/unit/deal-assessment-boundaries.test.ts holds.
+const INTERNAL_READERS = [
+  "src/lib/data/deal-assessments.ts", "src/lib/underwrite/inputs.ts", "src/lib/underwrite/prompt.ts",
+];
+
 describe("the new columns are named only where they are written", () => {
   it("no other application file, and no other migration, mentions one", () => {
     // `tenure` and `photo_url` are common words: match them only as a column in SQL (snake_case, quoted by a SQL keyword or comma).
     const files = [...walk(join(ROOT, "src")), ...walk(join(ROOT, "supabase/migrations")), ...walk(join(ROOT, "scripts"))]
       // The diligence checklist names "tenure" as a thing to check: a word in a template, not a column.
-      .filter((f) => ![MIGRATION, LOADER, SCRIPT, "src/lib/dd/templates.ts"].includes(f));
+      .filter((f) => ![MIGRATION, LOADER, SCRIPT, "src/lib/dd/templates.ts", ...INTERNAL_READERS].includes(f));
     const hits: string[] = [];
     for (const f of files) {
       const text = f.endsWith(".sql") ? sql(f) : code(f);
