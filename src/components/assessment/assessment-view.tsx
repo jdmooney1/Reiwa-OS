@@ -75,7 +75,12 @@ export function AssessmentView({
   const r = run.report;
   const a = run.assessment;
   const ccy = (r.currency as Currency) ?? "GBP";
-  const money = (x: number | null | undefined) => formatMoneyUnits(typeof x === "number" ? x : null, ccy);
+  // Outflows in brackets, as the rest of the workspace shows them; a nil line is a dash, not "£-0".
+  const money = (x: number | null | undefined) => {
+    if (typeof x !== "number" || !Number.isFinite(x)) return "—";
+    if (Math.abs(x) < 500) return "—";
+    return x < 0 ? `(${formatMoneyUnits(-x, ccy)})` : formatMoneyUnits(x, ccy);
+  };
   const evidence = new Map((a?.evidence ?? []).map((e) => [e.key, e]));
   const b = r.base;
 
