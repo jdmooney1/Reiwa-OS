@@ -52,9 +52,20 @@ describe("the actions create a draft and publish nothing", () => {
 
 describe("the deal is made by the loader's own seedDeal, with the teaser in the same commit", () => {
   const d = code(DATA);
-  it("calls seedDeal and writes no opportunity, property or case itself", () => {
+  it("calls seedDeal and writes no opportunity or property itself", () => {
     expect(d).toContain("seedDeal(tx,");
-    expect(d).not.toMatch(/insert into (opportunities|properties|investment_cases)|update (opportunities|properties|investment_cases)/i);
+    expect(d).not.toMatch(/insert into (opportunities|properties)|update (opportunities|properties)/i);
+  });
+  it("writes underwriting only as version 1 of a deal it has just created, filling blanks", () => {
+    expect(d).toMatch(/if \(input\.underwriting && outcome === "created"\)/);
+    const fn = d.slice(d.indexOf("async function seedUnderwriting"), d.indexOf("// ---- Reading it back"));
+    expect(fn).toContain("version = 1");
+    expect(fn).toMatch(/values \(\$1,\$2,1,'current'/);
+    const upd = fn.slice(fn.indexOf("update investment_cases set"), fn.indexOf("where case_id = $1"));
+    for (const line of upd.split("\n").filter((x) => /=/.test(x) && !/update investment_cases/.test(x))) {
+      expect(line, line.trim()).toMatch(/coalesce\(|\|\| assumptions/);
+    }
+    expect(fn).toMatch(/status !== "current" && c\.status !== "draft"\) return/);
   });
   it("writes nothing when the deal is held", () => {
     const held = d.indexOf('if (seeded.outcome === "held") return');

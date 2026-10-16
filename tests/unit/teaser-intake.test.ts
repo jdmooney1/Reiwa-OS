@@ -7,6 +7,7 @@ import {
   TeaserExtractionSchema, toSeedRecord, intakeReference, uploadIdOf, sourcingLine, emptyExtraction, REVIEW_FIELDS,
   rangeProblems, normaliseReading, type TeaserExtraction,
 } from "@/lib/teaser-intake/schema";
+import { teaserUnderwriting, rentRollFrom, isoDate, hasUnderwriting, remainingInputs } from "@/lib/teaser-intake/underwriting";
 import { isIntakePathFor, sniffIntakeType, declaredIntakeType, intakeFolder, maxBytesFor, MAX_INTAKE_IMAGE_BYTES } from "@/lib/teaser-intake/files";
 
 const USER = "2b1f0c7e-1d2a-4c3b-9e8f-0a1b2c3d4e5f";
@@ -23,7 +24,7 @@ function reading(patch: (x: TeaserExtraction) => void = () => undefined): Teaser
   };
   x.asset_snapshot = { ...x.asset_snapshot, size_sq_m: 1000, tenure: "freehold", passing_rent_pa: 450000, epc_rating: "A" };
   x.deal_terms = { ...x.deal_terms, currency: "EUR", guide_price: 9500000, niy_percent: 4.4, price_basis: "Vraagprijs" };
-  x.tenants = [{ name: "Studio B.V.", area_sq_ft: null, area_sq_m: null, rent_pa: 450000, lease_expiry: "2031-06-30", break_option: null }];
+  x.tenants = [{ name: "Studio B.V.", unit: null, use: null, area_sq_ft: null, area_sq_m: null, rent_pa: 450000, erv_pa: null, lease_expiry: "2031-06-30", break_option: null }];
   x.highlights = ["Canal-side, fully let"];
   x.other_facts = [{ label: "VAT", value: "Opted" }];
   x.evidence = [{ field: "deal_terms.guide_price", page: 2, quote: "Vraagprijs EUR 9.500.000 k.k." }];
@@ -183,7 +184,7 @@ describe("a model's answer is brought onto the schema, never guessed into anothe
     const x = normaliseReading({ opportunity: { name: "A" }, tenants: [{ rent_pa: 1 }, { name: "T", rent_pa: "100" }], evidence: [{ field: "x" }] })!;
     expect(x.opportunity.name).toBe("A");
     expect(x.deal_terms.guide_price).toBeNull();
-    expect(x.tenants).toEqual([{ name: "T", area_sq_ft: null, area_sq_m: null, rent_pa: 100, lease_expiry: null, break_option: null }]);
+    expect(x.tenants).toEqual([{ name: "T", unit: null, use: null, area_sq_ft: null, area_sq_m: null, rent_pa: 100, erv_pa: null, lease_expiry: null, break_option: null }]);
     expect(x.evidence).toEqual([]);
     expect(x.document.kind).toBe("other");
   });
@@ -253,5 +254,65 @@ describe("files", () => {
     expect(isIntakePathFor(USER, `intake/${USER}/${FILE}.pdf/x`)).toBe(false);
     expect(isIntakePathFor("not-a-uuid", `intake/not-a-uuid/${FILE}.pdf`)).toBe(false);
     expect(isIntakePathFor(USER, 42)).toBe(false);
+  });
+});
+
+describe("the teaser becomes underwriting v1: stated figures, the tenancy, and nothing decided", () => {
+  const tenant = (t: Partial<TeaserExtraction["tenants"][number]>) => ({
+    name: "Tenant", unit: null, use: null, area_sq_ft: null, area_sq_m: null, rent_pa: null, erv_pa: null,
+    lease_expiry: null, break_option: null, ...t,
+  });
+  it("carries the stated figures and nothing else", () => {
+    const u = teaserUnderwriting(reading((x) => { x.asset_snapshot.erv_pa = 480000; x.asset_snapshot.occupancy_percent = 100; }), { fileName: "kade.pdf" });
+    expect(u.fields).toEqual({ acquisition_price: 9500000, entry_yield_pct: 4.4, gross_rental_income: 450000, erv: 480000, occupancy_pct: 100 });
+    expect(u.assumptions.source).toBe("teaser_intake");
+    expect(u.assumptions.teaserFile).toBe("kade.pdf");
+    expect(u.assumptions.priceBasis).toBe("Vraagprijs");
+    expect(hasUnderwriting(u)).toBe(true);
+  });
+  it("builds a rent roll only when every line has an area and a rent; a vacant unit is a zero rent", () => {
+    const full = reading((x) => {
+      x.tenants = [
+        tenant({ name: "Studio B.V.", unit: "Ground", use: "office", area_sq_m: 500, rent_pa: 300000, lease_expiry: "30/06/2031", erv_pa: 310000 }),
+        tenant({ name: "Vacant", unit: "First", area_sq_ft: 5000 }),
+      ];
+    });
+    const rr = rentRollFrom(full)!;
+    expect(rr).toHaveLength(2);
+    expect(rr[0]).toMatchObject({ unit: "Ground", tenant: "Studio B.V.", use: "office", areaSqft: Math.round(500 * 10.7639), rentPa: 300000, expiry: "2031-06-30", ervPa: 310000 });
+    expect(rr[1]).toMatchObject({ unit: "First", tenant: null, use: "office", rentPa: 0, expiry: null });
+    const partial = reading((x) => { x.tenants = [tenant({ name: "A", area_sq_ft: 1000, rent_pa: 1 }), tenant({ name: "B", rent_pa: 2 })]; });
+    expect(rentRollFrom(partial)).toBeNull();
+    const u = teaserUnderwriting(partial, { fileName: null });
+    expect(u.assumptions.rentRoll).toBeUndefined();
+    expect(u.assumptions.teaserTenancy).toHaveLength(2);
+  });
+  it("an ERV is the stated one, else a schedule that gives one for every line, else nothing", () => {
+    expect(teaserUnderwriting(reading((x) => { x.tenants = [tenant({ erv_pa: 1 }), tenant({ erv_pa: 2 })]; }), { fileName: null }).fields.erv).toBe(3);
+    expect(teaserUnderwriting(reading((x) => { x.tenants = [tenant({ erv_pa: 1 }), tenant({})]; }), { fileName: null }).fields.erv).toBeNull();
+  });
+  it("reads a date only when the day is written", () => {
+    expect(isoDate("2031-06-30")).toBe("2031-06-30");
+    expect(isoDate("1/2/2030")).toBe("2030-02-01");
+    expect(isoDate("June 2031")).toBeNull();
+    expect(isoDate("31/02/2030")).toBeNull();
+    expect(isoDate(null)).toBeNull();
+  });
+  it("a teaser with nothing for underwriting makes no version", () => {
+    expect(hasUnderwriting(teaserUnderwriting(emptyExtraction(), { fileName: null }))).toBe(false);
+  });
+  it("lists what is still to underwrite, and treats LTV as debt", () => {
+    expect(remainingInputs(null).map((g) => g.key)).toContain("exitYieldPct");
+    const left = remainingInputs({ acquisitionPrice: 1, grossRentalIncome: 1, erv: 1, ltvPct: 55, exitYieldPct: 5 }).map((g) => g.key);
+    expect(left).not.toContain("debt");
+    expect(left).not.toContain("exitYieldPct");
+    expect(left).toContain("acquisitionCosts");
+    expect(left).toContain("targetIrr");
+  });
+  it("the tenant use vocabulary is the engine's, and plural words are read", () => {
+    const a = JSON.parse(JSON.stringify(reading()));
+    a.tenants = [{ name: "X", use: "Offices" }, { name: "Y", use: "shop" }];
+    const x = normaliseReading(a)!;
+    expect(x.tenants.map((t) => t.use)).toEqual(["office", null]);
   });
 });

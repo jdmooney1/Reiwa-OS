@@ -14,6 +14,8 @@ vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 vi.mock("@/lib/data/underwriting", () => ({
   createVersion: async (...a: unknown[]) => { state.created.push(a); return "case-1"; },
   makeCurrent: async () => undefined,
+  // No earlier version, so there are no structured assumptions to carry forward.
+  listVersions: async () => [],
 }));
 
 const OPP = "11111111-1111-4111-8111-111111111111";

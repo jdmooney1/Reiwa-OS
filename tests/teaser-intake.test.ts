@@ -10,7 +10,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminQuery, withSession, type Session } from "@/lib/db/client";
 import { parseDealSeed } from "@/lib/ingestion/deal-seed";
-import { createIntakeDeal, IntakeOrgError, type IntakeDealInput } from "@/lib/data/teaser-intake";
+import { createIntakeDeal, IntakeOrgError, getTeaserBrief, type IntakeDealInput } from "@/lib/data/teaser-intake";
+import { teaserUnderwriting } from "@/lib/teaser-intake/underwriting";
 import { TeaserExtractionSchema, emptyExtraction, toSeedRecord, intakeReference } from "@/lib/teaser-intake/schema";
 import { orgIdByName, createStaffSession } from "./helpers";
 
@@ -32,11 +33,19 @@ function input(name: string, extra: Partial<IntakeDealInput> = {}): IntakeDealIn
   x.asset_snapshot = { ...x.asset_snapshot, size_sq_m: 1000, tenure: "freehold", passing_rent_pa: 500000 };
   x.deal_terms = { ...x.deal_terms, currency: "EUR", guide_price: 11000000, niy_percent: 4.1 };
   x.evidence = [{ field: "deal_terms.guide_price", page: 1, quote: "EUR 11.000.000 k.k." }];
-  const record = toSeedRecord(TeaserExtractionSchema.parse(x), { fileName: "teaser.pdf", model: "test-model" });
+  x.asset_snapshot.erv_pa = 520000;
+  x.asset_snapshot.occupancy_percent = 95;
+  x.tenants = [
+    { name: "Studio B.V.", unit: "Ground", use: "office", area_sq_ft: 6000, area_sq_m: null, rent_pa: 300000, erv_pa: null, lease_expiry: "2031-06-30", break_option: null },
+    { name: "Vacant", unit: "First", use: null, area_sq_ft: 4000, area_sq_m: null, rent_pa: null, erv_pa: null, lease_expiry: null, break_option: null },
+  ];
+  const reading = TeaserExtractionSchema.parse(x);
+  const record = toSeedRecord(reading, { fileName: "teaser.pdf", model: "test-model" });
   const [deal] = parseDealSeed({ deals: [record] });
   return {
     orgId, userId: staff.userId, allowExisting: false, record, deal: { ...deal, reference: intakeReference(deal.name, UPLOAD()) },
-    fileName: "teaser.pdf", title: "teaser", mimeType: "application/pdf", sizeBytes: 1234, ...extra,
+    fileName: "teaser.pdf", title: "teaser", mimeType: "application/pdf", sizeBytes: 1234,
+    underwriting: teaserUnderwriting(reading, { fileName: "teaser.pdf" }), ...extra,
   };
 }
 let k = 0;
@@ -114,5 +123,43 @@ describe("a teaser makes the loader's own draft, with the file filed on it", () 
   it("staff cannot create a deal in an organisation they are not a member of", async () => {
     await expect(withSession(staff, (tx) => createIntakeDeal(tx, input("Rokin", { orgId: otherOrgId }), fileIt)))
       .rejects.toBeInstanceOf(IntakeOrgError);
+  });
+
+  it("leaves underwriting v1 ready: the teaser's figures, its tenancy as a rent roll, and nothing decided", async () => {
+    const r = await withSession(staff, (tx) => createIntakeDeal(tx, input("Underwritten"), fileIt));
+    expect(r.kind).toBe("done");
+    if (r.kind !== "done") return;
+    const c = await adminQuery<Record<string, any>>("select * from investment_cases where opportunity_id = $1", [r.opportunityId]);
+    expect(c).toHaveLength(1);
+    expect(c[0]).toMatchObject({ version: 1, status: "current", created_by: staff.userId });
+    expect(Number(c[0].acquisition_price)).toBe(11000000);
+    expect(Number(c[0].erv)).toBe(520000);
+    expect(Number(c[0].occupancy_pct)).toBe(95);
+    expect(c[0].change_rationale).toMatch(/^From the broker teaser \(teaser\.pdf\)/);
+    for (const k of ["acquisition_costs", "capex", "debt", "exit_yield_pct", "hold_period_years", "target_irr", "noi"]) expect(c[0][k], k).toBeNull();
+    expect(c[0].assumptions.source).toBe("teaser_intake");
+    expect(c[0].assumptions.rentRoll).toHaveLength(2);
+    expect(c[0].assumptions.rentRoll[1]).toMatchObject({ unit: "First", tenant: null, rentPa: 0, areaSqft: 4000 });
+    const brief = await withSession(staff, (tx) => getTeaserBrief(tx, r.opportunityId));
+    expect(brief?.tenancy).toHaveLength(2);
+    expect(brief?.documentId).toBe(r.documentId);
+  });
+
+  it("makes version 1 when the teaser gives no price but does give income", async () => {
+    const i = input("No Price");
+    const u = { ...i.underwriting!, fields: { ...i.underwriting!.fields, acquisition_price: null, entry_yield_pct: null, gross_rental_income: null } };
+    const deal = { ...i.deal, money: { ...i.deal.money, guidePrice: null, niyPct: null, passingRent: null } };
+    const r = await withSession(staff, (tx) => createIntakeDeal(tx, { ...i, deal, underwriting: u }, fileIt));
+    if (r.kind !== "done") throw new Error(r.kind);
+    const c = await adminQuery<Record<string, any>>("select * from investment_cases where opportunity_id = $1", [r.opportunityId]);
+    expect(c).toHaveLength(1);
+    expect(c[0].acquisition_price).toBeNull();
+    expect(Number(c[0].erv)).toBe(520000);
+  });
+
+  it("a deal not made from a teaser has no brief", async () => {
+    const [o] = await adminQuery<{ opportunity_id: string }>(
+      "select opportunity_id from opportunities where source_facts->'teaser_intake' is null limit 1");
+    expect(await withSession(staff, (tx) => getTeaserBrief(tx, o.opportunity_id))).toBeNull();
   });
 });

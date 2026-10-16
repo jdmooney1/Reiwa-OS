@@ -82,3 +82,28 @@ plain-key price or rent with no currency stated is now refused rather than kept 
 - `tests/teaser-intake.test.ts` (integration): the draft, its case, the internal document and the
   provenance land together; a held deal and a failed file copy leave no trace; a re-drop is held;
   staff cannot write into an organisation they are not a member of.
+
+## Underwriting v1, ready for the next stage
+
+A deal made from a teaser opens its **Underwriting** tab ready to underwrite
+(`lib/teaser-intake/underwriting.ts`, written by `seedUnderwriting()` in `lib/data/teaser-intake.ts`,
+in the same transaction as the deal):
+
+- **Version 1** carries what the teaser states: price, NIY, passing rent, ERV (stated, or the sum of a
+  schedule that gives one for every line) and occupancy. Its change rationale says it is the broker's
+  figures, not yet underwritten. Costs, capex, NOI, debt, exit yield, hold and target IRR stay empty:
+  they are judgements.
+- **`assumptions.teaserTenancy`** keeps the tenancy schedule as read. It also becomes
+  **`assumptions.rentRoll`** (the assessment engine's shape, docs/28) only when every line has an
+  area and a rent; a "Vacant" line is a zero rent. Dates are taken only when the day is written.
+- **`assumptions.source = "teaser_intake"`** marks the version. It is dropped when a person revises,
+  because the next version is theirs.
+- **New versions carry the assumptions forward** from the version the form was seeded from, so the
+  rent roll survives revision (`createVersionAction`).
+- The tab shows a **From the teaser** panel to staff: what is still to underwrite in the working
+  version, the tenancy schedule and whether it loaded as a rent roll, the price basis, what the
+  teaser left out, and a link to the teaser itself.
+
+Only a deal the intake has just created gets this; no version anyone has worked on is touched.
+Deals made before this change still get the panel (it reads `source_facts`), but their v1 carries only
+price, NIY and passing rent.

@@ -48,7 +48,9 @@ describe("the new columns are named only where they are written", () => {
     // intake, whose schema speaks the parser's input vocabulary (it builds seed records and is
     // staff-only; teaser-intake-boundaries.test.ts keeps it away from every investor surface).
     expect(hits.filter((h) => !h.startsWith("src/lib/ingestion/deal-seed.ts")
-      && !h.startsWith("src/lib/teaser-intake/") && !h.startsWith("src/components/opportunities/teaser-intake.tsx"))).toEqual([]);
+      && !h.startsWith("src/lib/teaser-intake/") && !h.startsWith("src/components/opportunities/teaser-intake.tsx")
+      // The teaser brief on the Underwriting tab reads source_facts for staff only (isInternalStaff on the page).
+      && !h.startsWith("src/lib/data/teaser-intake.ts"))).toEqual([]);
   });
 });
 
