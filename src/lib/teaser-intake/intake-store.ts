@@ -28,7 +28,7 @@ import { DOCUMENT_BUCKET, ALLOWED_DOCUMENT_TYPES } from "@/lib/documents/constra
 import { newOpportunityObjectPath } from "@/lib/documents/storage";
 import { AppError } from "@/lib/errors";
 import {
-  INTAKE_TYPES, MAX_INTAKE_BYTES, sniffIntakeType, isIntakePathFor, intakeFolder, type IntakeType,
+  MAX_INTAKE_BYTES, sniffIntakeType, isIntakePathFor, intakeFolder, maxBytesFor, tooLargeMessage, type IntakeType,
 } from "@/lib/teaser-intake/files";
 
 export { MAX_INTAKE_BYTES, INTAKE_TYPES, type IntakeType } from "@/lib/teaser-intake/files";
@@ -63,11 +63,10 @@ export async function readIntakeObject(userId: string, path: string): Promise<In
   if (error || !data) throw new AppError("That upload could not be found. Drop the file again.");
   const bytes = new Uint8Array(await data.arrayBuffer());
   if (bytes.byteLength === 0) throw new AppError("The uploaded file is empty.");
-  if (bytes.byteLength > MAX_INTAKE_BYTES) {
-    throw new AppError(`The file is larger than ${Math.round(MAX_INTAKE_BYTES / (1024 * 1024))} MB. Use the teaser rather than the full IM.`);
-  }
+  if (bytes.byteLength > MAX_INTAKE_BYTES) throw new AppError(tooLargeMessage("application/pdf"));
   const type = sniffIntakeType(bytes);
   if (!type) throw new AppError("The file is not a PDF, PNG or JPEG.");
+  if (bytes.byteLength > maxBytesFor(type)) throw new AppError(tooLargeMessage(type));
   // The extension the server chose must agree with what the bytes are.
   if (!path.endsWith(ALLOWED_DOCUMENT_TYPES[type])) throw new AppError("The file is not the type it was uploaded as. Drop it again.");
   return { bytes, type };

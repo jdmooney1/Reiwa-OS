@@ -21,7 +21,7 @@ import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { ActionError } from "@/components/workspace/primitives";
 import { useFileDrop, dropZoneClass } from "@/lib/ui/use-file-drop";
 import { cn } from "@/lib/utils";
-import { INTAKE_ACCEPT, MAX_INTAKE_BYTES, declaredIntakeType } from "@/lib/teaser-intake/files";
+import { INTAKE_ACCEPT, MAX_INTAKE_BYTES, MAX_INTAKE_IMAGE_BYTES, declaredIntakeType, maxBytesFor, tooLargeMessage } from "@/lib/teaser-intake/files";
 import {
   REVIEW_FIELDS, fieldPath, type ReviewField, type TeaserExtraction, type EvidenceItem,
 } from "@/lib/teaser-intake/schema";
@@ -41,7 +41,6 @@ export function TeaserIntake({ orgs }: { orgs: Org[] }) {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [error, setError] = useState<string>();
   const [extraction, setExtraction] = useState<TeaserExtraction | null>(null);
-  const [model, setModel] = useState<string | null>(null);
   const [readError, setReadError] = useState<string>();
   const [matches, setMatches] = useState<PossibleMatch[]>([]);
   const [held, setHeld] = useState<PossibleMatch[] | null>(null);
@@ -50,18 +49,16 @@ export function TeaserIntake({ orgs }: { orgs: Org[] }) {
   const [busy, setBusy] = useState<"create" | "attach" | null>(null);
 
   const reset = () => {
-    setPhase({ kind: "idle" }); setError(undefined); setExtraction(null); setModel(null); setReadError(undefined);
+    setPhase({ kind: "idle" }); setError(undefined); setExtraction(null); setReadError(undefined);
     setMatches([]); setHeld(null); setProblems([]); setBusy(null);
     if (input.current) input.current.value = "";
   };
 
   async function start(file: File) {
     reset();
-    if (!declaredIntakeType(file.name, file.type)) { setError("Drop a PDF, PNG or JPEG of the teaser."); return; }
-    if (file.size > MAX_INTAKE_BYTES) {
-      setError(`The file is ${(file.size / MB).toFixed(1)} MB; the limit is ${Math.round(MAX_INTAKE_BYTES / MB)} MB. Use the teaser rather than the full IM.`);
-      return;
-    }
+    const type = declaredIntakeType(file.name, file.type);
+    if (!type) { setError("Drop a PDF, PNG or JPEG of the teaser."); return; }
+    if (file.size > maxBytesFor(type)) { setError(tooLargeMessage(type)); return; }
     setPhase({ kind: "uploading", fileName: file.name });
     const prep = await prepareTeaserUploadAction(file.name, file.type, file.size).catch(() => ({ error: "The upload could not be prepared. Try again." }));
     if (prep.error || !("path" in prep) || !prep.path || !prep.signedUrl) { setError(prep.error ?? "The upload could not be prepared."); setPhase({ kind: "idle" }); return; }
@@ -69,7 +66,7 @@ export function TeaserIntake({ orgs }: { orgs: Org[] }) {
     try {
       // Re-labelled with the type the server agreed to, so a PDF a mail client handed over with
       // no type is not refused by the bucket as application/octet-stream.
-      const typed = new File([file], file.name, { type: declaredIntakeType(file.name, file.type)! });
+      const typed = new File([file], file.name, { type });
       const body = new FormData();
       body.append("cacheControl", "3600");
       body.append("", typed);
@@ -83,10 +80,9 @@ export function TeaserIntake({ orgs }: { orgs: Org[] }) {
 
     setPhase({ kind: "reading", fileName: file.name, path: prep.path });
     const read = await readTeaserAction(prep.path).catch(() => ({ error: "The teaser could not be read. Try again." } as const));
-    if ("error" in read && read.error) { setError(read.error); setPhase({ kind: "idle" }); void discardTeaserAction(prep.path); return; }
-    if (!("extraction" in read) || !read.extraction) { setError("The teaser could not be read."); setPhase({ kind: "idle" }); return; }
+    if ("error" in read && read.error) { setError(read.error); setPhase({ kind: "idle" }); void discardTeaserAction(prep.path).catch(() => undefined); return; }
+    if (!("extraction" in read) || !read.extraction) { setError("The teaser could not be read."); setPhase({ kind: "idle" }); void discardTeaserAction(prep.path).catch(() => undefined); return; }
     setExtraction(read.extraction);
-    setModel(read.model ?? null);
     setReadError(read.readError);
     setMatches(read.matches ?? []);
     setPhase({ kind: "review", fileName: file.name, path: prep.path });
@@ -98,7 +94,7 @@ export function TeaserIntake({ orgs }: { orgs: Org[] }) {
     if (phase.kind !== "review" || !extraction) return;
     setBusy("create"); setError(undefined); setProblems([]); setHeld(null);
     const r = await createDealFromTeaserAction({
-      path: phase.path, fileName: phase.fileName, orgId, extraction, model, allowExisting,
+      path: phase.path, fileName: phase.fileName, orgId, extraction, allowExisting,
     }).catch(() => ({ error: "The deal could not be created. Try again." }));
     setBusy(null);
     if (r.error) { setError(r.error); return; }
@@ -118,7 +114,7 @@ export function TeaserIntake({ orgs }: { orgs: Org[] }) {
   }
 
   async function startAgain() {
-    if (phase.kind === "review" || phase.kind === "reading") void discardTeaserAction(phase.path);
+    if (phase.kind === "review" || phase.kind === "reading") void discardTeaserAction(phase.path).catch(() => undefined);
     reset();
   }
 
@@ -141,7 +137,7 @@ export function TeaserIntake({ orgs }: { orgs: Org[] }) {
             <>
               <FileUp className="h-6 w-6 text-ink-faint" />
               <p className="mt-3 text-sm text-ink">Drop a teaser or IM here</p>
-              <p className="mt-1 text-xs text-ink-muted">PDF, PNG or JPEG, up to {Math.round(MAX_INTAKE_BYTES / MB)} MB</p>
+              <p className="mt-1 text-xs text-ink-muted">PDF up to {Math.round(MAX_INTAKE_BYTES / MB)} MB, or a PNG / JPEG up to {(MAX_INTAKE_IMAGE_BYTES / MB).toFixed(1)} MB</p>
               <button type="button" onClick={() => input.current?.click()}
                 className="mt-4 rounded border border-line px-3 py-1.5 text-xs font-medium text-ink hover:border-line-strong">
                 Choose a file
@@ -170,7 +166,7 @@ export function TeaserIntake({ orgs }: { orgs: Org[] }) {
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       <div className="flex items-center justify-between gap-3 text-xs text-ink-muted">
-        <span className="truncate">Read from <span className="text-ink">{phase.fileName}</span>{model ? ` by ${model}` : ""}. Check each field; empty means the teaser did not say.</span>
+        <span className="truncate">Read from <span className="text-ink">{phase.fileName}</span>. Check each field; empty means the teaser did not say.</span>
         <button type="button" onClick={startAgain} className="flex shrink-0 items-center gap-1 hover:text-ink"><X className="h-3.5 w-3.5" /> Start again</button>
       </div>
 
@@ -230,7 +226,8 @@ export function TeaserIntake({ orgs }: { orgs: Org[] }) {
           <div className="flex items-center justify-between gap-2">
             <p className="text-2xs text-ink-faint">Creates a draft at stage New, untriaged and unowned. The teaser is filed under Documents as internal.</p>
             <div className="flex items-center gap-2">
-              <Link href="/pipeline" className="rounded px-3 py-2 text-xs font-medium text-ink-muted hover:text-ink">Cancel</Link>
+              <Link href="/pipeline" onClick={() => { void discardTeaserAction(phase.path).catch(() => undefined); }}
+                className="rounded px-3 py-2 text-xs font-medium text-ink-muted hover:text-ink">Cancel</Link>
               <button type="button" disabled={busy !== null || !orgId} onClick={() => create(false)}
                 className="flex items-center gap-1.5 rounded bg-purple px-4 py-2 text-xs font-semibold text-surface hover:bg-purple-70 disabled:opacity-60">
                 {busy === "create" && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Create Draft Deal

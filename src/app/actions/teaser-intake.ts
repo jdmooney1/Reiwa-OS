@@ -41,14 +41,15 @@ import { recordDocumentOn } from "@/lib/data/opportunity-documents";
 import { titleFromFileName } from "@/lib/documents/suggest-title";
 import { safeFileName } from "@/lib/documents/constraints";
 import {
-  TeaserExtractionSchema, toSeedRecord, intakeReference, emptyExtraction, statesMoney, type TeaserExtraction,
+  TeaserExtractionSchema, toSeedRecord, intakeReference, uploadIdOf, emptyExtraction, rangeProblems,
+  type TeaserExtraction,
 } from "@/lib/teaser-intake/schema";
-import { declaredIntakeType, MAX_INTAKE_BYTES } from "@/lib/teaser-intake/files";
+import { declaredIntakeType, maxBytesFor, tooLargeMessage } from "@/lib/teaser-intake/files";
 import {
   createIntakeUpload, readIntakeObject, promoteIntakeObject, removeIntakeObject, removePromotedObject,
   sweepStaleIntake,
 } from "@/lib/teaser-intake/intake-store";
-import { extractTeaser } from "@/lib/teaser-intake/extract";
+import { extractTeaser, INTAKE_MODEL } from "@/lib/teaser-intake/extract";
 
 /** A deal already in the pipeline that may be the same building. Safe to show. */
 export interface PossibleMatch {
@@ -66,14 +67,13 @@ export interface PrepareResult { error?: string; path?: string; signedUrl?: stri
 
 export async function prepareTeaserUploadAction(fileName: string, mime: string, size: number): Promise<PrepareResult> {
   const { db } = await requireStaffSession();
+  if (!db.canWrite) return { error: "Your account cannot create deals." };
   let out: PrepareResult = {};
   const r = await runAction("teaserIntake.prepare", {}, async () => {
     const type = declaredIntakeType(String(fileName ?? ""), String(mime ?? ""));
     if (!type) throw new AppError("Drop a PDF, PNG or JPEG of the teaser.");
     if (!Number.isFinite(size) || size <= 0) throw new AppError("The file is empty.");
-    if (size > MAX_INTAKE_BYTES) {
-      throw new AppError(`The file is larger than ${Math.round(MAX_INTAKE_BYTES / (1024 * 1024))} MB. Use the teaser rather than the full IM.`);
-    }
+    if (size > maxBytesFor(type)) throw new AppError(tooLargeMessage(type));
     await sweepStaleIntake(db.userId);
     out = await createIntakeUpload(db.userId, type);
   });
@@ -84,7 +84,6 @@ export async function prepareTeaserUploadAction(fileName: string, mime: string, 
 export interface ReadResult {
   error?: string;
   extraction?: TeaserExtraction;
-  model?: string | null;
   /** Set when the file could not be read by the model: the person can still fill the form by hand. */
   readError?: string;
   matches?: PossibleMatch[];
@@ -92,16 +91,14 @@ export interface ReadResult {
 
 export async function readTeaserAction(path: string): Promise<ReadResult> {
   const { db } = await requireStaffSession();
+  if (!db.canWrite) return { error: "Your account cannot create deals." };
   let out: ReadResult = {};
   const r = await runAction("teaserIntake.read", {}, async () => {
     const file = await readIntakeObject(db.userId, path);
     let extraction: TeaserExtraction;
-    let model: string | null = null;
     let readError: string | undefined;
     try {
-      const res = await extractTeaser(file.bytes, file.type);
-      extraction = res.extraction;
-      model = res.model;
+      extraction = (await extractTeaser(file.bytes, file.type)).extraction;
     } catch (e) {
       // A reading that failed is not the end: the file is still here and the form can be filled by hand.
       if (!(e instanceof AppError)) throw e;
@@ -109,16 +106,15 @@ export async function readTeaserAction(path: string): Promise<ReadResult> {
       readError = assertSafeForDisplay(e.message);
     }
     const matches = await withSession(db, (tx) => findPossibleMatches(tx, extraction));
-    out = { extraction, model, readError, matches };
+    out = { extraction, readError, matches };
   });
   return r.error ? { error: r.error } : out;
 }
 
 /**
- * Read-only: deals in the caller's organisations whose name looks like this one,
- * or whose address shares the leading street words. The definitive check is the
- * one seedDeal() makes on the resolved property at creation; this is an early
- * warning on the review screen.
+ * Read-only, and by NAME only: deals visible to this person whose name looks like this one.
+ * An early warning on the review screen. The definitive check (same building, or similar
+ * name, in the chosen organisation) is the one seedDeal() makes at creation.
  */
 async function findPossibleMatches(tx: Queryable, x: TeaserExtraction): Promise<PossibleMatch[]> {
   const name = x.opportunity.name?.trim();
@@ -143,20 +139,17 @@ export interface CreateInput {
   fileName: string | null;
   orgId: string;
   extraction: unknown;
-  model: string | null;
   /** Create even though a deal for the same building is already in the pipeline. */
   allowExisting: boolean;
 }
 
 export interface CreateResult {
   error?: string;
-  /** What the seed parser refused, one line each, for the person to fix on the form. */
+  /** What must be fixed on the form, one line each. */
   problems?: string[];
   /** Set when the deal was held because it looks like one already in the pipeline. */
   held?: PossibleMatch[];
   opportunityId?: string;
-  outcome?: "created" | "updated";
-  notice?: string;
 }
 
 export async function createDealFromTeaserAction(input: CreateInput): Promise<CreateResult> {
@@ -170,13 +163,16 @@ export async function createDealFromTeaserAction(input: CreateInput): Promise<Cr
     if (!checked.success) throw new AppError("The reviewed details could not be read. Reload the page and drop the teaser again.");
     const x = checked.data;
 
-    if (statesMoney(x) && !x.deal_terms.currency) {
-      out = { problems: ["Choose the currency the teaser's figures are in: nothing is assumed to be GBP."] };
-      return;
-    }
+    const problems = rangeProblems(x);
+    // The deal's currency is recorded even when the teaser gives no figure, so it is always chosen, never assumed.
+    if (!x.deal_terms.currency) problems.unshift("Choose the currency the deal is in: nothing is assumed to be GBP.");
+    if (problems.length) { out = { problems }; return; }
 
+    const uploadId = uploadIdOf(input.path);
+    if (!uploadId) throw new AppError("That upload could not be found. Drop the file again.");
     const fileName = safeFileName(input.fileName ?? "") ?? null;
-    const record = toSeedRecord(x, { fileName, model: input.model });
+    // The model is recorded from the server's own setting, never from what the browser sent.
+    const record = toSeedRecord(x, { fileName, model: INTAKE_MODEL });
     let deal;
     try {
       [deal] = parseDealSeed({ deals: [record] });
@@ -184,7 +180,7 @@ export async function createDealFromTeaserAction(input: CreateInput): Promise<Cr
       out = { problems: problemLines((e as Error).message) };
       return;
     }
-    deal = { ...deal, reference: intakeReference(deal.name) };
+    deal = { ...deal, reference: intakeReference(deal.name, uploadId) };
 
     // Read the file before opening the transaction: a missing or mislabelled file stops here.
     const file = await readIntakeObject(db.userId, input.path);
@@ -210,12 +206,7 @@ export async function createDealFromTeaserAction(input: CreateInput): Promise<Cr
       return;
     }
     await removeIntakeObject(db.userId, input.path);
-    out = {
-      opportunityId: result.opportunityId, outcome: result.outcome,
-      notice: result.outcome === "updated"
-        ? "This teaser had already been used to create this deal. Blank fields were filled and the file was added; nothing you had edited was changed."
-        : undefined,
-    };
+    out = { opportunityId: result.opportunityId };
   }, { ruleMessage: "The deal could not be created." });
 
   if (r.error) return { error: r.error };
@@ -255,16 +246,21 @@ export async function attachTeaserToDealAction(path: string, fileName: string | 
     if (!isUuid(opportunityId)) throw new AppError("That deal could not be found.");
     const file = await readIntakeObject(db.userId, path);
     const name = safeFileName(fileName ?? "") ?? null;
-    const promoted = await promoteIntakeObject(db.userId, path, opportunityId, file.type);
+    let promoted: string | null = null;
     try {
-      await withSession(db, (tx) => recordDocumentOn(tx, db.userId, opportunityId, {
-        title: titleFromFileName(name ?? "") || "Teaser",
-        storagePath: promoted, category: TEASER_CATEGORY, fileName: name,
-        mimeType: file.type, sizeBytes: file.bytes.byteLength,
-      }));
+      await withSession(db, async (tx) => {
+        // Visibility first, under this person's own policies: nothing is copied for a deal they cannot see.
+        const seen = await tx.query("select 1 from opportunities where opportunity_id = $1", [opportunityId]);
+        if (!seen.rows[0]) throw new AppError("That deal could not be found.");
+        promoted = await promoteIntakeObject(db.userId, path, opportunityId, file.type);
+        await recordDocumentOn(tx, db.userId, opportunityId, {
+          title: titleFromFileName(name ?? "") || "Teaser",
+          storagePath: promoted, category: TEASER_CATEGORY, fileName: name,
+          mimeType: file.type, sizeBytes: file.bytes.byteLength,
+        });
+      });
     } catch (e) {
-      await removePromotedObject(promoted);
-      if (e instanceof Error && /not found or not permitted/.test(e.message)) throw new AppError("That deal could not be found.");
+      if (promoted) await removePromotedObject(promoted);
       throw e;
     }
     await removeIntakeObject(db.userId, path);
@@ -276,7 +272,12 @@ export async function attachTeaserToDealAction(path: string, fileName: string | 
 }
 
 // ---- 4. Discard ---------------------------------------------------------------
+/** Best-effort: never throws, so a page leaving cannot surface an error. */
 export async function discardTeaserAction(path: string): Promise<void> {
-  const { db } = await requireStaffSession();
-  await removeIntakeObject(db.userId, path);
+  try {
+    const { db } = await requireStaffSession();
+    await removeIntakeObject(db.userId, path);
+  } catch {
+    // An expired session or a storage hiccup leaves the file for the daily sweep.
+  }
 }

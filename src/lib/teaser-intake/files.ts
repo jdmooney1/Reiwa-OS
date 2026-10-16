@@ -18,6 +18,24 @@ export const INTAKE_ACCEPT = ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,ima
  */
 export const MAX_INTAKE_BYTES = 22 * 1024 * 1024;
 
+/**
+ * The reader refuses an image over 5 MB once encoded, so a screenshot or scan must be smaller
+ * than a PDF may be. A larger scan is better sent as the PDF.
+ */
+export const MAX_INTAKE_IMAGE_BYTES = Math.floor(3.7 * 1024 * 1024);
+
+/** The ceiling for a file of this type. */
+export function maxBytesFor(t: IntakeType): number {
+  return t === "application/pdf" ? MAX_INTAKE_BYTES : MAX_INTAKE_IMAGE_BYTES;
+}
+
+/** Words for a file over its ceiling. */
+export function tooLargeMessage(t: IntakeType): string {
+  return t === "application/pdf"
+    ? `The file is larger than ${Math.round(MAX_INTAKE_BYTES / (1024 * 1024))} MB. Use the teaser rather than the full IM.`
+    : `Images must be under ${(MAX_INTAKE_IMAGE_BYTES / (1024 * 1024)).toFixed(1)} MB. Use a smaller screenshot, or the PDF.`;
+}
+
 export function isIntakeType(t: string): t is IntakeType {
   return (INTAKE_TYPES as readonly string[]).includes(t);
 }

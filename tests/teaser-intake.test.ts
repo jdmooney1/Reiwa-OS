@@ -14,6 +14,8 @@ import { createIntakeDeal, IntakeOrgError, type IntakeDealInput } from "@/lib/da
 import { TeaserExtractionSchema, emptyExtraction, toSeedRecord, intakeReference } from "@/lib/teaser-intake/schema";
 import { orgIdByName, createStaffSession } from "./helpers";
 
+let uploads = 0;
+const UPLOAD = () => `${String(Date.now()).slice(-4)}${String(++uploads).padStart(4, "0")}-6b5a-4f3e-9d2c-0a1b2c3d4e5f`;
 const RUN = [...String(Date.now()).slice(-6)].map((c) => "abcdefghij"[Number(c)]).join("");
 let n = 0;
 let orgId: string;
@@ -33,7 +35,7 @@ function input(name: string, extra: Partial<IntakeDealInput> = {}): IntakeDealIn
   const record = toSeedRecord(TeaserExtractionSchema.parse(x), { fileName: "teaser.pdf", model: "test-model" });
   const [deal] = parseDealSeed({ deals: [record] });
   return {
-    orgId, userId: staff.userId, allowExisting: false, record, deal: { ...deal, reference: intakeReference(deal.name) },
+    orgId, userId: staff.userId, allowExisting: false, record, deal: { ...deal, reference: intakeReference(deal.name, UPLOAD()) },
     fileName: "teaser.pdf", title: "teaser", mimeType: "application/pdf", sizeBytes: 1234, ...extra,
   };
 }
@@ -60,7 +62,7 @@ describe("a teaser makes the loader's own draft, with the file filed on it", () 
       stage: "new", status: "active", triage_status: "untriaged", owner_user_id: null, created_by: staff.userId,
       currency: "EUR", broker_name: "Example Agents", source_contact_name: "Pat Example", deal_stage: "guided",
     });
-    expect(o.reference).toMatch(/^IM-ZT/);
+    expect(o.reference).toMatch(/^IM-ZT[A-Z]+-KADE-\d{8}$/);
     expect(Number(o.size_sqft)).toBe(10764);
     expect(o.source_facts.teaser_intake.evidence).toHaveLength(1);
     const c = await adminQuery<Record<string, any>>("select * from investment_cases where opportunity_id = $1", [r.opportunityId]);
@@ -78,18 +80,20 @@ describe("a teaser makes the loader's own draft, with the file filed on it", () 
     expect(pubs[0].n).toBe(0);
   });
 
-  it("the same teaser again fills blanks on the same deal and adds the file; it makes no second deal", async () => {
+  it("the same teaser dropped again is held against the deal it made: a teaser never updates a deal by itself", async () => {
     const i = input("Gracht");
     const a = await withSession(staff, (tx) => createIntakeDeal(tx, i, fileIt));
-    const b = await withSession(staff, (tx) => createIntakeDeal(tx, i, fileIt));
-    expect(a.kind === "done" && b.kind === "done" && a.opportunityId === b.opportunityId).toBe(true);
-    expect(b.kind === "done" && b.outcome).toBe("updated");
+    expect(a.kind).toBe("done");
+    const again = { ...i, deal: { ...i.deal, reference: intakeReference(i.deal.name, UPLOAD()) } };
+    const b = await withSession(staff, (tx) => createIntakeDeal(tx, again, fileIt));
+    expect(b.kind).toBe("held");
+    if (a.kind === "done" && b.kind === "held") expect(b.collisions.map((c) => c.opportunityId)).toContain(a.opportunityId);
   });
 
   it("a deal that looks like one already in the pipeline is held and leaves no trace, unless allowed", async () => {
     const first = input("Singel Huis");
     await withSession(staff, (tx) => createIntakeDeal(tx, first, fileIt));
-    const twin = { ...first, deal: { ...first.deal, name: `${first.deal.name} Amsterdam`, reference: intakeReference(`${first.deal.name} Amsterdam`) } };
+    const twin = { ...first, deal: { ...first.deal, name: `${first.deal.name} Amsterdam`, reference: intakeReference(`${first.deal.name} Amsterdam`, UPLOAD()) } };
     const before = await counts();
     let copies = 0;
     const r = await withSession(staff, (tx) => createIntakeDeal(tx, twin, async (o) => { copies++; return fileIt(o); }));

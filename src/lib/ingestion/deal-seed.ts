@@ -190,21 +190,23 @@ function parseOne(d: unknown, bad: (m: string) => void): SeedDeal | null {
   const sourcing = text(opp, "sourcing", "opportunity");
   // A record may name the broker firm and person outright (a reviewed teaser does). Those win
   // over parsing the source line, and a line that does not parse is then not a problem.
-  const statedBroker = text(opp, "broker_name", "opportunity");
-  const statedContact = text(opp, "source_contact_name", "opportunity");
+  // Only text is taken; anything else stays where it was, as a source fact (as it always did).
+  const softText = (o: Obj, k: string): string | null => {
+    const v = o[k];
+    if (typeof v !== "string" || v.trim() === "") return null;
+    delete o[k];
+    return v.trim();
+  };
+  const statedBroker = softText(opp, "broker_name");
+  const statedContact = softText(opp, "source_contact_name");
   const fromLine = parseSourcing(sourcing);
-  const parsed = statedBroker || statedContact
-    ? { broker: statedBroker, contact: statedContact, note: fromLine.note }
-    : fromLine;
+  const parsed = { broker: statedBroker ?? fromLine.broker, contact: statedContact ?? fromLine.contact, note: fromLine.note };
 
   // ---- asset_snapshot ----
   const statedSqft = number(snap, "size_sq_ft", "asset_snapshot");
   // Square metres are read, not taken: the figure stays in sourceFacts exactly as the source
   // gave it, and is converted only when no sq ft figure was stated (and flagged when it is).
   const sqm = snap.size_sq_m;
-  if (sqm !== undefined && sqm !== null && (typeof sqm !== "number" || !Number.isFinite(sqm) || sqm < 0)) {
-    err(`asset_snapshot.size_sq_m must be a non-negative number or null (got ${JSON.stringify(sqm)})`);
-  }
   const sizeFromSqm = statedSqft === null && typeof sqm === "number" && Number.isFinite(sqm) && sqm > 0;
   const sizeSqft = sizeFromSqm ? Math.round((sqm as number) * SQFT_PER_SQM) : statedSqft;
   const tenureRaw = text(snap, "tenure", "asset_snapshot");
@@ -214,7 +216,16 @@ function parseOne(d: unknown, bad: (m: string) => void): SeedDeal | null {
     else err(`asset_snapshot.tenure "${tenureRaw}" is not one this loader knows (freehold, virtual freehold, long leasehold, short leasehold)`);
   }
   // Ground rent arrives as an amount ("ground_rent_gbp_pa") or as words ("ground_rent": "Peppercorn").
-  const groundRentPa = number(snap, "ground_rent_gbp_pa", "asset_snapshot") ?? number(snap, "ground_rent_pa", "asset_snapshot");
+  // Plain-currency money keys (no _gbp in the name) are taken only when they are numbers; text
+  // there ("OIEO 12.5m") stays a source fact, as every unmapped key always has.
+  const soft = (o: Obj, k: string): number | null => {
+    const v = o[k];
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0) return null;
+    delete o[k];
+    return v;
+  };
+  const plainGroundRent = soft(snap, "ground_rent_pa");
+  const groundRentPa = number(snap, "ground_rent_gbp_pa", "asset_snapshot") ?? plainGroundRent;
   const groundRentNote = text(snap, "ground_rent", "asset_snapshot");
   const property = {
     heritageStatus: text(snap, "heritage_status", "asset_snapshot"),
@@ -231,14 +242,21 @@ function parseOne(d: unknown, bad: (m: string) => void): SeedDeal | null {
   };
 
   // ---- money ----
-  const currency = text(terms, "currency", "deal_terms") ?? "GBP";
-  if (!(CURRENCIES as readonly string[]).includes(currency)) err(`deal_terms.currency "${currency}" must be one of ${CURRENCIES.join(", ")}`);
+  const statedCurrency = text(terms, "currency", "deal_terms");
+  const currency = statedCurrency ?? "GBP";
   const gbpPrice = number(terms, "guide_price_gbp", "deal_terms");
   const gbpRent = number(snap, "passing_rent_gbp_pa", "asset_snapshot") ?? number(terms, "passing_rent_gbp_pa", "deal_terms");
   if (currency !== "GBP" && (gbpPrice !== null || gbpRent !== null)) err(`deal_terms.currency "${currency}": the field names are GBP; refusing to guess a conversion`);
-  const guidePrice = gbpPrice ?? number(terms, "guide_price", "deal_terms");
+  const plainPrice = soft(terms, "guide_price");
+  const plainRent = soft(snap, "passing_rent_pa") ?? soft(terms, "passing_rent_pa");
+  if (plainPrice !== null || plainRent !== null || plainGroundRent !== null) {
+    // Money with no currency in its name needs one stated: GBP is never assumed for it.
+    if (statedCurrency === null) err("deal_terms.currency is required when money is given without _gbp in its name");
+    else if (!(CURRENCIES as readonly string[]).includes(currency)) err(`deal_terms.currency "${currency}" must be one of ${CURRENCIES.join(", ")}`);
+  }
+  const guidePrice = gbpPrice ?? plainPrice;
   const niyPct = number(terms, "niy_percent", "deal_terms");
-  const passingRent = gbpRent ?? number(snap, "passing_rent_pa", "asset_snapshot") ?? number(terms, "passing_rent_pa", "deal_terms");
+  const passingRent = gbpRent ?? plainRent;
 
   // ---- documents ----
   let photoType: PhotoReferenceType | null = null;

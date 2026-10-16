@@ -77,11 +77,14 @@ export const TeaserExtractionSchema = z.object({
     price_basis: text,
     niy_percent: num,
     price_psf: num,
+    /** Per square metre, as European teasers quote it. Kept as a source fact; never converted. */
+    price_psm: num,
     sale_structure: text,
   }),
   tenants: z.array(z.object({
     name: z.string(),
     area_sq_ft: num,
+    area_sq_m: num,
     rent_pa: num,
     lease_expiry: text,
     break_option: text,
@@ -122,11 +125,12 @@ export const REVIEW_FIELDS: ReviewField[] = [
   { section: "opportunity", key: "broker_name", label: "Broker firm", kind: "text" },
   { section: "opportunity", key: "source_contact_name", label: "Broker contact", kind: "text" },
   { section: "opportunity", key: "vendor", label: "Vendor", kind: "text" },
-  { section: "deal_terms", key: "currency", label: "Currency", kind: "enum", options: CURRENCIES },
+  { section: "deal_terms", key: "currency", label: "Currency", kind: "enum", options: CURRENCIES, required: true },
   { section: "deal_terms", key: "guide_price", label: "Guide price", kind: "number" },
   { section: "deal_terms", key: "price_basis", label: "Price basis", kind: "text" },
   { section: "deal_terms", key: "niy_percent", label: "NIY", kind: "number", unit: "%" },
   { section: "deal_terms", key: "price_psf", label: "Price per sq ft", kind: "number" },
+  { section: "deal_terms", key: "price_psm", label: "Price per sq m", kind: "number" },
   { section: "deal_terms", key: "sale_structure", label: "Sale structure", kind: "text" },
   { section: "asset_snapshot", key: "passing_rent_pa", label: "Passing rent pa", kind: "number" },
   { section: "asset_snapshot", key: "erv_pa", label: "ERV pa", kind: "number" },
@@ -153,13 +157,56 @@ export const fieldPath = (f: Pick<ReviewField, "section" | "key">) => `${f.secti
 
 // ---- Into the seed --------------------------------------------------------
 /**
- * The stable reference a teaser-made deal carries. A different prefix from the
- * command-line seed (SEED-) so the two routes never update each other's rows;
- * dropping the same teaser twice finds the first deal and only fills blanks.
+ * The reference a teaser-made deal carries: the name, plus the upload it came
+ * from. Unique per upload ON PURPOSE, so a teaser never lands on an existing
+ * row through seedDeal()'s "same reference, fill the blanks" path; a second
+ * teaser for a building already in the pipeline meets the duplicate check and
+ * is held for a person to decide. A different prefix from the command-line
+ * seed (SEED-), and never empty for a name in a script the slug cannot spell.
  */
-export function intakeReference(name: string): string {
-  const slug = name.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return `IM-${slug.toUpperCase()}`.slice(0, 120);
+export function intakeReference(name: string, uploadId: string): string {
+  const slug = name.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+  const tag = uploadId.replace(/[^0-9a-f]/gi, "").slice(0, 8).toUpperCase() || "X";
+  return slug ? `IM-${slug.toUpperCase()}-${tag}` : `IM-${tag}`;
+}
+
+/** The upload id inside an intake path (intake/<user>/<uuid>.<ext>), or "" for anything else. */
+export function uploadIdOf(path: string): string {
+  return /\/([0-9a-f-]{36})\.[a-z]+$/i.exec(path)?.[1] ?? "";
+}
+
+/**
+ * The database's own length limits on the text a teaser fills (migration 0032).
+ * A longer reading is shortened for the column and kept in full in source_facts,
+ * so nothing a teaser said is lost and no limit becomes an opaque failure.
+ */
+export const TEXT_LIMITS: Record<string, number> = {
+  heritage_status: 200, ground_rent_note: 200, covenant_rating: 200,
+  rent_review_mechanism: 500, transport_connectivity: 500, epc_rating: 50,
+};
+const DATA_COMPLETENESS_LIMIT = 1000;
+const clip = (v: string, n: number) => (v.length <= n ? v : `${v.slice(0, n - 1).trimEnd()}…`);
+
+/** Upper bounds the columns can hold, by kind of figure. Above them a figure is a misreading. */
+const NUMBER_LIMITS: Record<string, number> = {
+  unexpired_term_years: 999, wault_to_expiry_years: 999, wault_to_breaks_years: 999,
+  niy_percent: 100, occupancy_percent: 100, number_of_units: 1_000_000,
+  size_sq_ft: 1e9, size_sq_m: 1e8,
+  guide_price: 1e15, passing_rent_pa: 1e15, erv_pa: 1e15, ground_rent_pa: 1e11, price_psf: 1e9, price_psm: 1e10,
+};
+
+/** Figures the database could not hold: one line each, named as the form names them. */
+export function rangeProblems(x: TeaserExtraction): string[] {
+  const out: string[] = [];
+  for (const f of REVIEW_FIELDS) {
+    if (f.kind !== "number") continue;
+    const v = (x[f.section] as Record<string, unknown>)[f.key];
+    const max = NUMBER_LIMITS[f.key];
+    if (typeof v === "number" && max !== undefined && v > max) {
+      out.push(`${f.label}${f.unit ? ` (${f.unit})` : ""} of ${v.toLocaleString("en-GB")} is larger than any real figure; check it was read correctly.`);
+    }
+  }
+  return out;
 }
 
 /** The source line on the opportunity: the broker when the teaser names one, the file otherwise. */
@@ -195,12 +242,25 @@ export function toSeedRecord(x: TeaserExtraction, meta: IntakeMeta): Obj {
     broker_name: o.broker_name, source_contact_name: o.source_contact_name, vendor: o.vendor,
     sourcing: sourcingLine(o.broker_name?.trim() || null, o.source_contact_name?.trim() || null, meta.fileName),
   });
+  // The parser reads ground rent in words as `ground_rent`; long text is shortened for its column.
+  const { ground_rent_note, ...rest } = x.asset_snapshot;
+  const snap = present({ ...rest, ground_rent: ground_rent_note });
+  const fullText: Obj = {};
+  for (const [k, n] of Object.entries(TEXT_LIMITS)) {
+    const key = k === "ground_rent_note" ? "ground_rent" : k;
+    const v = snap[key];
+    if (typeof v === "string" && v.length > n) { fullText[k] = v; snap[key] = clip(v, n); }
+  }
   const record: Obj = {
     opportunity,
-    asset_snapshot: present({ ...x.asset_snapshot }),
+    asset_snapshot: snap,
     deal_terms: present({ ...x.deal_terms }),
   };
-  if (!blank(x.data_completeness)) record.data_completeness = x.data_completeness!.trim();
+  if (!blank(x.data_completeness)) {
+    const dc = x.data_completeness!.trim();
+    record.data_completeness = clip(dc, DATA_COMPLETENESS_LIMIT);
+    if (dc.length > DATA_COMPLETENESS_LIMIT) fullText.data_completeness = dc;
+  }
   // Everything below has no column: the parser keeps unknown top-level keys verbatim in source_facts.
   if (x.tenants.length) record.tenants = x.tenants.map((t) => present({ ...t }));
   if (x.highlights.length) record.highlights = x.highlights;
@@ -209,12 +269,13 @@ export function toSeedRecord(x: TeaserExtraction, meta: IntakeMeta): Obj {
     file_name: meta.fileName, model: meta.model, document_kind: x.document.kind, document_note: x.document.note,
   });
   if (x.evidence.length) (record.teaser_intake as Obj).evidence = x.evidence;
+  if (Object.keys(fullText).length) (record.teaser_intake as Obj).full_text = fullText;
   return record;
 }
 
 /** True when the reading carries an amount of money, which then needs a stated currency. */
 export function statesMoney(x: TeaserExtraction): boolean {
-  return [x.deal_terms.guide_price, x.deal_terms.price_psf, x.asset_snapshot.passing_rent_pa, x.asset_snapshot.erv_pa,
+  return [x.deal_terms.guide_price, x.deal_terms.price_psf, x.deal_terms.price_psm, x.asset_snapshot.passing_rent_pa, x.asset_snapshot.erv_pa,
     x.asset_snapshot.ground_rent_pa, ...x.tenants.map((t) => t.rent_pa)].some((v) => v !== null);
 }
 
@@ -233,7 +294,90 @@ export function emptyExtraction(): TeaserExtraction {
       transport_connectivity: null, passing_rent_pa: null, erv_pa: null, occupancy_percent: null,
       number_of_units: null, year_built_or_refurbished: null,
     },
-    deal_terms: { currency: null, guide_price: null, price_basis: null, niy_percent: null, price_psf: null, sale_structure: null },
+    deal_terms: { currency: null, guide_price: null, price_basis: null, niy_percent: null, price_psf: null, price_psm: null, sale_structure: null },
     tenants: [], highlights: [], other_facts: [], evidence: [], data_completeness: null,
   };
+}
+
+// ---- Reading the model's answer ------------------------------------------
+// The structured-output format carries the enum lists as guidance only, so a
+// model can still answer "Mixed-use", "Long Leasehold", "£" or "12,500,000".
+// This brings an answer onto the schema's vocabulary where the meaning is
+// unambiguous, and to null where it is not; TeaserExtractionSchema then
+// decides. A value is never guessed into a different meaning.
+const ENUM_FIELDS: Record<string, readonly string[]> = {
+  "opportunity.asset_type": ASSET_TYPES, "asset_snapshot.tenure": TENURES,
+  "opportunity.deal_stage": DEAL_STAGES, "deal_terms.currency": CURRENCIES,
+};
+const CURRENCY_WORDS: Record<string, string> = {
+  "£": "GBP", "€": "EUR", "$": "USD", "US$": "USD", "¥": "JPY", "円": "JPY", "STERLING": "GBP", "EURO": "EUR", "EUROS": "EUR",
+};
+const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+
+function enumValue(raw: unknown, allowed: readonly string[], path: string): string | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  if (path === "deal_terms.currency") {
+    const t = raw.trim().toUpperCase();
+    const c = CURRENCY_WORDS[t] ?? CURRENCY_WORDS[raw.trim()] ?? t;
+    return allowed.includes(c) ? c : null;
+  }
+  const t = raw.trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
+  const underscored = t.replace(/ /g, "_");
+  if (allowed.includes(t)) return t;
+  if (allowed.includes(underscored)) return underscored;
+  if (path === "opportunity.asset_type" && t === "mixed") return "mixed use";
+  if (path === "opportunity.asset_type" && t === "data center") return "data centre";
+  return null;
+}
+
+function numberValue(raw: unknown): number | null {
+  if (typeof raw === "number") return Number.isFinite(raw) && raw >= 0 ? raw : null;
+  if (typeof raw !== "string") return null;
+  const t = raw.replace(/[\s,£€$¥]/g, "");
+  if (!/^\d+(\.\d+)?%?$/.test(t)) return null;
+  return Number(t.replace("%", ""));
+}
+
+/** Coerce a model's answer onto the schema, then validate it. Returns null when it cannot be read at all. */
+export function normaliseReading(raw: unknown): TeaserExtraction | null {
+  if (!isObj(raw)) return null;
+  const base = emptyExtraction();
+  const shape = TeaserExtractionSchema.shape;
+  const out: Obj = { ...base };
+  for (const section of ["opportunity", "asset_snapshot", "deal_terms"] as const) {
+    const src = isObj(raw[section]) ? raw[section] as Obj : {};
+    const target: Obj = { ...base[section] };
+    const fields = shape[section].shape as Record<string, z.ZodTypeAny>;
+    for (const key of Object.keys(fields)) {
+      const v = src[key];
+      const path = `${section}.${key}`;
+      if (ENUM_FIELDS[path]) target[key] = enumValue(v, ENUM_FIELDS[path], path);
+      else if (key === "off_market") target[key] = typeof v === "boolean" ? v : null;
+      else if (fields[key].safeParse(1).success) {
+        target[key] = numberValue(v);
+      } else target[key] = typeof v === "string" && v.trim() ? v.trim() : null;
+    }
+    out[section] = target;
+  }
+  const doc = isObj(raw.document) ? raw.document : {};
+  out.document = {
+    is_property_investment_material: doc.is_property_investment_material !== false,
+    kind: (DOCUMENT_KINDS as readonly string[]).includes(String(doc.kind)) ? doc.kind : "other",
+    note: typeof doc.note === "string" && doc.note.trim() ? doc.note.trim() : null,
+  };
+  const arr = (v: unknown) => (Array.isArray(v) ? v : []);
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  out.tenants = arr(raw.tenants).filter(isObj).filter((t) => str(t.name)).map((t) => ({
+    name: str(t.name)!, area_sq_ft: numberValue(t.area_sq_ft), area_sq_m: numberValue(t.area_sq_m),
+    rent_pa: numberValue(t.rent_pa), lease_expiry: str(t.lease_expiry), break_option: str(t.break_option),
+  }));
+  out.highlights = arr(raw.highlights).map(str).filter((v): v is string => v !== null);
+  out.other_facts = arr(raw.other_facts).filter(isObj)
+    .map((f) => ({ label: str(f.label), value: str(f.value) }))
+    .filter((f): f is { label: string; value: string } => f.label !== null && f.value !== null);
+  out.evidence = arr(raw.evidence).filter(isObj).filter((e) => str(e.field) && str(e.quote))
+    .map((e) => ({ field: str(e.field)!, page: numberValue(e.page), quote: str(e.quote)! }));
+  out.data_completeness = str(raw.data_completeness);
+  const checked = TeaserExtractionSchema.safeParse(out);
+  return checked.success ? checked.data : null;
 }
