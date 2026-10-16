@@ -73,6 +73,9 @@ const ASSET_TYPE: Record<string, string> = {
   "residential": "residential", "multifamily": "multifamily", "hotel": "hotel",
   "student housing": "student_housing", "healthcare": "healthcare", "data centre": "data_centre",
   "mixed use": "mixed_use", "land": "land",
+  // Said outright by the source (or by the person reviewing a teaser), never a fallback for a
+  // word this file does not know: an unknown asset type is still refused below.
+  "other": "other",
 };
 const TENURE: Record<string, Tenure> = {
   "freehold": "freehold", "virtual freehold": "virtual_freehold",
@@ -80,6 +83,16 @@ const TENURE: Record<string, Tenure> = {
 };
 const DEAL_STAGES: readonly DealStage[] = ["early_dialogue", "guided", "under_offer"];
 const PHOTO_TYPES: readonly PhotoReferenceType[] = ["attachment_not_retrieved", "external_url", "none_found"];
+
+/**
+ * The currencies a record may state its money in. The GBP-named keys (guide_price_gbp,
+ * passing_rent_gbp_pa) are GBP by name; the plain keys (guide_price, passing_rent_pa) carry the
+ * record's own `deal_terms.currency`. Nothing is ever converted between them.
+ */
+const CURRENCIES = ["GBP", "EUR", "USD", "JPY"] as const;
+
+/** International square feet in one square metre, for a source that states only sq m. */
+export const SQFT_PER_SQM = 10.7639;
 
 /** Price per sq ft or rent per sq ft must reproduce the stated total within this. */
 const RECONCILE_TOLERANCE = 0.015;
@@ -175,10 +188,27 @@ function parseOne(d: unknown, bad: (m: string) => void): SeedDeal | null {
     else err(`opportunity.deal_stage ${JSON.stringify(stageRaw)} must be one of ${DEAL_STAGES.join(", ")} or null`);
   }
   const sourcing = text(opp, "sourcing", "opportunity");
-  const parsed = parseSourcing(sourcing);
+  // A record may name the broker firm and person outright (a reviewed teaser does). Those win
+  // over parsing the source line, and a line that does not parse is then not a problem.
+  // Only text is taken; anything else stays where it was, as a source fact (as it always did).
+  const softText = (o: Obj, k: string): string | null => {
+    const v = o[k];
+    if (typeof v !== "string" || v.trim() === "") return null;
+    delete o[k];
+    return v.trim();
+  };
+  const statedBroker = softText(opp, "broker_name");
+  const statedContact = softText(opp, "source_contact_name");
+  const fromLine = parseSourcing(sourcing);
+  const parsed = { broker: statedBroker ?? fromLine.broker, contact: statedContact ?? fromLine.contact, note: fromLine.note };
 
   // ---- asset_snapshot ----
-  const sizeSqft = number(snap, "size_sq_ft", "asset_snapshot");
+  const statedSqft = number(snap, "size_sq_ft", "asset_snapshot");
+  // Square metres are read, not taken: the figure stays in sourceFacts exactly as the source
+  // gave it, and is converted only when no sq ft figure was stated (and flagged when it is).
+  const sqm = snap.size_sq_m;
+  const sizeFromSqm = statedSqft === null && typeof sqm === "number" && Number.isFinite(sqm) && sqm > 0;
+  const sizeSqft = sizeFromSqm ? Math.round((sqm as number) * SQFT_PER_SQM) : statedSqft;
   const tenureRaw = text(snap, "tenure", "asset_snapshot");
   let tenure: Tenure | null = null;
   if (tenureRaw !== null) {
@@ -186,7 +216,16 @@ function parseOne(d: unknown, bad: (m: string) => void): SeedDeal | null {
     else err(`asset_snapshot.tenure "${tenureRaw}" is not one this loader knows (freehold, virtual freehold, long leasehold, short leasehold)`);
   }
   // Ground rent arrives as an amount ("ground_rent_gbp_pa") or as words ("ground_rent": "Peppercorn").
-  const groundRentPa = number(snap, "ground_rent_gbp_pa", "asset_snapshot");
+  // Plain-currency money keys (no _gbp in the name) are taken only when they are numbers; text
+  // there ("OIEO 12.5m") stays a source fact, as every unmapped key always has.
+  const soft = (o: Obj, k: string): number | null => {
+    const v = o[k];
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0) return null;
+    delete o[k];
+    return v;
+  };
+  const plainGroundRent = soft(snap, "ground_rent_pa");
+  const groundRentPa = number(snap, "ground_rent_gbp_pa", "asset_snapshot") ?? plainGroundRent;
   const groundRentNote = text(snap, "ground_rent", "asset_snapshot");
   const property = {
     heritageStatus: text(snap, "heritage_status", "asset_snapshot"),
@@ -203,11 +242,21 @@ function parseOne(d: unknown, bad: (m: string) => void): SeedDeal | null {
   };
 
   // ---- money ----
-  const currency = text(terms, "currency", "deal_terms") ?? "GBP";
-  const guidePrice = number(terms, "guide_price_gbp", "deal_terms");
+  const statedCurrency = text(terms, "currency", "deal_terms");
+  const currency = statedCurrency ?? "GBP";
+  const gbpPrice = number(terms, "guide_price_gbp", "deal_terms");
+  const gbpRent = number(snap, "passing_rent_gbp_pa", "asset_snapshot") ?? number(terms, "passing_rent_gbp_pa", "deal_terms");
+  if (currency !== "GBP" && (gbpPrice !== null || gbpRent !== null)) err(`deal_terms.currency "${currency}": the field names are GBP; refusing to guess a conversion`);
+  const plainPrice = soft(terms, "guide_price");
+  const plainRent = soft(snap, "passing_rent_pa") ?? soft(terms, "passing_rent_pa");
+  if (plainPrice !== null || plainRent !== null || plainGroundRent !== null) {
+    // Money with no currency in its name needs one stated: GBP is never assumed for it.
+    if (statedCurrency === null) err("deal_terms.currency is required when money is given without _gbp in its name");
+    else if (!(CURRENCIES as readonly string[]).includes(currency)) err(`deal_terms.currency "${currency}" must be one of ${CURRENCIES.join(", ")}`);
+  }
+  const guidePrice = gbpPrice ?? plainPrice;
   const niyPct = number(terms, "niy_percent", "deal_terms");
-  const passingRent = number(snap, "passing_rent_gbp_pa", "asset_snapshot") ?? number(terms, "passing_rent_gbp_pa", "deal_terms");
-  if (currency !== "GBP" && (guidePrice !== null || passingRent !== null)) err(`deal_terms.currency "${currency}": the field names are GBP; refusing to guess a conversion`);
+  const passingRent = gbpRent ?? plainRent;
 
   // ---- documents ----
   let photoType: PhotoReferenceType | null = null;
@@ -249,31 +298,36 @@ function parseOne(d: unknown, bad: (m: string) => void): SeedDeal | null {
   // ---- flags: disagreement is recorded, never resolved ----
   const flags: LoaderFlag[] = [];
   const price = guidePrice;
-  const psf = typeof (terms.price_psf_gbp) === "number" ? (terms.price_psf_gbp as number) : null;
+  const psfRaw = terms.price_psf_gbp ?? terms.price_psf;
+  const psf = typeof psfRaw === "number" ? psfRaw : null;
   if (price !== null && psf !== null && sizeSqft !== null) {
     const implied = psf * sizeSqft;
     if (Math.abs(implied - price) / price > RECONCILE_TOLERANCE) {
       flags.push({
         code: "price_psf_mismatch",
-        message: `Guide price ${fmt(price)} does not agree with the stated price per sq ft (${psf} x ${sizeSqft.toLocaleString("en-GB")} sq ft = ${fmt(implied)}).`,
+        message: `Guide price ${fmt(price, currency)} does not agree with the stated price per sq ft (${psf} x ${sizeSqft.toLocaleString("en-GB")} sq ft = ${fmt(implied, currency)}).`,
       });
     }
   }
-  const rpsf = typeof (terms.passing_rent_psf_gbp) === "number" ? (terms.passing_rent_psf_gbp as number) : null;
+  const rpsfRaw = terms.passing_rent_psf_gbp ?? terms.passing_rent_psf;
+  const rpsf = typeof rpsfRaw === "number" ? rpsfRaw : null;
   if (passingRent !== null && rpsf !== null && sizeSqft !== null) {
     const implied = rpsf * sizeSqft;
     if (Math.abs(implied - passingRent) / passingRent > RECONCILE_TOLERANCE) {
       flags.push({
         code: "passing_rent_psf_mismatch",
-        message: `Passing rent ${fmt(passingRent)} does not agree with the stated rent per sq ft (${rpsf} x ${sizeSqft.toLocaleString("en-GB")} sq ft = ${fmt(implied)}).`,
+        message: `Passing rent ${fmt(passingRent, currency)} does not agree with the stated rent per sq ft (${rpsf} x ${sizeSqft.toLocaleString("en-GB")} sq ft = ${fmt(implied, currency)}).`,
       });
     }
+  }
+  if (sizeFromSqm) {
+    flags.push({ code: "size_converted_from_sq_m", message: `The source states ${(sqm as number).toLocaleString("en-GB")} sq m and no sq ft; recorded as ${sizeSqft!.toLocaleString("en-GB")} sq ft (x ${SQFT_PER_SQM}).` });
   }
   if (parsed.note) flags.push({ code: "source_note", message: `The source line carries a note: ${parsed.note}` });
   if (dataCompleteness && /differs from|conflict|discrepan/i.test(dataCompleteness)) {
     flags.push({ code: "source_conflict_noted", message: `The source marks a conflict with another record: ${dataCompleteness}` });
   }
-  if (sourcing && !parsed.broker) {
+  if (sourcing && !parsed.broker && !statedContact) {
     flags.push({ code: "broker_not_parsed", message: "The source line does not name a broker in the usual shape, so no broker or contact was set. The line is kept in full." });
   }
   if (flags.length) sourceFacts._loader_flags = flags;
@@ -289,4 +343,4 @@ function parseOne(d: unknown, bad: (m: string) => void): SeedDeal | null {
   };
 }
 
-const fmt = (n: number) => `GBP ${Math.round(n).toLocaleString("en-GB")}`;
+const fmt = (n: number, currency = "GBP") => `${currency} ${Math.round(n).toLocaleString("en-GB")}`;

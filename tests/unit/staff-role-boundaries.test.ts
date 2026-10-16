@@ -125,16 +125,21 @@ describe("the application layer agrees with the database, and is never the only 
     expect((fx.match(/isPortalAdmin\(session\)/g) ?? []).length).toBe(2);
   });
 
-  it("requireStaffSession is used by the three memo drafting actions and nothing else", () => {
+  it("requireStaffSession is used by the three memo drafting actions and the teaser intake, nothing else", () => {
     const users = walk("src").filter((f) => f !== "src/lib/auth/admin.ts" && read(f).includes("requireStaffSession()"));
     expect(users.sort()).toEqual([
       "src/app/actions/memo-review.ts", "src/app/actions/memo-translation-accept.ts", "src/app/actions/memo-translation.ts",
+      // Pre-investor drafting: creates an untriaged draft deal; teaser-intake-boundaries.test.ts holds the rest.
+      "src/app/actions/teaser-intake.ts",
     ]);
   });
 
-  it("isInternalStaff is used by that gate and by the memo page's two offers, nowhere else", () => {
+  it("isInternalStaff is used by that gate, the memo page's two offers and the teaser intake's entry points, nowhere else", () => {
     const users = walk("src").filter((f) => f !== "src/lib/auth/admin.ts" && /isInternalStaff\(/.test(read(f)));
-    expect(users).toEqual(["src/app/(app)/opportunities/[opportunityId]/memo/page.tsx"]);
+    expect(users.sort()).toEqual([
+      "src/app/(app)/opportunities/[opportunityId]/memo/page.tsx",
+      "src/app/(app)/opportunities/intake/page.tsx", "src/app/(app)/opportunities/new/page.tsx", "src/app/(app)/pipeline/page.tsx",
+    ]);
   });
 
   it("the investor admin area, the sharing control and the investor Overview editor stay admin-only", () => {

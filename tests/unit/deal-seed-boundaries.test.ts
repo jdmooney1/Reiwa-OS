@@ -44,8 +44,11 @@ describe("the new columns are named only where they are written", () => {
       const text = f.endsWith(".sql") ? sql(f) : code(f);
       for (const c of ALL) if (new RegExp(`\\b${c}\\b`).test(text)) hits.push(`${f}: ${c}`);
     }
-    // The only tolerated mention is the pure parser's own camelCase/doc words, which are not column names.
-    expect(hits.filter((h) => !h.startsWith("src/lib/ingestion/deal-seed.ts"))).toEqual([]);
+    // The only tolerated mentions are the pure parser's own camelCase/doc words, and the teaser
+    // intake, whose schema speaks the parser's input vocabulary (it builds seed records and is
+    // staff-only; teaser-intake-boundaries.test.ts keeps it away from every investor surface).
+    expect(hits.filter((h) => !h.startsWith("src/lib/ingestion/deal-seed.ts")
+      && !h.startsWith("src/lib/teaser-intake/") && !h.startsWith("src/components/opportunities/teaser-intake.tsx"))).toEqual([]);
   });
 });
 

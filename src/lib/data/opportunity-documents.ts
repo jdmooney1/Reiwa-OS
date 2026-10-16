@@ -62,27 +62,38 @@ export async function listDocuments(
   });
 }
 
+export interface DocumentRecordInput {
+  title: string; storagePath: string; category?: string;
+  fileName?: string | null; mimeType?: string | null; sizeBytes?: number | null;
+  accessLevel?: DocumentAccessLevel;
+}
+
 export async function recordDocument(
   session: Session,
   opportunityId: string,
-  input: {
-    title: string; storagePath: string; category?: string;
-    fileName?: string | null; mimeType?: string | null; sizeBytes?: number | null;
-    accessLevel?: DocumentAccessLevel;
-  },
+  input: DocumentRecordInput,
 ): Promise<string> {
-  return withSession(session, async (tx) => {
-    const opp = await tx.query<{ org_id: string }>(
-      "select org_id from opportunities where opportunity_id = $1", [opportunityId]);
-    if (!opp.rows[0]) throw new Error("Opportunity not found or not permitted");
-    const res = await tx.query<{ document_id: string }>(
-      `insert into opportunity_documents
-         (org_id, opportunity_id, title, category, storage_path, file_name, mime_type, size_bytes, access_level, uploaded_by)
-       values ($1,$2,$3,coalesce($4,'Other'),$5,$6,$7,$8,coalesce($9,'internal'),$10)
-       returning document_id`,
-      [opp.rows[0].org_id, opportunityId, input.title, input.category ?? null, input.storagePath,
-       input.fileName ?? null, input.mimeType ?? null, input.sizeBytes ?? null,
-       input.accessLevel ?? null, session.userId ?? null]);
-    return res.rows[0].document_id;
-  });
+  return withSession(session, (tx) => recordDocumentOn(tx, session.userId ?? null, opportunityId, input));
+}
+
+/**
+ * The same insert, inside a transaction the caller already holds, so a document
+ * can land in the same commit as the opportunity it belongs to (the teaser
+ * intake creates both at once). RLS applies exactly as it does above.
+ */
+export async function recordDocumentOn(
+  tx: Queryable, userId: string | null, opportunityId: string, input: DocumentRecordInput,
+): Promise<string> {
+  const opp = await tx.query<{ org_id: string }>(
+    "select org_id from opportunities where opportunity_id = $1", [opportunityId]);
+  if (!opp.rows[0]) throw new Error("Opportunity not found or not permitted");
+  const res = await tx.query<{ document_id: string }>(
+    `insert into opportunity_documents
+       (org_id, opportunity_id, title, category, storage_path, file_name, mime_type, size_bytes, access_level, uploaded_by)
+     values ($1,$2,$3,coalesce($4,'Other'),$5,$6,$7,$8,coalesce($9,'internal'),$10)
+     returning document_id`,
+    [opp.rows[0].org_id, opportunityId, input.title, input.category ?? null, input.storagePath,
+     input.fileName ?? null, input.mimeType ?? null, input.sizeBytes ?? null,
+     input.accessLevel ?? null, userId]);
+  return res.rows[0].document_id;
 }
