@@ -53,4 +53,4 @@ and in the report. The loader never picks a winner.
 
 No admin screen reads the new building facts: they are in the database, and the Asset Snapshot
 composer does not yet read them. The opportunity page shows the money, source and broker as it
-always has. Extraction from raw text is the next, separate piece of work.
+always has. Extraction from a teaser file is `docs/24-teaser-intake.md`: it builds the same records and lands them through the same `seedDeal()`.
