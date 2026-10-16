@@ -21,7 +21,7 @@ export const INTAKE_SYSTEM_PROMPT = [
   "- tenure must be one of the listed values or null. A long leasehold is 99 years or more unexpired at sale; if the document says only \"leasehold\" with no term, leave tenure null and record the words in other_facts.",
   "- name is how the deal would be referred to: the building name if it has one, otherwise its street address (e.g. \"16 Conduit Street\"). market is the city.",
   "- broker_name is the selling agent's firm; source_contact_name is the named agent contact, if any. vendor only if named.",
-  "- tenants: one row per tenant the document lists, with only what it states.",
+  "- tenants: one row per tenant (or per vacant unit, with name \"Vacant\") the tenancy schedule lists, with only what it states: the unit or floor, the use of that space (office, retail, residential, industrial, hotel or other), area, rent, the ERV for that unit if the schedule gives one, lease expiry and break as written (a date as yyyy-mm-dd when the day is given).",
   "- highlights: the document's own investment highlights, each shortened to one line.",
   "- other_facts: any other material fact the structure has no field for (planning, capex, service charge, VAT status, sale timetable, data room). Short label, short value.",
   "- evidence: for every field you filled, one entry with its path (e.g. \"deal_terms.guide_price\", \"opportunity.address\"), the page number if known, and the words on the page that support it, quoted exactly and kept short (under 25 words).",

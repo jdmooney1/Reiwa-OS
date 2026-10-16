@@ -134,10 +134,11 @@ describe("the application layer agrees with the database, and is never the only 
     ]);
   });
 
-  it("isInternalStaff is used by that gate, the memo page's two offers and the teaser intake's entry points, nowhere else", () => {
+  it("isInternalStaff is used by that gate, the memo page's two offers, the teaser intake's entry points and its underwriting brief, nowhere else", () => {
     const users = walk("src").filter((f) => f !== "src/lib/auth/admin.ts" && /isInternalStaff\(/.test(read(f)));
     expect(users.sort()).toEqual([
       "src/app/(app)/opportunities/[opportunityId]/memo/page.tsx",
+      "src/app/(app)/opportunities/[opportunityId]/underwriting/page.tsx",
       "src/app/(app)/opportunities/intake/page.tsx", "src/app/(app)/opportunities/new/page.tsx", "src/app/(app)/pipeline/page.tsx",
     ]);
   });

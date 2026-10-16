@@ -5,6 +5,10 @@ import { listVersions } from "@/lib/data/underwriting";
 import { compareVersions } from "@/lib/underwriting/compare";
 import { UnderwritingSection } from "@/components/workspace/underwriting-section";
 import type { Currency } from "@/types/database";
+import { isInternalStaff } from "@/lib/auth/admin";
+import { withSession } from "@/lib/db/client";
+import { getTeaserBrief } from "@/lib/data/teaser-intake";
+import { TeaserBriefPanel } from "@/components/workspace/teaser-brief";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +43,18 @@ export default async function UnderwritingPage({
     ? compareVersions(from, to)
     : null;
 
+  // The broker's own words stay with Reiwa's staff: an organisation user sees the versions, not the teaser.
+  const brief = isInternalStaff(auth)
+    ? await withSession(session, (tx) => getTeaserBrief(tx, params.opportunityId))
+    : null;
+  const working = versions.find((v) => v.status === "current") ?? versions.find((v) => v.status === "approved") ?? versions[0] ?? null;
+
   return (
+    <>
+    {brief && (
+      <TeaserBriefPanel opportunityId={params.opportunityId} brief={brief} working={working}
+        currency={opp.currency as Currency} />
+    )}
     <UnderwritingSection
       opportunityId={params.opportunityId}
       versions={versions}
@@ -47,5 +62,6 @@ export default async function UnderwritingPage({
       canWrite={auth.role !== "investor_viewer"}
       currency={opp.currency as Currency}
     />
+    </>
   );
 }

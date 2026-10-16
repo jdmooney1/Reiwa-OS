@@ -25,6 +25,8 @@ export const TENURES = ["freehold", "virtual freehold", "long leasehold", "short
 export const DEAL_STAGES = ["early_dialogue", "guided", "under_offer"] as const;
 export const CURRENCIES = ["GBP", "EUR", "USD", "JPY"] as const;
 export const DOCUMENT_KINDS = ["teaser", "information_memorandum", "brochure", "other"] as const;
+/** The uses a tenancy line can have: the underwriting engine's own vocabulary (lib/underwrite). */
+export const TENANT_USES = ["office", "retail", "residential", "industrial", "hotel", "other"] as const;
 
 const text = z.string().nullable();
 const num = z.number().nullable();
@@ -83,9 +85,13 @@ export const TeaserExtractionSchema = z.object({
   }),
   tenants: z.array(z.object({
     name: z.string(),
+    /** The unit or floor the tenant occupies, as the schedule names it. */
+    unit: text,
+    use: z.enum(TENANT_USES).nullable(),
     area_sq_ft: num,
     area_sq_m: num,
     rent_pa: num,
+    erv_pa: num,
     lease_expiry: text,
     break_option: text,
   })),
@@ -325,6 +331,7 @@ function enumValue(raw: unknown, allowed: readonly string[], path: string): stri
   const underscored = t.replace(/ /g, "_");
   if (allowed.includes(t)) return t;
   if (allowed.includes(underscored)) return underscored;
+  if (path === "tenants.use" && t.endsWith("s") && allowed.includes(t.slice(0, -1))) return t.slice(0, -1);
   if (path === "opportunity.asset_type" && t === "mixed") return "mixed use";
   if (path === "opportunity.asset_type" && t === "data center") return "data centre";
   return null;
@@ -368,8 +375,11 @@ export function normaliseReading(raw: unknown): TeaserExtraction | null {
   const arr = (v: unknown) => (Array.isArray(v) ? v : []);
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
   out.tenants = arr(raw.tenants).filter(isObj).filter((t) => str(t.name)).map((t) => ({
-    name: str(t.name)!, area_sq_ft: numberValue(t.area_sq_ft), area_sq_m: numberValue(t.area_sq_m),
-    rent_pa: numberValue(t.rent_pa), lease_expiry: str(t.lease_expiry), break_option: str(t.break_option),
+    name: str(t.name)!, unit: str(t.unit),
+    use: enumValue(t.use, TENANT_USES, "tenants.use") as (typeof TENANT_USES)[number] | null,
+    area_sq_ft: numberValue(t.area_sq_ft), area_sq_m: numberValue(t.area_sq_m),
+    rent_pa: numberValue(t.rent_pa), erv_pa: numberValue(t.erv_pa),
+    lease_expiry: str(t.lease_expiry), break_option: str(t.break_option),
   }));
   out.highlights = arr(raw.highlights).map(str).filter((v): v is string => v !== null);
   out.other_facts = arr(raw.other_facts).filter(isObj)

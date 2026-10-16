@@ -50,6 +50,7 @@ import {
   sweepStaleIntake,
 } from "@/lib/teaser-intake/intake-store";
 import { extractTeaser, INTAKE_MODEL } from "@/lib/teaser-intake/extract";
+import { teaserUnderwriting } from "@/lib/teaser-intake/underwriting";
 
 /** A deal already in the pipeline that may be the same building. Safe to show. */
 export interface PossibleMatch {
@@ -191,6 +192,7 @@ export async function createDealFromTeaserAction(input: CreateInput): Promise<Cr
       result = await withSession(db, (tx) => createIntakeDeal(tx, {
         orgId: input.orgId, userId: db.userId, allowExisting: input.allowExisting, deal, record, fileName,
         title: titleFromFileName(fileName ?? "") || "Teaser", mimeType: file.type, sizeBytes: file.bytes.byteLength,
+        underwriting: teaserUnderwriting(x, { fileName }),
       }, async (opportunityId) => {
         promoted = await promoteIntakeObject(db.userId, input.path, opportunityId, file.type);
         return promoted;

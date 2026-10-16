@@ -21,7 +21,7 @@ import { requireDbSession } from "@/lib/auth/session";
 import { AppError } from "@/lib/errors";
 import { runAction } from "@/lib/actions/run-action";
 import type { ActionResult } from "@/lib/actions/result";
-import { createVersion, makeCurrent, type UnderwritingInput } from "@/lib/data/underwriting";
+import { createVersion, makeCurrent, listVersions, type UnderwritingInput } from "@/lib/data/underwriting";
 import { applyDdTemplate, updateDdItem, addDdItem, type DdItemPatch } from "@/lib/data/due-diligence";
 import { createRisk, promoteFindingToRisk, updateRisk, type RiskPatch } from "@/lib/data/opportunity-risks";
 import { recordDecision, amendDecision, type IcOutcome } from "@/lib/data/ic-decisions";
@@ -95,6 +95,15 @@ export async function createVersionAction(
     if (!alloc.ok) throw new AppError(alloc.error);
     input.depreciationYears = alloc.depreciationYears;
     input.depreciationMethod = alloc.depreciationMethod;
+    // The structured assumptions (a rent roll, the teaser's tenancy schedule) have no field on
+    // this form, so they are carried forward from the version the form was seeded from
+    // (working, else approved, else latest; underwriting-section.tsx), exactly as stored.
+    const versions = await listVersions(session, opportunityId);
+    const seed = versions.find((v) => v.status === "current") ?? versions.find((v) => v.status === "approved") ?? versions[0] ?? null;
+    if (seed && Object.keys(seed.assumptions ?? {}).length) {
+      const { source: _source, ...carried } = seed.assumptions;
+      input.assumptions = carried;
+    }
     await createVersion(session, opportunityId, input);
     refresh(opportunityId);
   }, {
